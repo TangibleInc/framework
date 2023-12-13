@@ -1,8 +1,8 @@
 <?php
-namespace Tangible\Rest;
-use Tangible\Rest as rest;
+namespace tangible\api;
+use tangible\api;
 
-function request($method, $route, $data = [], $options = []) {
+function rest($method, $route, $data = [], $options = []) {
 
   $method = strtoupper($method);
   $request = new WP_REST_Request( $method, $route );
