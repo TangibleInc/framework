@@ -1,3 +1,0 @@
-# Math
-
-Evaluate mathematical expression.

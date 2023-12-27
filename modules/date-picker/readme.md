@@ -1,3 +1,0 @@
-# Date picker
-
-Date picker
