@@ -13,28 +13,52 @@ namespace tangible\framework;
  * This will become unnecessary when using the new AJAX/API/Form module, because
  * they use a smart JavaScript function to gather form fields data.
  */
-function render_setting_field_checkbox($config) {
+function render_setting_field_checkbox($config, $type='checkbox') {
 
   foreach ([
     'name',
     'value',
-    'label'
+    'label',
+    'description'
   ] as $key) {
     $$key = $config[$key];
   }
 
   $checked = $value==='true';
 
-  ?>
-  <label>
-    <input type="hidden" name="<?php echo $name; ?>" value="<?php
-      echo $checked ? 'true' : 'false';
-    ?>" autocomplete="off"><input type="checkbox"
-      value="true" autocomplete="off"
-      onclick="this.previousSibling.value=this.previousSibling.value==='true'?'false':'true'"
-      <?php echo $checked ? 'checked="checked"' : ''; ?>
-    />
-    <?php echo esc_html($label); ?>
-  </label>
-  <?php
+  if ($type === 'checkbox'): ?>
+      <label>
+          <input type="hidden" name="<?php echo $name; ?>" value="<?php echo $checked ? 'true' : 'false'; ?>" autocomplete="off">
+          <input type="checkbox" value="true" autocomplete="off"
+              onclick="this.previousSibling.value=this.previousSibling.value==='true'?'false':'true'" 
+              <?php echo $checked ? 'checked' : ''; ?> />
+          <?php echo esc_html($label); ?>
+      </label>
+  <?php else: ?>
+      <div class="tangible-card">
+          <label class="tangible-feature-switch">
+              <input type="hidden" name="<?php echo $name; ?>" value="<?php echo $checked ? 'true' : 'false'; ?>" autocomplete="off" class="feature-hidden-input">
+              <input type="checkbox" value="true" autocomplete="off"
+                  onclick="this.previousElementSibling.value = this.checked ? 'true' : 'false'" 
+                  <?php echo $checked ? 'checked' : ''; ?> />
+              <span class="tangible-feature-switch-label"><?php echo esc_html($label); ?></span>
+              <span class="tangible-slider tangible-slider-round"></span>
+          </label>
+          <?php if (!empty($description)): ?>
+              <div class="feature-description">
+                  <?php
+                  if (is_callable($description)) {
+                      $description(
+                          tangible\framework\get_plugin_feature_settings($plugin, $feature),
+                          tangible\framework\get_plugin_feature_settings_key($plugin, $feature),
+                          $is_enabled
+                      );
+                  } else {
+                      echo $description;
+                  }
+                  ?>
+              </div>
+          <?php endif; ?>
+      </div>
+    <?php endif; 
 };
