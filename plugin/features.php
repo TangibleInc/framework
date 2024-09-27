@@ -30,12 +30,12 @@ function render_features_settings_page($plugin) {
         <div class="setting-row feature-<?php echo $name; ?>">
           <?php
             framework\render_setting_field_checkbox([
-              'type' => 'checkbox',
+              'type' => 'switch',
               'name' => "{$settings_key}[$feature_key]",
               'value' => $is_enabled ? 'true' : '',
               'label' => $title,
-              'description' => $feature['description'] ?? ''
-            ], $type = 'slider');
+              'description' => $feature['description'] ?? '',
+            ]);
           ?>
         </div>
         <?php

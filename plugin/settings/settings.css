@@ -364,7 +364,7 @@
   font-size: .9rem;
 }
 
-.tangible-slider {
+.tangible-switch-track {
     position: relative;
     min-width: 50px; 
     height: 24px; 
@@ -374,7 +374,7 @@
     transition: background-color 0.3s;
 }
 
-.tangible-slider:before {
+.tangible-switch-track:before {
     content: "";
     position: absolute;
     width: 20px; 
@@ -386,10 +386,10 @@
     transition: transform 0.3s;
 }
 
-input[type="checkbox"]:checked ~ .tangible-slider {
+input[type="checkbox"]:checked ~ .tangible-switch-track {
     background-color: var(--tt-admin-accent);
 }
 
-input[type="checkbox"]:checked ~ .tangible-slider:before {
+input[type="checkbox"]:checked ~ .tangible-switch-track:before {
     transform: translateX(26px); /* Adjusted to match new width */
 }
