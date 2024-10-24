@@ -161,6 +161,6 @@ framework\register_plugin_dependencies($plugin, [
 The argument `$dependencies` is an array of dependencies, an object with the properties:
 
 - `title` - Plugin title
-- `url` - Optional: URL to get the plugin
+- `url` - Optional: URL to the plugin website
 - `active` - Boolean (true/false)
 - `callback` - Optional: Instead of `active`, run callback that returns true/false
