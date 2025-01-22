@@ -485,7 +485,6 @@ new class {
    * Provide current user to the request if there is a valid token.
    */
   function rest_pre_dispatch( $result, $server, $request ) {
-    if (!empty($result)) return $result;
     try {
       if ($request->get_route() !== '/' . $this->namespace . '/token/validate'
         && !empty($user_id = $this->determine_current_user())
@@ -494,8 +493,9 @@ new class {
         wp_set_current_user($user_id);
       }
     } catch (\Throwable $th) {
-      // Continue
+      // Continue - Pass through to any other plugin with JWT auth
     }
+    return $result;
   }
 
 };
