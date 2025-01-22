@@ -10,6 +10,9 @@
     "build": "roll build",
     "format": "roll format",
     "test": "roll run tests/index.ts",
+    "test:7.4": "roll run tests/index.ts PHP_VERSION=7.4",
+    "test:8.4": "roll run tests/index.ts PHP_VERSION=8.4",
+    "test:all": "npm run test && npm run test:8.4 && npm run e2e",
     "version": "node version.js",
     "subrepo": "git-subrepo",
     "-- End-to-end testing --": "https://playwright.dev/",
@@ -19,11 +22,11 @@
     "e2e:ui": "npm run e2e -- --ui"
   },
   "devDependencies": {
-    "@playwright/test": "^1.49.0",
+    "@playwright/test": "^1.49.1",
     "@tangible/git-subrepo": "^1.0.1",
     "@tangible/now": "^1.1.3",
     "@tangible/roller": "^2.1.4",
-    "@wordpress/e2e-test-utils-playwright": "^1.13.0",
+    "@wordpress/e2e-test-utils-playwright": "^1.16.0",
     "testra": "^2.1.4"
   },
   "prettier": {

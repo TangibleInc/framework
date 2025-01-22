@@ -61,7 +61,7 @@ export async function getServer(
     // documentRoot: '/var/www/html',
     projectPath,
     mode: 'plugin',
-    phpVersion: '7.4',
+    phpVersion: '8.2',
     // silence: true,
     reset,
     ...serverOptions,
