@@ -24,7 +24,7 @@
   "devDependencies": {
     "@playwright/test": "^1.49.1",
     "@tangible/git-subrepo": "^1.0.1",
-    "@tangible/now": "^1.1.3",
+    "@tangible/now": "^2.0.0",
     "@tangible/roller": "^2.1.4",
     "@wordpress/e2e-test-utils-playwright": "^1.16.0",
     "testra": "^2.1.4"

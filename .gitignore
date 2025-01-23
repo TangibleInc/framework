@@ -12,6 +12,7 @@ composer.lock
 package-lock.json
 yarn.lock
 bun.lockb
+bun.lock
 
 /artifacts
 *.swp
