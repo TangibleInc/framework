@@ -1,7 +1,7 @@
 import path from 'node:path'
 import fs from 'node:fs/promises'
 import { getWpNowConfig, startServer } from '@tangible/now'
-import { disableConsole, enableConsole, originalConsole } from './console'
+import { disableConsole, enableConsole, originalConsole } from './console.js'
 import { createRequest } from './request'
 import type { WPNowServer, WPNowOptions } from '@tangible/now'
 import type { PHP } from '@php-wasm/universal'
