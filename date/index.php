@@ -24,10 +24,15 @@ require_once __DIR__.'/legacy.php';
 (include __DIR__ . '/module-loader.php')(new class {
 
   public $name = 'tangible_date';
-  public $version = '20250115';
+  public $version = '20250124';
 
   function load() {
-    require_once __DIR__ . '/DateCreator.php';
+
+    // Compatibility with older version of Date module
+    if (!class_exists('Tangible\\DateCreator')) {
+      require_once __DIR__ . '/DateCreator.php';
+    }
+
     do_action($this->name . '_ready');
   }
 });
