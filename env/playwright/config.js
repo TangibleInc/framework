@@ -83,7 +83,8 @@ export function createConfig(userConfig = {}) {
     ],
     globalSetup: path.join(__dirname, 'setup.js'),
     webServer: {
-      command: `wp-now start --port ${testSitePort} --path ${testDir} --skip-browser --php 8.2`,
+      // NOTE: Keep this PHP version for compatibility with Playwright, until confirmed working with 8.2 and 8.4
+      command: `wp-now start --port ${testSitePort} --path ${testDir} --skip-browser --php 8.0`,
       url: process.env.WP_BASE_URL,
       timeout: 120_000, // 120 seconds.
       reuseExistingServer: true,
