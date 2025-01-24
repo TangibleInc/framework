@@ -1,21 +1,21 @@
 {
   "name": "@tangible/env",
   "type": "module",
-  "version": "2025.1.24",
+  "version": "2025.1.25",
   "description": "Local dev and test environment with WordPress Playground and Playwright",
   "homepage": "https://github.com/tangibleinc/framework",
   "repository": {
     "url": "git+ssh://git@github.com/tangibleinc/framework.git"
   },
-  "module": "build/index.js",
+  "module": "index.js",
   "exports": {
     ".": {
-      "types": "./build/index.d.ts",
-      "import": "./build/index.js"
+      "types": "./index.d.ts",
+      "import": "./index.js"
     },
     "./*": {
-      "types": "./build/*.d.ts",
-      "import": "./build/*.js"
+      "types": "./*.d.ts",
+      "import": "./*.js"
     }
   },
   "scripts": {
