@@ -1,8 +1,21 @@
 /**
  * Create a wrapper around `fetch()` with given URL for JSON API
  */
-export function createRequest(siteUrl: string) {
-  const request = async ({
+
+export type Requester = {
+  (options: {
+    method: string
+    route: string
+    format: 'json' | 'text' | 'arrayBuffer'
+    data: {
+      [key: string]: string
+    }
+  }): Promise<any>
+  token?: string
+}
+
+export function createRequest(siteUrl: string): Requester {
+  const request: Requester = async ({
     method = 'GET',
     route,
     /**
@@ -24,7 +37,13 @@ export function createRequest(siteUrl: string) {
       )
     }
 
-    const options = {
+    const options: {
+      method: string
+      headers?: {
+        [key: string]: string
+      }
+      body?: string
+    } = {
       method,
     }
 
@@ -40,7 +59,9 @@ export function createRequest(siteUrl: string) {
       }
     }
 
-    return await (await fetch(url, options))[format]()
+    return await (await fetch(url, options))[
+      format
+    ]()
   }
 
   request.token = undefined

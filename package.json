@@ -31,7 +31,7 @@
     "@gjsify/esbuild-plugin-transform-ext": "^0.0.4",
     "@playwright/test": "^1.50.0",
     "@tangible/git-subrepo": "^1.0.1",
-    "@tangible/now": "^2.0.1",
+    "@tangible/now": "^2.0.3",
     "@tangible/roller": "^2.1.4",
     "@wordpress/e2e-test-utils-playwright": "^1.16.0",
     "esbuild": "^0.24.2",

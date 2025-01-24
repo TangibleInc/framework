@@ -5,8 +5,9 @@ import type { WPNowServer, WPNowOptions } from '@tangible/now'
 import type { PHP } from '@php-wasm/universal'
 import { disableConsole, enableConsole, originalConsole } from './console.js'
 import { createRequest } from './request.js'
+import type { Requester} from './request.js'
 
-let serverInstance: Server
+let serverInstance: Server | null
 
 export type Server = {
   php: PHP
@@ -14,12 +15,8 @@ export type Server = {
   documentRoot: string
   options: {}
   stopServer: () => Promise<void>
-  request: (requestOptions: {
-    method?: string | undefined
-    route: any
-    format?: string | undefined
-    data?: {} | undefined
-  }) => Promise<any>
+  request: Requester
+  console: Console
 
   // Template tag functions
   phpx: (code: string | TemplateStringsArray, ...args: any[]) => Promise<any>
@@ -27,11 +24,17 @@ export type Server = {
 
   setSiteTemplate: (code: string) => void
   resetSiteTemplate: () => void
+
+  onMessage: (callback: Listener) => void
 }
+
+export type Listener = (message: any) => void
 
 export async function getServer(
   options: {
     path?: string
+    blueprint?: string
+    env?: string
     mappings?: {
       [target: string]: string
     }
@@ -48,6 +51,8 @@ export async function getServer(
   const {
     path: projectPath = path.join(process.cwd(), 'tests'),
     reset = true,
+    blueprint,
+    env,
     mappings,
     ...serverOptions
   } = options
@@ -55,10 +60,12 @@ export async function getServer(
   const server: WPNowServer = await startServer({
     ...(await getWpNowConfig({
       path: projectPath,
+      blueprint,
+      env,
+        // @ts-ignore
       mappings,
     })),
 
-    // documentRoot: '/var/www/html',
     projectPath,
     mode: 'plugin',
     phpVersion: '8.2',
@@ -68,7 +75,10 @@ export async function getServer(
   } as WPNowOptions)
 
   const { php, stopServer } = server
-  const { port, documentRoot } = server.options
+  const {
+    port = 3000,
+    documentRoot = '/var/www/html'
+  } = server.options
 
   /**
    * PHP-WASM provides a function post_message_to_js() to send messages from PHP to JS.
@@ -76,7 +86,6 @@ export async function getServer(
    * is a wrapper to enable multiple listeners with unsubscribe.
    */
 
-  type Listener = (message: any) => void
   const phpListeners: Listener[] = []
 
   // Subscriber
@@ -113,7 +122,7 @@ export async function getServer(
    *
    * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Template_literals#tagged_templates
    */
-  const phpx = async (code, ...args) => {
+  const phpx = async (code: string | TemplateStringsArray, ...args: string[]) => {
     if (Array.isArray(code)) {
       code = code.reduce(
         (prev, now, index) => prev + now + (args[index] ?? ''),
@@ -126,9 +135,9 @@ export async function getServer(
     let result
     try {
       result = await php.run({
-        code: phpStart + code.replace(phpStartRegex, ''),
+        code: phpStart + (code as string).replace(phpStartRegex, ''),
       })
-    } catch (e) {
+    } catch (e: any) {
       result = { errors: e.message }
     }
     const { text, errors } = result
@@ -146,7 +155,7 @@ export async function getServer(
    * const result = wpx`return 'hi';`
    * ```
    */
-  const wpx = async (code, ...args) => {
+  const wpx = async (code: string | TemplateStringsArray, ...args: string[]) => {
     if (Array.isArray(code)) {
       code = code.reduce(
         (prev, now, index) => prev + now + (args[index] ?? ''),
@@ -157,7 +166,7 @@ export async function getServer(
 include 'wp-load.php';
 echo json_encode((function() {
   try {
-    ${code}
+    ${code as string}
   } catch (Exception $e) {
     return [
       'error' => $e->getMessage()
@@ -166,7 +175,7 @@ echo json_encode((function() {
 })());`
 
     try {
-      return JSON.parse(result)
+      return JSON.parse(result || '')
     } catch (e) {
       console.error(e)
     }
@@ -179,7 +188,7 @@ $wp_rewrite->set_permalink_structure('/%postname%/');
 $wp_rewrite->flush_rules();
 `
 
-  const templatePluginPath = `/${documentRoot}/wp-content/mu-plugins/template-include.php`
+  const templatePluginPath = `${documentRoot}/wp-content/mu-plugins/template-include.php`
   /**
    * Set site template to override theme
    */

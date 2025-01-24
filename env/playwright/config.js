@@ -24,7 +24,7 @@ export function createConfig(userConfig = {}) {
   )
 
   const testSitePort = userConfig.port || 8881
-  const testDir = userConfig.testDir || __dirname // path.join(cwd, 'tests/e2e')
+  const testDir = userConfig.testDir || path.join(cwd, 'tests')
   const testMatch = userConfig.testMatch || '**/*.js'
 
   /**
@@ -84,17 +84,22 @@ export function createConfig(userConfig = {}) {
     globalSetup: path.join(__dirname, 'setup.js'),
     webServer: {
       // NOTE: Keep this PHP version for compatibility with Playwright, until confirmed working with 8.2 and 8.4
-      command: `wp-now start --port ${testSitePort} --path ${testDir} --skip-browser --php 8.0`,
+      command: `wp-now start --port ${testSitePort} --path ${testDir} --skip-browser --php 8.0${
+        // blueprint.json
+        userConfig.blueprint ? ` --blueprint ${
+          path.join(testDir, userConfig.blueprint)
+        }` : ''
+      }${
+        // .wp-env.json
+        userConfig.env ? ` --env ${
+          path.join(testDir, userConfig.env)
+        }` : ''
+      }`,
       url: process.env.WP_BASE_URL,
       timeout: 120_000, // 120 seconds.
       reuseExistingServer: true,
     },
   }
 
-  Object.assign(config, userConfig instanceof Function
-    ? userConfig(config)
-    : userConfig
-  )
-
-  return defineConfig(config)  
+  return defineConfig(config)
 }
