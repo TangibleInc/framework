@@ -8,7 +8,7 @@ export const originalConsole = globalThis.console
 
 export const disableConsole = () => {
   // Silence console messages from NodePHP
-  globalThis.console = silentConsole
+  globalThis.console = silentConsole as Console
 }
 
 export const enableConsole = () => {

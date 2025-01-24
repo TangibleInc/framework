@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.common.json",
+  "compilerOptions": {
+    "outDir": "../build/env",
+    "rootDir": ".",
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "noEmit": false,
+  }
+}

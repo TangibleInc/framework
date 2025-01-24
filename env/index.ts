@@ -4,12 +4,12 @@ import { getWpNowConfig, startServer } from '@tangible/now'
 import { disableConsole, enableConsole, originalConsole } from './console'
 import { createRequest } from './request'
 import type { WPNowServer, WPNowOptions } from '@tangible/now'
-import type { NodePHP } from '@php-wasm/node'
+import type { PHP } from '@php-wasm/universal'
 
 let serverInstance: Server
 
 export type Server = {
-  php: NodePHP
+  php: PHP
   port: number
   documentRoot: string
   options: {}
@@ -65,7 +65,7 @@ export async function getServer(
     // silence: true,
     reset,
     ...serverOptions,
-  })
+  } as WPNowOptions)
 
   const { php, stopServer } = server
   const { port, documentRoot } = server.options

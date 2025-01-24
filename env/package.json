@@ -1,0 +1,32 @@
+{
+  "name": "@tangible/env",
+  "type": "module",
+  "version": "2025.1.24",
+  "description": "Local dev and test environment with WordPress Playground and Playwright",
+  "homepage": "https://github.com/tangibleinc/framework",
+  "repository": {
+    "url": "git+ssh://git@github.com/tangibleinc/framework.git"
+  },
+  "module": "build/index.js",
+  "exports": {
+    ".": {
+      "types": "./build/index.d.ts",
+      "import": "./build/index.js"
+    },
+    "./*": {
+      "types": "./build/*.d.ts",
+      "import": "./build/*.js"
+    }
+  },
+  "scripts": {
+    "release": "npm publish --access public",
+    "release:try": "npm publish --dry-run"
+  },
+  "dependencies": {
+    "@wordpress/e2e-test-utils-playwright": "^1.16.0"
+  },
+  "peerDependencies": {
+    "@playwright/test": "*",  
+    "@tangible/now": "*"
+  }  
+}

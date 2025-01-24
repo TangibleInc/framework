@@ -1,18 +1,24 @@
 {
   "name": "@tangible/framework",
+  "type": "module",
+  "version": "2025.1.24",
   "description": "Framework module",
   "homepage": "https://github.com/tangibleinc/framework",
-  "repository": "git@github.com:tangibleinc/framework.git",
-  "type": "module",
+  "repository": {
+    "url": "git+ssh://git@github.com/tangibleinc/framework.git"
+  },
   "scripts": {
     "start": "wp-now start --blueprint=blueprint.dev.json",
-    "dev": "roll dev",
-    "build": "roll build",
+    "build": "npm run clean && node build.js && npm run build:types",
+    "build:types": "tsc --project env/tsconfig.types.json",
+    "clean": "rm -rf build",
+    "dev:libs": "roll dev",
+    "build:libs": "roll build",
     "format": "roll format",
     "test": "roll run tests/index.ts",
     "test:7.4": "roll run tests/index.ts PHP_VERSION=7.4",
     "test:8.4": "roll run tests/index.ts PHP_VERSION=8.4",
-    "test:all": "npm run test && npm run test:8.4 && npm run e2e",
+    "test:all": "npm run test:7.4 && npm run test:8.4 && npm run e2e",
     "version": "node version.js",
     "subrepo": "git-subrepo",
     "-- End-to-end testing --": "https://playwright.dev/",
@@ -22,12 +28,16 @@
     "e2e:ui": "npm run e2e -- --ui"
   },
   "devDependencies": {
-    "@playwright/test": "^1.49.1",
+    "@gjsify/esbuild-plugin-transform-ext": "^0.0.4",
+    "@playwright/test": "^1.50.0",
     "@tangible/git-subrepo": "^1.0.1",
-    "@tangible/now": "^2.0.0",
+    "@tangible/now": "^2.0.1",
     "@tangible/roller": "^2.1.4",
     "@wordpress/e2e-test-utils-playwright": "^1.16.0",
-    "testra": "^2.1.4"
+    "esbuild": "^0.24.2",
+    "globby": "^14.0.2",
+    "testra": "^2.1.4",
+    "typescript": "^5.7.3"
   },
   "prettier": {
     "semi": false,
