@@ -1,7 +1,7 @@
 {
   "name": "@tangible/framework",
   "type": "module",
-  "version": "2025.1.24",
+  "version": "2025.1.25",
   "description": "Framework module",
   "homepage": "https://github.com/tangibleinc/framework",
   "repository": {
@@ -38,11 +38,5 @@
     "globby": "^14.0.2",
     "testra": "^2.1.4",
     "typescript": "^5.7.3"
-  },
-  "prettier": {
-    "semi": false,
-    "singleQuote": true,
-    "tabWidth": 2,
-    "useTabs": false
   }
 }
