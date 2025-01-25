@@ -3,6 +3,7 @@ import path from 'node:path'
 import fs from 'node:fs/promises'
 import { test, is, ok, run } from 'testra'
 import { getServer } from '../env/index.js'
+import { ensureFrameworkActivated } from './common.js'
 
 export default run(async () => {
   const { php, request, phpx, wpx, onMessage, console } = await getServer({
@@ -22,35 +23,16 @@ export default run(async () => {
     is('<!doc', result.slice(0, 5).toLowerCase(), 'responds with HTML document')
 
     // Activate Framework as plugin if needed
+    result = await ensureFrameworkActivated({ wpx })
 
     result = await wpx/* php */ `
-$result = class_exists('tangible\\framework');
-if (!$result) {
-  if (!function_exists('activate_plugin')) {
-    require ABSPATH . 'wp-admin/includes/plugin.php';
-  }
-  $result = activate_plugin(ABSPATH . 'wp-content/plugins/tangible-framework/plugin.php');
-}
-
-$has_framework = !is_wp_error($result) ? true : $result->get_error_message();
-
 // Clear log
 file_put_contents('wp-content/log.txt', '');
+return get_option( 'permalink_structure' );`
 
-return [
-  'framework' => $has_framework,
-  'permalink' => get_option( 'permalink_structure' ),
-];`
+    ok(true, 'PHP setup success')
 
-    ok(Boolean(result), 'PHP setup success')
-
-    if (result.framework !== true) {
-      console.log(result.framework)
-    }
-
-    is(true, result.framework === true, 'framework loaded')
-
-    is('/%postname%/', result.permalink, 'pretty permalink enabled')
+    is('/%postname%/', result, 'pretty permalink enabled')
 
     result = await wpx/* php */ `return switch_theme('empty-block-theme');`
     is(null, result, 'activate empty block theme')
@@ -129,6 +111,7 @@ require( tangible\\framework::$state->path . '/tests/basic-assertions.php' );`
   })
 
   await import('../api/tests/index.ts')
+  await import('../file-system/tests/index.ts')
 
   test('Log', async () => {
     const log = (
