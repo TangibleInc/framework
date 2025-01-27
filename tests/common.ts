@@ -1,3 +1,15 @@
+import { getServer } from '../env/index.js'
+
+export async function getServerWithFramework() {
+  const server = await getServer({
+    phpVersion: process.env.PHP_VERSION || '8.2',
+    reset: true,
+  })
+  const { wpx } = server
+  await ensureFrameworkActivated({ wpx })
+  return server
+}
+
 // Activate Framework as plugin if needed
 export async function ensureFrameworkActivated({ wpx }) {
   return await wpx/* php */ `
