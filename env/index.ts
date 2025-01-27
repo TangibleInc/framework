@@ -12,6 +12,7 @@ let serverInstance: Server | null
 export type Server = {
   php: PHP
   port: number
+  siteUrl: string
   documentRoot: string
   options: {}
   stopServer: () => Promise<void>
@@ -231,13 +232,16 @@ HTML);
 
   resetSiteTemplate()
 
+  const siteUrl = `http://localhost:${port}`
+
   return (serverInstance = {
     php,
     port,
     console: originalConsole,
+    siteUrl,
     documentRoot,
     options: server.options,
-    request: createRequest(`http://localhost:${port}`),
+    request: createRequest(siteUrl),
     phpx,
     wpx,
     async stopServer() {

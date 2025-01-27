@@ -4,10 +4,10 @@
 
 export type Requester = {
   (options: {
-    method: string
     route: string
-    format: 'json' | 'text' | 'arrayBuffer'
-    data: {
+    method?: string
+    format?: 'json' | 'text' | 'arrayBuffer'
+    data?: {
       [key: string]: string
     }
   }): Promise<any>
