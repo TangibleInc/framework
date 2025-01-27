@@ -35,7 +35,7 @@ function get_plugin_settings_page_url($plugin, $tab = '') {
 
   return empty($tab)
     ? $settings_page_url
-    : "{$settings_page_url}&tab=$tab_slug"
+    : "{$settings_page_url}&tab=$tab"
   ;
 }
 

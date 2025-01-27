@@ -9,26 +9,31 @@ export default run(async () => {
 
     const registerPlugin = `$plugin = tangible\\framework\\register_plugin([
       'name' => 'example'
-    ]);`;
+    ]);`
 
     result = await wpx`
       ${registerPlugin}
       return $plugin;
     `
-    is(true, typeof result==='object', `register_plugin() returns object`)
+    is(true, typeof result === 'object', `register_plugin() returns object`)
     is(true, 'name' in result, `$plugin->name`)
 
     result = await wpx`
       ${registerPlugin}
       return tangible\\framework\\get_plugin_settings_page_config( $plugin );
     `
-    is(true, typeof result==='object', `get_plugin_settings_page_config() returns object`)
+    is(
+      true,
+      typeof result === 'object',
+      `get_plugin_settings_page_config() returns object`,
+    )
     is(true, 'slug' in result, `settings page slug`)
     is(true, 'url' in result, `settings page url`)
     is(true, 'url_base' in result, `settings page url base`)
 
     // Double the backslash to escape in JS template literal then PHP string
-    result = await wpx`return function_exists('tangible\\\\framework\\\\is_plugin_settings_page');`
+    result =
+      await wpx`return function_exists('tangible\\\\framework\\\\is_plugin_settings_page');`
 
     is(true, result, `function is_plugin_settings_page() exists`)
 
@@ -50,5 +55,16 @@ export default run(async () => {
 
     is(true, result, `is plugin settings page`)
 
+    result = await wpx`
+      ${registerPlugin}
+      return tangible\\framework\\get_plugin_settings_page_url( $plugin );
+    `
+    is('string', typeof result, `get plugin settings page URL`)
+
+    result = await wpx`
+      ${registerPlugin}
+      return tangible\\framework\\get_plugin_settings_page_url( $plugin, 'welcome' );
+    `
+    is('string', typeof result, `get plugin settings page URL with tab`)
   })
 })
