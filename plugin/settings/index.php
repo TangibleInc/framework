@@ -17,6 +17,30 @@ function get_plugin_settings($plugin) {
   ;
 }
 
+function get_settings_page_values($plugin) {
+
+  $is_multisite = is_multisite();
+  $url_base = $is_multisite
+    ? 'settings.php'
+    : 'options-general.php'
+  ;
+  $settings_page_slug = "{$plugin->name}-settings";
+  $url = "{$url_base}?page={$settings_page_slug}";
+  $settings_page_url = $is_multisite ? network_admin_url($url) : admin_url($url);
+
+  return [
+    'url_base' => $url_base,
+    'page_slug' => $settings_page_slug,
+    'page_url'=> $settings_page_url
+  ];
+}
+
+function get_settings_tab_url($plugin, $tab_slug) {
+  $tab_query = !empty($tab_slug) ? "&tab=$tab_slug" : '';
+  $settings_page_url = get_settings_page_values($plugin)['page_url'];
+  return "{$settings_page_url}{$tab_query}";
+}
+
 /**
  * Register plugin settings
  * 
@@ -36,20 +60,18 @@ function register_plugin_settings($plugin, $config) {
     framework\load_plugin_features( $plugin );
   }
 
-  $is_multisite = is_multisite();
-  $url_base = $is_multisite
-    ? 'settings.php'
-    : 'options-general.php'
-  ;
-  $settings_page_slug = "{$plugin->name}-settings";
-  $url = "{$url_base}?page={$settings_page_slug}";
-  $settings_page_url = $is_multisite ? network_admin_url($url) : admin_url($url);
+  [
+    'url_base' => $url_base,
+    'page_slug' => $settings_page_slug,
+    'page_url' => $settings_page_url
+  ] = get_settings_page_values($plugin);
 
   $plugin->settings = $config;
   if (isset($config['features'])) {
     $plugin->features = $config['features'];
   }
 
+  $is_multisite = is_multisite();
   $settings_key = framework\get_plugin_settings_key($plugin);
   $prefix = $plugin->setting_prefix ?? str_replace('-', '_', $name);
   $nonce_key = "{$prefix}_nonce";
