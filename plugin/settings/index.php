@@ -17,6 +17,43 @@ function get_plugin_settings($plugin) {
   ;
 }
 
+function get_plugin_settings_page_slug($plugin) {
+  return "{$plugin->name}-settings";
+}
+
+function get_plugin_settings_page_url_base($plugin) {
+  return is_multisite() ? 'settings.php' : 'options-general.php';
+}
+
+function get_plugin_settings_page_url($plugin, $tab = '') {
+
+  $url_base = framework\get_plugin_settings_page_url_base($plugin);
+  $settings_page_slug = framework\get_plugin_settings_page_slug($plugin);
+
+  $url = "{$url_base}?page={$settings_page_slug}";
+  $settings_page_url = is_multisite() ? network_admin_url($url) : admin_url($url);
+
+  return empty($tab)
+    ? $settings_page_url
+    : "{$settings_page_url}&tab=$tab_slug"
+  ;
+}
+
+function get_plugin_settings_page_config($plugin) {
+  return [
+    'slug' => framework\get_plugin_settings_page_slug($plugin),
+    'url' => framework\get_plugin_settings_page_url($plugin),
+    'url_base' => framework\get_plugin_settings_page_url_base($plugin),
+  ];
+}
+
+function is_plugin_settings_page($plugin) {
+  global $pagenow;
+  return $pagenow === (is_multisite() ? 'settings.php' : 'options-general.php')
+    && ($_GET['page'] ?? '') === "{$plugin->name}-settings"
+  ;
+}
+
 /**
  * Register plugin settings
  * 
@@ -36,20 +73,18 @@ function register_plugin_settings($plugin, $config) {
     framework\load_plugin_features( $plugin );
   }
 
-  $is_multisite = is_multisite();
-  $url_base = $is_multisite
-    ? 'settings.php'
-    : 'options-general.php'
-  ;
-  $settings_page_slug = "{$plugin->name}-settings";
-  $url = "{$url_base}?page={$settings_page_slug}";
-  $settings_page_url = $is_multisite ? network_admin_url($url) : admin_url($url);
+  [
+    'slug' => $settings_page_slug,
+    'url' => $settings_page_url,
+    'url_base' => $url_base,
+  ] = framework\get_plugin_settings_page_config($plugin);
 
   $plugin->settings = $config;
   if (isset($config['features'])) {
     $plugin->features = $config['features'];
   }
 
+  $is_multisite = is_multisite();
   $settings_key = framework\get_plugin_settings_key($plugin);
   $prefix = $plugin->setting_prefix ?? str_replace('-', '_', $name);
   $nonce_key = "{$prefix}_nonce";

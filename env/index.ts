@@ -162,11 +162,25 @@ export async function getServer(
         '',
       )
     }
-    const result = await phpx/* php */`
+
+    // Extract lines to use namespace and put them at the top
+    let useNamespace = ''
+    let filteredCode = ''
+
+    for (const line of (code as string).split('\n')) {
+      if (line.trim().startsWith('use ')) {
+        useNamespace += line + '\n';
+      } else {
+        filteredCode += line + '\n'
+      }
+    }
+
+const result = await phpx/* php */`
+${useNamespace}
 include 'wp-load.php';
 echo json_encode((function() {
   try {
-    ${code as string}
+    ${filteredCode}
   } catch (Exception $e) {
     return [
       'error' => $e->getMessage()
