@@ -24,7 +24,7 @@ if (!class_exists('tangible\\design')) {
 
     design::$state->version = $this->version;
     design::$state->path = __DIR__;
-    design::$state->url = untrailingslashit(plugins_url('/', __FILE__));
+    design::$state->url = framework\module_url( __FILE__ );
     
     require_once __DIR__ . '/admin.php';
     require_once __DIR__ . '/enqueue.php';
