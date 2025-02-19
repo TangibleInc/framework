@@ -1,6 +1,10 @@
 <?php
 namespace tangible\framework;
 
+/**
+ * Get module folder URL from given file path
+ * Similar to `plugins_url()` but not limited to within plugins folder
+ */
 function module_url( $path, $file = false ) {
   // Shortcut: single argument $file with default root path '/'
   if ($file===false) {

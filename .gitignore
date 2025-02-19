@@ -8,7 +8,6 @@ node_modules
 *.local.js
 
 # Ignore lock files to allow any package manager
-composer.lock
 package-lock.json
 yarn.lock
 bun.lockb
