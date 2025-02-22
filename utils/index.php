@@ -12,15 +12,26 @@ function module_url( $path, $file = false ) {
     $path = '/';
   }
   if (!empty($path) && $path[0]!=='/') $path = '/' . $path;
+
+  $file = wp_normalize_path( $file );
   $dir = dirname( $file ) . $path;
-  if (strpos($dir, WP_CONTENT_DIR)!==false) {
+  $content_dir = wp_normalize_path(
+    defined('WP_CONTENT_DIR_OVERRIDE')
+      ? WP_CONTENT_DIR_OVERRIDE
+      : WP_CONTENT_DIR
+  );
+  if (strpos($dir, $content_dir)!==false) {
     return untrailingslashit(
-      content_url( str_replace( DIRECTORY_SEPARATOR, '/', str_replace(WP_CONTENT_DIR, '', $dir)))
+      content_url( str_replace($content_dir, '', $dir))
     );
   }
 
   // Outside wp-content
   return untrailingslashit(
-    home_url( '/' . str_replace( DIRECTORY_SEPARATOR, '/', str_replace(ABSPATH, '', $dir)))
+    home_url( '/' . str_replace(wp_normalize_path(
+      defined('ABSPATH_OVERRIDE')
+      ? ABSPATH_OVERRIDE
+      : ABSPATH
+    ), '', $dir))
   );
 }

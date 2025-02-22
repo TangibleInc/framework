@@ -114,6 +114,7 @@ require( tangible\\framework::$state->path . '/tests/basic-assertions.php' );`
   await import('../env/tests/index.ts')
   await import('../file-system/tests/index.ts')
   await import('../plugin/tests/index.ts')
+  await import('../utils/tests/index.ts')
 
   test('Log', async () => {
     const log = (
