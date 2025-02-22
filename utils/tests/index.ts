@@ -52,7 +52,7 @@ export default run(async () => {
       `framework\\module_url() returns plugin folder for Windows-style file path`,
     )
 
-    const windowsStyleModuleFilePath = `${windowsStyleContentPath}/tangible/example-module/index.php`
+    const windowsStyleModuleFilePath = `${windowsStyleContentPath}\\tangible\\example-module\\index.php`
 
     result = await wpx`
       define('WP_CONTENT_DIR_OVERRIDE', '${windowsStyleContentPath}');
