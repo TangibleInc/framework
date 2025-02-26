@@ -11,6 +11,7 @@ if (!class_exists('tangible\\framework')) {
 
 // Load Date module early since it has its own loader
 require_once __DIR__ . '/date/index.php';
+require_once __DIR__ . '/utils/index.php';
 
 (include __DIR__ . '/module-loader.php')(new class {
 

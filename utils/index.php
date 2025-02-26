@@ -1,6 +1,7 @@
 <?php
 namespace tangible\framework;
 
+if (!function_exists('module_url')):
 /**
  * Get module folder URL from given file path
  * Similar to `plugins_url()` but not limited to within plugins folder
@@ -35,3 +36,4 @@ function module_url( $path, $file = false ) {
     ), '', $dir))
   );
 }
+endif;
