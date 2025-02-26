@@ -1,7 +1,7 @@
 {
   "name": "@tangible/env",
   "type": "module",
-  "version": "2025.2.22",
+  "version": "2025.2.26",
   "description": "Local dev and test environment with WordPress Playground and Playwright",
   "homepage": "https://github.com/tangibleinc/framework",
   "repository": {
