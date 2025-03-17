@@ -53,11 +53,13 @@ function conditional_enqueue() {
 // Register after priority 1, when plugin framework used to register
 add_action('wp_enqueue_scripts', __NAMESPACE__ . '\\register', 2);
 add_action('admin_enqueue_scripts', __NAMESPACE__ . '\\register', 2);
+add_action('login_enqueue_scripts', __NAMESPACE__ . '\\register', 2);
 add_action('enqueue_block_assets', __NAMESPACE__ . '\\register', 2);
 add_action('enqueue_block_editor_assets', __NAMESPACE__ . '\\register', 2);
 
 add_action('wp_enqueue_scripts', __NAMESPACE__ . '\\conditional_enqueue', 999);
 add_action('admin_enqueue_scripts', __NAMESPACE__ . '\\conditional_enqueue', 999);
+add_action('login_enqueue_scripts', __NAMESPACE__ . '\\conditional_enqueue', 999);
 add_action('enqueue_block_assets', __NAMESPACE__ . '\\conditional_enqueue', 999);
 add_action('enqueue_block_editor_assets', __NAMESPACE__ . '\\conditional_enqueue', 999);
 
