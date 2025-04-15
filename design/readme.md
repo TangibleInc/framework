@@ -1,8 +1,16 @@
-# Integrate Design library with WordPress
+# Design library
 
-In the Framework, it would be convenient to bundle the library `@tangible/design`, made of Sass and JavaScript, into independently loadable modules under a shared global namespace.
+This is a set of design styles, components, and assets and for use by Tangible plugins.
 
-- `design-core.min.css`
-- `design-core.min.js`
-- `design-component.*.min.css`
-- `design-component.*.min.js`
+## Plan
+
+Integrate the general-purpose design library with curated tokens and CSS variables.
+
+- `core.min.css`
+  - class `t-design`
+- `core.min.js`
+  - `Tangible.Design`
+- `component.*.min.css`
+  - class `t-Component`
+- `component.*.min.js`
+  - class `Component` exported from `@tangible/design`
