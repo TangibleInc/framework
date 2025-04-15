@@ -70,7 +70,7 @@ new class {
     $this->namespace      = $this->plugin_name . '/v' . self::$api_version;
 
     add_filter( 'rest_api_init', [ $this, 'rest_api_init' ] );
-    add_filter( 'rest_pre_dispatch', [ $this, 'rest_pre_dispatch' ], 10, 3 );
+    add_filter( 'init', [ $this, 'pre_request' ], 5 );
   }
 
   /**
@@ -484,9 +484,11 @@ new class {
   /**
    * Provide current user to the request if there is a valid token.
    */
-  function rest_pre_dispatch( $result, $server, $request ) {
+  function pre_request() {
     try {
-      if ($request->get_route() !== '/' . $this->namespace . '/token/validate'
+      $route = $_SERVER['REQUEST_URI'] ?? '/';
+      $prefix = trailingslashit( rest_get_url_prefix() );
+      if (strpos($route, $prefix . $this->namespace . '/token/validate')===false
         && !empty($user_id = $this->determine_current_user())
         && !is_user_logged_in()
       ) {
@@ -495,7 +497,6 @@ new class {
     } catch (\Throwable $th) {
       // Continue - Pass through to any other plugin with JWT auth
     }
-    return $result;
   }
 
 };
