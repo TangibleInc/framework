@@ -7,10 +7,6 @@
           "WP_DEBUG": true
       },
       "method": "rewrite-wp-config"
-    },
-    {
-      "step": "activatePlugin",
-      "pluginPath": "/var/www/html/wp-content/plugins/tangible-e2e-plugin"
     }
   ]
 }

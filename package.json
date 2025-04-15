@@ -1,7 +1,7 @@
 {
   "name": "@tangible/framework",
   "type": "module",
-  "version": "2025.2.26",
+  "version": "2025.4.2",
   "description": "Framework module",
   "homepage": "https://github.com/tangibleinc/framework",
   "repository": {
@@ -26,16 +26,16 @@
     "env:start": "wp-env start",
     "env:update": "wp-env start --update",
     "env:stop": "wp-env stop",
-    "env:composer": "FOLDER=`basename $(realpath $PWD)`; wp-env run cli --env-cwd=wp-content/plugins/$FOLDER composer",
+    "env:composer": "FOLDER=tangible-framework; wp-env run cli --env-cwd=wp-content/plugins/$FOLDER composer",
     "env:composer:install": "wp-env run cli sudo apk add git && npm run env:composer install",
     "env:composer:update": "npm run env:composer update",
-    "env:test": "FOLDER=`basename $(realpath $PWD)`; wp-env run tests-wordpress /var/www/html/wp-content/plugins/$FOLDER/vendor/bin/phpunit --testdox -c /var/www/html/wp-content/plugins/$FOLDER/phpunit.xml --verbose",
+    "env:test": "FOLDER=tangible-framework; wp-env run tests-wordpress /var/www/html/wp-content/plugins/$FOLDER/vendor/bin/phpunit --testdox -c /var/www/html/wp-content/plugins/$FOLDER/phpunit.xml --verbose",
     "env:test:7.4": "WP_ENV_PHP_VERSION=7.4 wp-env start && npm run env:test",
     "env:test:8.2": "WP_ENV_PHP_VERSION=8.2 wp-env start && npm run env:test",
     "env:destroy": "wp-env destroy",
     "env:clean": "wp-env clean all",
     "-- End-to-end testing --": "https://playwright.dev/",
-    "e2e": "playwright test --config tests/playwright.config.js",
+    "e2e": "playwright test --config playwright.config.js",
     "e2e:install": "playwright install chromium",
     "e2e:debug": "npm run e2e -- --debug",
     "e2e:ui": "npm run e2e -- --ui"

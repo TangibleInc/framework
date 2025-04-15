@@ -13,6 +13,13 @@ import { defineConfig, devices } from '@playwright/test'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
+export function createEnvConfig(userConfig = {}) {
+  return createConfig({
+    wpEnv: true,
+    ...userConfig
+  })
+}
+
 export function createConfig(userConfig = {}) {
 
   const cwd = userConfig.cwd || process.cwd()
@@ -26,6 +33,7 @@ export function createConfig(userConfig = {}) {
   const testSitePort = userConfig.port || 8881
   const testDir = userConfig.testDir || path.join(cwd, 'tests')
   const testMatch = userConfig.testMatch || '**/*.js'
+  const isWpEnv = Boolean(userConfig.wpEnv)
 
   /**
    * Workaround because @wordpress/e2e-test-utils-playwright
@@ -34,6 +42,11 @@ export function createConfig(userConfig = {}) {
   if (!process.env.WP_BASE_URL) {
     const testSiteUrl = `http://localhost:${testSitePort}`
     process.env.WP_BASE_URL = testSiteUrl
+  }
+
+  if (isWpEnv) {
+    process.env.WP_ENV_PORT = testSitePort - 1
+    process.env.WP_ENV_TESTS_PORT = testSitePort
   }
 
   const config = {
@@ -84,7 +97,12 @@ export function createConfig(userConfig = {}) {
     globalSetup: path.join(__dirname, 'setup.js'),
     webServer: {
       // NOTE: Keep this PHP version for compatibility with Playwright, until confirmed working with 8.2 and 8.4
-      command: `wp-now start --port ${testSitePort} --path ${testDir} --skip-browser --php 8.0${
+      command:      
+      // wp-env using Docker
+      isWpEnv
+      ? `wp-env start`
+      // wp-now using PHP-WASM (experimental)
+      : `wp-now start --port ${testSitePort} --path ${testDir} --skip-browser --php 8.0${
         // blueprint.json
         userConfig.blueprint ? ` --blueprint ${
           path.join(testDir, userConfig.blueprint)

@@ -128,7 +128,7 @@ The test environment is started by running:
 npm run env:start
 ```
 
-This uses [`wp-env`](https://developer.wordpress.org/block-editor/reference-guides/packages/packages-env/) to quickly spin up a local dev and test environment, optionally switching between multiple PHP versions. It requires **Docker** to be installed. There are instructions available for installing Docker on [Windows](https://docs.docker.com/desktop/install/windows-install/), [macOS](https://docs.docker.com/desktop/install/mac-install/), and [Linux](https://docs.docker.com/desktop/install/linux-install/).
+This uses [`wp-env`](https://developer.wordpress.org/block-editor/reference-guides/packages/packages-env/) to set up a local dev and test site, optionally switching between multiple PHP versions. It requires **Docker** to be installed. There are instructions available for installing Docker on [Windows](https://docs.docker.com/desktop/install/windows-install/), [macOS](https://docs.docker.com/desktop/install/mac-install/), and [Linux](https://docs.docker.com/desktop/install/linux-install/).
 
 Visit [http://localhost:8888](http://localhost:8888) to see the dev site, and [http://localhost:8889](http://localhost:8880) for the test site, whose database is cleared on every run.
 
