@@ -11,6 +11,7 @@ use tangible\template_system;
 
 framework::$state->admin_menus = [];
 
+require_once __DIR__ . '/icon.php';
 require_once __DIR__ . '/separator.php';
 
 function get_admin_menus() {
@@ -66,7 +67,7 @@ add_action(
       'manage_options', // Capability
       'tangible', // Menu slug
       '', // Callback
-      'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zeGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIHZpZXdCb3g9Ii01IC01IDEwOSAxMDkiPgoKICAgIDxwYXRoIGQ9Ik0wIDAgSCAzMyBWIDMzIEggMCBMIDAgMCIgZmlsbD0iIzllYTNhOCI+PC9wYXRoPgogICAgPHBhdGggZD0iTTMzIDAgSCA2NiBWIDMzIEggMzMgTCAzMyAwIiBmaWxsPSIjOWVhM2E4Ij48L3BhdGg+CiAgICA8cGF0aCBkPSJNNjYgMCBIIDk5IFYgMzMgSCA2NiBMIDY2IDAiIGZpbGw9IiM5ZWEzYTgiPjwvcGF0aD4KCiAgICA8cGF0aCBkPSJNMCAzMyBIIDMzIFYgNjYgSCAwIEwgMCAzMyIgZmlsbD0iIzllYTNhOCI+PC9wYXRoPgogICAgPHBhdGggZD0iTTY2IDMzIEggOTkgViA2NiBIIDY2IEwgNjYgMzMiIGZpbGw9IiM5ZWEzYTgiPjwvcGF0aD4KCiAgICA8cGF0aCBkPSJNMzMgNjYgSCA2NiBWIDk5IEggMzMgTCAzMyA2NiIgZmlsbD0iIzllYTNhOCI+PC9wYXRoPgoKICA8L3N2Zz4=', // Icon
+      framework\get_admin_menu_icon(), // Icon
       30 // Position
     );
 
