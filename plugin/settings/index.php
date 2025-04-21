@@ -17,6 +17,24 @@ function get_plugin_settings($plugin) {
   ;
 }
 
+function update_plugin_settings($plugin, $new_settings) {
+
+  $settings_key = framework\get_plugin_settings_key($plugin);
+
+  // Merge with previous settings to support different pages to partially update
+  $old_settings = framework\get_plugin_settings($plugin);
+  $settings = array_merge(
+    empty($old_settings) ? [] : $old_settings,
+    $new_settings
+  );
+
+  if (is_multisite()) {
+    return update_network_option(null, $settings_key, $settings);
+  }
+
+  return update_option($settings_key, $settings);
+}
+
 function get_plugin_settings_page_slug($plugin) {
   return "{$plugin->name}-settings";
 }
@@ -201,7 +219,7 @@ function register_plugin_settings($plugin, $config) {
                   if (isset($tabs[$active_tab]) && isset($tabs[$active_tab]['callback'])) {
 
                     // Render tab
-                    $tabs[$active_tab]['callback']();
+                    $tabs[$active_tab]['callback']( $plugin );
                   }
                 ?>
               </form>
@@ -227,20 +245,8 @@ function register_plugin_settings($plugin, $config) {
     && isset($_POST[$settings_key])
     && check_admin_referer($nonce_key, $nonce_key)
   ) {
-
-    // Merge with previous settings to support different pages to partially update
-    $old_settings = framework\get_plugin_settings($plugin);
     $new_settings = $_POST[$settings_key];
-    $settings = array_merge(
-      empty($old_settings) ? [] : $old_settings,
-      $new_settings
-    );
-
-    if (is_multisite()) {
-      update_network_option(null, $settings_key, $settings);
-    } else {
-      update_option($settings_key, $settings);
-    }
+    framework\update_plugin_settings($plugin, $new_settings);
   }
 
   /**

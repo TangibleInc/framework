@@ -37,6 +37,18 @@ function register_theme($config) {
   ]);
 }
 
+function get_plugin($name, $theme =  false) {
+  foreach (framework::$state->plugins as $plugin) {
+    if ($plugin->name === $name && ($plugin->is_theme ?? false) === $theme) {
+      return $plugin;
+    }
+  }
+}
+
+function get_theme($name) {
+  return framework\get_plugin($name, true);
+}
+
 require_once __DIR__ . '/dependencies/index.php';
 require_once __DIR__ . '/features/index.php';
 require_once __DIR__ . '/settings/index.php';
