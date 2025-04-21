@@ -37,7 +37,7 @@ function register_theme($config) {
   ]);
 }
 
-function get_plugin($name, $theme =  false) {
+function get_plugin($name, $theme = false) {
   foreach (framework::$state->plugins as $plugin) {
     if ($plugin->name === $name && ($plugin->is_theme ?? false) === $theme) {
       return $plugin;
