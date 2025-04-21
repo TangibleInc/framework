@@ -1,6 +1,9 @@
-import { getServer } from '../env/index.js'
+import { getServer } from './server.ts'
+
+export { getServer }
 
 export async function getServerWithFramework() {
+  if (globalThis.serverInstance) return globalThis.serverInstance
   const server = await getServer({
     phpVersion: process.env.PHP_VERSION || '8.2',
     reset: true,

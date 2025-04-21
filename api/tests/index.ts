@@ -1,5 +1,5 @@
 import { test, is, ok, run } from 'testra'
-import { getServer } from '../../env/index.js'
+import { getServer } from '../../tests/common.ts'
 
 export default run(async () => {
 

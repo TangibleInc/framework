@@ -2,10 +2,10 @@ import url from 'node:url'
 import path from 'node:path'
 import fs from 'node:fs/promises'
 import { test, is, ok, run } from 'testra'
-import { getServer } from '../env/index.js'
-import { ensureFrameworkActivated } from './common.js'
+import { getServer, ensureFrameworkActivated } from './common.js'
 
 export default run(async () => {
+
   const { php, request, phpx, wpx, onMessage, console } = await getServer({
     phpVersion: process.env.PHP_VERSION || '8.2',
     reset: true,

@@ -1,16 +1,102 @@
-/**
- * Deprecated: Use framework/tests/common.ts
- */
 import path from 'node:path'
 import fs from 'node:fs/promises'
 import { getWpNowConfig, startServer } from '@tangible/now'
 import type { WPNowServer, WPNowOptions } from '@tangible/now'
 import type { PHP } from '@php-wasm/universal'
-import { disableConsole, enableConsole, originalConsole } from './console.js'
-import { createRequest } from './request.js'
-import type { Requester} from './request.js'
 
-let serverInstance: Server | null
+/**
+ * Create a wrapper around `fetch()` with given URL for JSON API
+ */
+export type Requester = {
+  (options: {
+    route: string
+    method?: string
+    format?: 'json' | 'text' | 'arrayBuffer'
+    data?: {
+      [key: string]: string
+    }
+  }): Promise<any>
+  token?: string
+}
+
+export function createRequest(siteUrl: string): Requester {
+  const request: Requester = async ({
+    method = 'GET',
+    route,
+    /**
+     * Response format: arrayBuffer, formData, json, text
+     * @see https://developer.mozilla.org/en-US/docs/Web/API/Response#instance_methods
+     */
+    format = 'json',
+    data = {},
+  }) => {
+    const isJson = format === 'json'
+    const hasBody = !['GET', 'HEAD'].includes(method)
+    let url = `${siteUrl}${isJson ? '/wp-json' : ''}${route}`
+
+    if (!hasBody) {
+      // Convert data to URL query
+      url += Object.keys(data).reduce(
+        (str, key) => str + `${!str ? '?' : '&'}${key}=${data[key]}`,
+        '',
+      )
+    }
+
+    const options: {
+      method: string
+      headers?: {
+        [key: string]: string
+      }
+      body?: string
+    } = {
+      method,
+    }
+
+    if (isJson) {
+      options.headers = {
+        'Content-Type': 'application/json',
+      }
+      if (request.token) {
+        options.headers.Authorization = `Bearer ${request.token}`
+      }
+      if (hasBody) {
+        options.body = JSON.stringify(data)
+      }
+    }
+
+    return await (await fetch(url, options))[
+      format
+    ]()
+  }
+
+  request.token = undefined
+
+  return request
+}
+
+/**
+ * Console
+ */
+const silentConsole = {
+  log() {},
+  warn() {},
+  error() {},
+  info() {},
+  assert() {},
+}
+export const originalConsole = globalThis.console
+
+export const disableConsole = () => {
+  // Silence console messages from NodePHP
+  globalThis.console = silentConsole as Console
+}
+
+export const enableConsole = () => {
+  globalThis.console = originalConsole
+}
+
+
+// let serverInstance: Server | null
 
 export type Server = {
   php: PHP
@@ -30,6 +116,8 @@ export type Server = {
   resetSiteTemplate: () => void
 
   onMessage: (callback: Listener) => void
+
+  template: (code: string | TemplateStringsArray, ...args: string[]) => any
 }
 
 export type Listener = (message: any) => void
@@ -47,13 +135,13 @@ export async function getServer(
     reset?: boolean
   } = {},
 ): Promise<Server> {
-  if (serverInstance) {
-    if (!options.restart) return serverInstance
-    await serverInstance.stopServer()
+  if (globalThis.serverInstance) {
+    if (!options.restart) return globalThis.serverInstance
+    await globalThis.serverInstance.stopServer()
   }
 
   const {
-    path: projectPath = path.join(process.cwd(), 'tests'),
+    path: projectPath = path.join(process.cwd(), 'tests', 'now'),
     reset = true,
     blueprint,
     env,
@@ -237,7 +325,7 @@ HTML);
 
   const siteUrl = `http://localhost:${port}`
 
-  return (serverInstance = {
+  return (globalThis.serverInstance = {
     php,
     port,
     console: originalConsole,
@@ -248,11 +336,9 @@ HTML);
     phpx,
     wpx,
     async stopServer() {
-      serverInstance = null
+      globalThis.serverInstance = null
       await stopServer()
     },
     onMessage,
-    setSiteTemplate,
-    resetSiteTemplate,
   })
 }
