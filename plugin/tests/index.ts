@@ -1,5 +1,5 @@
 import { test, is, ok, run } from 'testra'
-import { getServerWithFramework } from '../../tests/common.ts'
+import { getServerWithFramework } from '../../tests/now/common.ts'
 
 export default run(async () => {
   const { php, request, wpx } = await getServerWithFramework()

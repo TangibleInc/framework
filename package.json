@@ -20,7 +20,7 @@
     "version": "node version.js",
     "subrepo": "git-subrepo",
     "now": "wp-now start --blueprint=blueprint.dev.json",
-    "now:test": "roll run tests/index.ts",
+    "now:test": "roll run tests/now/index.ts",
     "-- Local environment --": "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-env",
     "env": "wp-env",
     "composer": "FOLDER=tangible-framework; wp-env run cli --env-cwd=wp-content/plugins/$FOLDER composer",

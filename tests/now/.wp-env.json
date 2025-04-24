@@ -1,0 +1,6 @@
+{
+  "extends": "../../.wp-env.json",
+  "mappings": {
+    "wp-content/plugins/tangible-framework": "../.."
+  }
+}

@@ -73,7 +73,7 @@ return get_option( 'permalink_structure' );`
       messages.push(e)
     })
 
-    await wpx`require( tangible\\framework::$state->path . '/tests/basic-messages.php' );`
+    await wpx`test\\basic_messages();`
 
     is(
       [123, 'hi', { key: 'value' }],
@@ -96,7 +96,7 @@ function is($expected, $actual, $title = null) {
 }`
 
     await wpx`${prelude}
-require( tangible\\framework::$state->path . '/tests/basic-assertions.php' );`
+test\\basic_assertions();`
     unsubscribe()
 
     for (const [expected, actual, title] of asserts) {
@@ -110,11 +110,11 @@ require( tangible\\framework::$state->path . '/tests/basic-assertions.php' );`
     asserts.splice(0)
   })
 
-  await import('../api/tests/index.ts')
-  await import('../env/tests/index.ts')
-  await import('../file-system/tests/index.ts')
-  await import('../plugin/tests/index.ts')
-  await import('../utils/tests/index.ts')
+  await import('../../api/tests/index.ts')
+  await import('../../env/tests/index.ts')
+  await import('../../file-system/tests/index.ts')
+  await import('../../plugin/tests/index.ts')
+  await import('../../utils/tests/index.ts')
 
   test('Log', async () => {
     const log = (
