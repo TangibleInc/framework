@@ -8,6 +8,75 @@ Many of these were refactored from the deprecated [plugin framework v2](https://
 
 Git repository: https://github.com/tangibleinc/framework
 
+## Install
+
+Add as a production dependency in `tangible.config.js`.
+
+```js
+export default {
+  install: [
+    {
+      git: 'git@github.com:tangibleinc/framework',
+      dest: 'vendor/tangible/framework',
+      branch: 'main',
+    },
+  ]
+}
+```
+
+Run `npm run install` or `npx roll install`.
+
+Alternatively, add in `composer.json` and run `composer update`.
+
+```json
+{
+  "repositories": [
+    {
+      "type": "vcs",
+      "url": "git@github.com:tangibleinc/framework"
+    }
+  ],
+  "require": {
+    "tangible/framework": "dev-main"
+  },
+  "minimum-stability": "dev"
+}
+```
+
+## Use
+
+After loading the framework, its newest version instance is ready on `plugins_loaded` action.
+
+```php
+use tangible\framework;
+
+require_once __DIR__ . '/vendor/tangible/framework/index.php';
+
+add_action('plugins_loaded', function() {
+
+  // Newest version of Framework is ready
+
+});
+```
+
+### Note on plugin activation
+
+During plugin activation, such as after install or update, WordPress runs the `plugins_loaded` action *before* loading plugins and modules, short-circuiting the version comparison logic. This can cause an older version of a module to load with missing features.
+
+It is recommended to check for the constant `WP_SANDBOX_SCRAPING`, and skip loading the rest of the plugin when it's defined.
+
+```php
+if (defined('WP_SANDBOX_SCRAPING')) return;
+
+// ..Register with Framework and load the rest of plugin..
+```
+
+This guarantees the availability of the newest version of all modules. For more details, see:
+
+- https://developer.wordpress.org/reference/functions/register_activation_hook/#more-information
+- https://github.com/WordPress/wordpress-develop/blob/8a52d746e9bb85604f6a309a87d22296ce1c4280/src/wp-admin/includes/plugin.php#L2381C10-L2381C31
+
+
 ## Modules
 
 - [Admin](admin)
