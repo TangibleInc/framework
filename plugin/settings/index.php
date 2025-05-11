@@ -246,7 +246,14 @@ function register_plugin_settings($plugin, $config) {
     && check_admin_referer($nonce_key, $nonce_key)
   ) {
     $new_settings = $_POST[$settings_key];
-    framework\update_plugin_settings($plugin, $new_settings);
+
+    $update_value = apply_filters('tangible_plugin_save_settings_on_submit',
+      true, $plugin, $new_settings
+    );
+
+    if ($update_value) {
+      framework\update_plugin_settings($plugin, $new_settings);
+    }
   }
 
   /**
