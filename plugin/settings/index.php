@@ -208,14 +208,21 @@ function register_plugin_settings($plugin, $config) {
                   <p><?php echo $title_section['description'] ?? '' ?></p>
                 </div>
               <?php } ?>
-          
+
+              <?php
+              if (isset($tabs[$active_tab]) && isset($tabs[$active_tab]['pre_callback'])) {
+                // Render pre callback content.
+                $tabs[$active_tab]['pre_callback']( $plugin );
+              }
+              ?>
+
               <form method="post"
                 class="tangible-plugin-settings-tab <?php echo $name; ?>-settings-tab <?php echo $name; ?>-settings-tab-<?php echo $active_tab; ?>"
               >
                 <?php
 
                   wp_nonce_field($nonce_key, $nonce_key);
-          
+
                   if (isset($tabs[$active_tab]) && isset($tabs[$active_tab]['callback'])) {
 
                     // Render tab
@@ -223,8 +230,15 @@ function register_plugin_settings($plugin, $config) {
                   }
                 ?>
               </form>
+
+              <?php
+              if (isset($tabs[$active_tab]) && isset($tabs[$active_tab]['post_callback'])) {
+                // Render pre callback content.
+                $tabs[$active_tab]['post_callback']( $plugin );
+              }
+              ?>
+
             </div>
-            
           </div>
           <?php
           if (isset($config['js'])) {
