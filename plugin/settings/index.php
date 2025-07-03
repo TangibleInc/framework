@@ -233,7 +233,7 @@ function register_plugin_settings($plugin, $config) {
 
               <?php
               if (isset($tabs[$active_tab]) && isset($tabs[$active_tab]['post_callback'])) {
-                // Render pre callback content.
+                // Render post callback content.
                 $tabs[$active_tab]['post_callback']( $plugin );
               }
               ?>
