@@ -29,10 +29,18 @@ function render_setting_field_checkbox($config) {
 
   if (empty($type) || $type === 'checkbox'): ?>
       <label>
-          <input type="hidden" name="<?php echo $name; ?>" value="<?php echo $checked ? 'true' : 'false'; ?>" autocomplete="off">
-          <input type="checkbox" value="true" autocomplete="off"
-              onclick="this.previousSibling.value=this.previousSibling.value==='true'?'false':'true'" 
-              <?php echo $checked ? 'checked' : ''; ?> />
+          <input
+            type="hidden"
+            name="<?php echo $name; ?>"
+            value="<?php echo $checked ? 'true' : 'false'; ?>"
+            autocomplete="off"
+          ><input
+            type="checkbox"
+            value="true"
+            autocomplete="off"
+            onclick="this.previousSibling.value=this.previousSibling.value==='true'?'false':'true'"
+            <?php echo $checked ? 'checked' : ''; ?>
+          />
           <?php echo esc_html($label); ?>
       </label>
     <?php elseif ($type === 'switch'): ?>
