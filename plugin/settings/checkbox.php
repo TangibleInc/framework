@@ -27,7 +27,12 @@ function render_setting_field_checkbox($config) {
 
   $checked = $value==='true';
 
-  if (empty($type) || $type === 'checkbox'): ?>
+  if (empty($type) || $type === 'checkbox'):
+  /**
+   * Note: The two input fields must be next to each other without
+   * space or new line for `previousSibling` to work.
+   */
+  ?>
       <label>
           <input
             type="hidden"
