@@ -27,12 +27,25 @@ function render_setting_field_checkbox($config) {
 
   $checked = $value==='true';
 
-  if (empty($type) || $type === 'checkbox'): ?>
+  if (empty($type) || $type === 'checkbox'):
+  /**
+   * Note: The two input fields must be next to each other without
+   * space or new line for `previousSibling` to work.
+   */
+  ?>
       <label>
-          <input type="hidden" name="<?php echo $name; ?>" value="<?php echo $checked ? 'true' : 'false'; ?>" autocomplete="off">
-          <input type="checkbox" value="true" autocomplete="off"
-              onclick="this.previousSibling.value=this.previousSibling.value==='true'?'false':'true'" 
-              <?php echo $checked ? 'checked' : ''; ?> />
+          <input
+            type="hidden"
+            name="<?php echo $name; ?>"
+            value="<?php echo $checked ? 'true' : 'false'; ?>"
+            autocomplete="off"
+          ><input
+            type="checkbox"
+            value="true"
+            autocomplete="off"
+            onclick="this.previousSibling.value=this.previousSibling.value==='true'?'false':'true'"
+            <?php echo $checked ? 'checked' : ''; ?>
+          />
           <?php echo esc_html($label); ?>
       </label>
     <?php elseif ($type === 'switch'): ?>
