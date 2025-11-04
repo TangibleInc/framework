@@ -107,7 +107,7 @@ function is_wpengine_staging( $host ) {
 }
 
 function is_subdomain_staging( $host ) {
-  $staging_subdomains = [
+  static $staging_subdomains = [
     'staging',
     'stage',
     'dev',
