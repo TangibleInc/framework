@@ -35,7 +35,8 @@ function is_staging( $given_host = null ): bool {
     'rapyd',
     'wpengine',
     'subdomain',
-    'local',
+    'localhost',
+    'local_domain',
     'flywheel',
   ] as $key) {
     $result = call_user_func("tangible\\env\\is_${key}_staging", $given_host);
@@ -74,7 +75,7 @@ function is_jetpack_staging() {
 }
 
 function is_txp_staging( $host ) {
-  if ( str_contains( $host, 'tangiblelaunchpad.com' ) ) {
+  if ( str_contains( $host, '.tangiblelaunchpad.com' ) ) {
     return true;
   }
 
@@ -117,9 +118,11 @@ function is_subdomain_staging( $host ) {
     'preview'
   ];
 
+  if (substr_count($host, '.') < 2) return false; // No subdomain
+
   foreach ( $staging_subdomains as $subdomain ) { 
     if (
-      str_contains( $host, $subdomain . '.' )          // Prefixed
+      str_starts_with( $host, $subdomain . '.' )       // Prefixed
       || str_contains( $host, '.' . $subdomain . '.' ) // Nested
       || str_contains( $host, '-' . $subdomain )       // Dashed
     ) { 
@@ -130,18 +133,23 @@ function is_subdomain_staging( $host ) {
   return false;
 }
 
-function is_local_staging( $host ) {
-  $local_hosts = [ 'localhost', '127.0.0.1', '::1' ];
-  $local_tlds = [ '.test', '.local', '.localhost' ];
-
-  if ( in_array( $host, $local_hosts, true ) ) {
-    return true;
-  }
+function is_local_domain_staging( $host ) {
+  static $local_tlds = [ '.test', '.local', '.localhost' ];
 
   foreach ( $local_tlds as $tld ) { 
     if ( str_ends_with( $host, $tld ) ) {
       return true;
     }
+  }
+
+  return false;
+}
+
+function is_localhost_staging( $host ) {
+  static $local_hosts = [ 'localhost', '127.0.0.1', '::1' ];
+
+  if ( in_array( $host, $local_hosts, true ) ) {
+    return true;
   }
 
   return false;
