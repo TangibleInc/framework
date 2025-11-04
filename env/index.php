@@ -9,18 +9,7 @@ defined( 'ABSPATH' ) || exit;
  * Returns whether or not the current site is a staging site.
  * @return boolean
  */
-function is_staging(): bool {
-  static $is_staging;
-  return isset($is_staging) ? is_staging : (
-    $is_staging = env\run_staging_checks()
-  );
-}
-
-/**
- * Runs all staging site checks and returns result.
- * @return boolean
- */
-function run_staging_checks(): bool {
+function is_staging( $reset = false ): bool {
 
   static $hook = 'tangible_env_is_staging';
   static $host;
@@ -29,6 +18,11 @@ function run_staging_checks(): bool {
      $host = strtolower( ( string ) wp_parse_url( home_url(), PHP_URL_HOST ) );
   }
 
+  // Short-circuit if env type "all" is staging
+  $result = apply_filters( $hook, false, 'all' );
+  if ($result === true) return true;
+
+  // Checks applied in this order
   foreach ([
     'wp',
     'jetpack',
@@ -40,12 +34,13 @@ function run_staging_checks(): bool {
     'local',
     'flywheel',
   ] as $key) {
-    if ( call_user_func("tangible\\env\\is_${key}_staging", $host) ) {
-      return apply_filters( $hook, true, $key );
+    $type_result = call_user_func("tangible\\env\\is_${key}_staging", $host);
+    if (apply_filters( $hook, $type_result, $key )) {
+      return true;
     }
   }
 
-  return apply_filters( $hook, false, 'all' );
+  return $result;
 }
 
 function is_wp_staging() {
@@ -108,7 +103,15 @@ function is_wpengine_staging( $host ) {
 }
 
 function is_subdomain_staging( $host ) {
-  $staging_subdomains = [ 'staging', 'stage', 'dev', 'development', 'sandbox', 'test', 'preview' ]; 
+  $staging_subdomains = [
+    'staging',
+    'stage',
+    'dev',
+    'development',
+    'sandbox',
+    'test',
+    'preview'
+  ];
 
   foreach ( $staging_subdomains as $subdomain ) { 
     $prefixed_staging_subdomain = str_contains( $host, $subdomain . '.' );
@@ -125,7 +128,7 @@ function is_subdomain_staging( $host ) {
 
 function is_local_staging( $host ) {
   $local_hosts = [ 'localhost', '127.0.0.1', '::1' ];
-  $local_tlds = [ '.test', '.local' ];
+  $local_tlds = [ '.test', '.local', '.localhost' ];
 
   if ( in_array( $host, $local_hosts, true ) ) {
     return true;

@@ -33,6 +33,7 @@ require_once __DIR__ . '/utils/index.php';
     require_once __DIR__ . '/ajax/index.php';
     require_once __DIR__ . '/api/index.php';
     require_once __DIR__ . '/design/index.php';
+    require_once __DIR__ . '/env/index.php';
     require_once __DIR__ . '/file-system/index.php';
     require_once __DIR__ . '/format/index.php';
     require_once __DIR__ . '/hjson/index.php';
