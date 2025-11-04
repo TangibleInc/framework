@@ -9,13 +9,17 @@ defined( 'ABSPATH' ) || exit;
  * Returns whether or not the current site is a staging site.
  * @return boolean
  */
-function is_staging( $reset = false ): bool {
+function is_staging( $given_host = null ): bool {
 
   static $hook = 'tangible_env_is_staging';
   static $host;
 
   if (!isset($host)) {
      $host = strtolower( ( string ) wp_parse_url( home_url(), PHP_URL_HOST ) );
+  }
+
+  if ( is_null($given_host) ) {
+    $given_host = $host;
   }
 
   // Short-circuit if env type "all" is staging
@@ -34,20 +38,20 @@ function is_staging( $reset = false ): bool {
     'local',
     'flywheel',
   ] as $key) {
-    $type_result = call_user_func("tangible\\env\\is_${key}_staging", $host);
+    $type_result = call_user_func("tangible\\env\\is_${key}_staging", $given_host);
     if (apply_filters( $hook, $type_result, $key )) {
       return true;
     }
   }
 
-  return $result;
+  return false;
 }
 
 function is_wp_staging() {
   if ( ! function_exists( 'wp_get_environment_type' ) ) {
     return false;
   }
-  
+
   $env_type = wp_get_environment_type();
   if ( in_array( $env_type, array( 'staging', 'development', 'local' ), true ) ) { 
     return true; 
@@ -73,7 +77,7 @@ function is_txp_staging( $host ) {
   if ( str_contains( $host, 'tangiblelaunchpad.com' ) ) {
     return true;
   }
-  
+
   return false;
 }
 

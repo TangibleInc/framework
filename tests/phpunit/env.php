@@ -76,4 +76,28 @@ class Env_TestCase extends \WP_UnitTestCase {
     $this->common_test_env_type('flywheel');
   }
 
+  /**
+   * @dataProvider provide_known_staging_domains
+   */
+  function test_known_staging_domains( string $host ) {
+    $this->assertTrue( env\is_staging($host) === true );
+  }
+
+  function provide_known_staging_domains() {
+    return [
+      // Domains
+      ['example.tangiblelaunchpad.com'],
+      ['example.kinsta.cloud'],
+      ['example.rapydapps.cloud'],
+      ['example.wpengine.com'],
+      // Subdomains
+      ['dev.example.com'],
+      ['development.example.com'],
+      ['preview.example.com'],
+      ['sandbox.example.com'],
+      ['stage.example.com'],
+      ['staging.example.com'],
+      ['test.example.com'],
+    ];
+  }
 }
