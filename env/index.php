@@ -118,11 +118,11 @@ function is_subdomain_staging( $host ) {
   ];
 
   foreach ( $staging_subdomains as $subdomain ) { 
-    $prefixed_staging_subdomain = str_contains( $host, $subdomain . '.' );
-    $nested_subdomain = str_contains( $host, '.' . $subdomain . '.' );
-    $dashed_staging_subdomain = str_contains( $host, '-' . $subdomain );
-
-    if ( $prefixed_staging_subdomain || $nested_subdomain ||  $dashed_staging_subdomain) { 
+    if (
+      str_contains( $host, $subdomain . '.' )          // Prefixed
+      || str_contains( $host, '.' . $subdomain . '.' ) // Nested
+      || str_contains( $host, '-' . $subdomain )       // Dashed
+    ) { 
       return true;
     } 
   }
