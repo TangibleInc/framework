@@ -111,7 +111,7 @@ test\\basic_assertions();`
   })
 
   await import('../../api/tests/index.ts')
-  await import('../../env/tests/index.ts')
+  await import('../../env/legacy/tests/index.ts')
   await import('../../file-system/tests/index.ts')
   await import('../../plugin/tests/index.ts')
   await import('../../utils/tests/index.ts')
