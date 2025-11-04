@@ -38,8 +38,8 @@ function is_staging( $given_host = null ): bool {
     'local',
     'flywheel',
   ] as $key) {
-    $type_result = call_user_func("tangible\\env\\is_${key}_staging", $given_host);
-    if (apply_filters( $hook, $type_result, $key )) {
+    $result = call_user_func("tangible\\env\\is_${key}_staging", $given_host);
+    if (apply_filters( $hook, $result, $key, $given_host )) {
       return true;
     }
   }
