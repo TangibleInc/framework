@@ -30,7 +30,7 @@ require_once __DIR__.'/legacy.php';
 (include __DIR__ . '/module-loader.php')(new class {
 
   public $name = 'tangible_date';
-  public $version = '20250415';
+  public $version = '20251107';
 
   function load() {
     // Compatibility with older version of Date module

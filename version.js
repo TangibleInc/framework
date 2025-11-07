@@ -20,7 +20,6 @@ import fs from 'node:fs/promises'
     'date/index.php',
     'plugin.php',
     'package.json',
-    'env/package.json'
   ]) {
     console.log('Update', file)
 

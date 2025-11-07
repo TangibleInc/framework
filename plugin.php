@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Tangible Framework
  * Description: Framework module shared by Tangible plugins
- * Version: 2025.4.15
+ * Version: 2025.11.7
  * GitHub URI: TangibleInc/framework
  */
 use tangible\framework;
