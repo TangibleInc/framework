@@ -34,7 +34,7 @@ function register_admin_menu($item) {
   $items = &framework::$state->admin_menus;
 
   if (!isset($item['name'])) {
-    throw new Exception("Property \"name\" is required");
+    throw new \Exception("Property \"name\" is required");
   }
 
   if (!isset($item['title'])) {
