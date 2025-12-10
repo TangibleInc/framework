@@ -1,5 +1,5 @@
 <?php
-namespace Tests\Framework;
+namespace Tangible\Framework\Tests;
 
 use Tangible\DataObject\DataSet;
 use Tangible\DataObject\SingularObject;
@@ -35,7 +35,7 @@ class DataObject_TestCase extends \WP_UnitTestCase {
 
         $fields = $dataset->get_fields();
         $this->assertArrayHasKey('title', $fields);
-        $this->assertEquals('string', $fields['title']['type']);
+        $this->assertEquals(DataSet::TYPE_STRING, $fields['title']['type']);
     }
 
     public function test_dataset_can_add_integer_field(): void {
@@ -44,7 +44,7 @@ class DataObject_TestCase extends \WP_UnitTestCase {
 
         $fields = $dataset->get_fields();
         $this->assertArrayHasKey('count', $fields);
-        $this->assertEquals('integer', $fields['count']['type']);
+        $this->assertEquals(DataSet::TYPE_INTEGER, $fields['count']['type']);
     }
 
     public function test_dataset_can_add_boolean_field(): void {
@@ -53,7 +53,7 @@ class DataObject_TestCase extends \WP_UnitTestCase {
 
         $fields = $dataset->get_fields();
         $this->assertArrayHasKey('is_active', $fields);
-        $this->assertEquals('boolean', $fields['is_active']['type']);
+        $this->assertEquals(DataSet::TYPE_BOOLEAN, $fields['is_active']['type']);
     }
 
     public function test_dataset_can_add_multiple_fields(): void {
