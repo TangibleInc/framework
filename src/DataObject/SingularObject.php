@@ -15,8 +15,8 @@ use Tangible\DataObject\Storage\OptionStorage;
  */
 class SingularObject extends Customer {
 
+    protected Storage $storage;
     protected string $slug;
-    protected DataSet $data;
 
     /**
      * Creates a new singular object with optional storage.
@@ -34,22 +34,33 @@ class SingularObject extends Customer {
         }
     }
 
-    /**
-     * Sets the dataset to be used by this singular object.
-     *
-     * @param DataSet $dataset the dataset to use.
-     */
-    public function set_dataset( DataSet $dataset ) {
-        $this->data = $dataset;
+    public function get_storage(): Storage {
+        return $this->storage;
+    }
+
+    public function set( string $slug, mixed $value ): Customer {
+        if ( isset( $this->data ) ) {
+            $value = $this->data->coerce( $slug, $value );
+        }
+        $this->storage->set( $slug, $value );
         return $this;
     }
 
-    /**
-     * Returns the dataset used by this singular object.
-     *
-     * @return DataSet the used dataset.
-     */
-    public function get_dataset(): DataSet {
-        return $this->data;
+    public function get( string $slug ): mixed {
+        $value = $this->storage->get( $slug );
+        if ( isset( $this->data ) && $value !== null ) {
+            $value = $this->data->coerce( $slug, $value );
+        }
+        return $value;
+    }
+
+    public function load(): Customer {
+        $this->storage->load();
+        return $this;
+    }
+
+    public function save(): Customer {
+        $this->storage->save();
+        return $this;
     }
 }

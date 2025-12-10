@@ -65,4 +65,45 @@ class DataSet {
         ];
         return $this;
     }
+
+    /**
+     * Coerce a value to the correct type based on field definition.
+     *
+     * @param string $slug the field name.
+     * @param mixed $value the value to coerce.
+     * @return mixed the coerced value.
+     */
+    public function coerce( string $slug, mixed $value ): mixed {
+        if ( ! isset( $this->fields[ $slug ] ) ) {
+            return $value;
+        }
+
+        $type = $this->fields[ $slug ]['type'];
+
+        return match ( $type ) {
+            self::TYPE_STRING  => (string) $value,
+            self::TYPE_INTEGER => (int) $value,
+            self::TYPE_BOOLEAN => $this->coerce_boolean( $value ),
+            default            => $value,
+        };
+    }
+
+    /**
+     * Coerce a value to boolean.
+     *
+     * @param mixed $value the value to coerce.
+     * @return bool the coerced value.
+     */
+    private function coerce_boolean( mixed $value ): bool {
+        if ( is_bool( $value ) ) {
+            return $value;
+        }
+
+        if ( is_string( $value ) ) {
+            $value = strtolower( $value );
+            return in_array( $value, [ '1', 'true', 'yes', 'on' ], true );
+        }
+
+        return (bool) $value;
+    }
 }

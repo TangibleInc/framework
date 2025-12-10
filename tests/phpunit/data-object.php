@@ -18,13 +18,34 @@ use Tangible\DataObject\Storage\CustomPostTypeStorage;
  */
 class DataObject_TestCase extends \WP_UnitTestCase {
 
+    public const CPT_SETTINGS = [
+        'label'           => 'My Views',
+        'labels'          => [
+            'name'                => 'My Views',
+            'singular_name'       => 'View',
+            'add_new'             => 'Add New View',
+            'add_new_item'        => 'Add New View',
+            'edit_item'           => 'Edit View',
+            'new_item'            => 'New View',
+            'view_item'           => 'View',
+            'search_items'        => 'Search Views',
+            'not_found'           => 'No Views Found',
+            'not_found_in_trash'  => 'No views found in Trash',
+            'menu_name'           => 'Tangible Algolia',
+        ],
+        'menu_position'         => 25,
+        'menu_icon'             => 'dashicons-admin-generic',
+        'supports'              => ['title', 'editor'],
+        'register_meta_box_cb'  => 'add_meta_boxes',
+    ];
     /**
      * ==========================================================================
      * LAYER 1: DataSet - Field Definition Tests
      * ==========================================================================
      */
 
-    public function test_dataset_can_be_instantiated(): void {
+    public function test_dataset_can_be_instantiated(): void
+    {
         $dataset = new DataSet();
         $this->assertInstanceOf(DataSet::class, $dataset);
     }
@@ -228,7 +249,7 @@ class DataObject_TestCase extends \WP_UnitTestCase {
 
         $object = new PluralObject('book');
         $object->set_dataset($dataset);
-        $object->register();
+        $object->register( self::CPT_SETTINGS );
 
         $entity = $object->create([
             'title' => 'The Great Gatsby',
@@ -246,7 +267,7 @@ class DataObject_TestCase extends \WP_UnitTestCase {
 
         $object = new PluralObject('book');
         $object->set_dataset($dataset);
-        $object->register();
+        $object->register( self::CPT_SETTINGS );
 
         $created = $object->create(['title' => 'Test Book']);
         $id = $created->get_id();
@@ -262,7 +283,7 @@ class DataObject_TestCase extends \WP_UnitTestCase {
 
         $object = new PluralObject('book');
         $object->set_dataset($dataset);
-        $object->register();
+        $object->register( self::CPT_SETTINGS );
 
         $entity = $object->create([
             'title' => 'Original Title',
@@ -271,7 +292,7 @@ class DataObject_TestCase extends \WP_UnitTestCase {
 
         $entity->set('title', 'Updated Title');
         $entity->set('pages', 200);
-        $entity->save();
+        $object->save( $entity );
 
         // Reload and verify
         $reloaded = $object->find($entity->get_id());
@@ -285,12 +306,12 @@ class DataObject_TestCase extends \WP_UnitTestCase {
 
         $object = new PluralObject('book');
         $object->set_dataset($dataset);
-        $object->register();
+        $object->register( self::CPT_SETTINGS );
 
         $entity = $object->create(['title' => 'To Be Deleted']);
         $id = $entity->get_id();
 
-        $object->delete($id);
+        $object->delete($entity);
 
         $found = $object->find($id);
         $this->assertNull($found);
@@ -302,7 +323,7 @@ class DataObject_TestCase extends \WP_UnitTestCase {
 
         $object = new PluralObject('book');
         $object->set_dataset($dataset);
-        $object->register();
+        $object->register( self::CPT_SETTINGS );
 
         $object->create(['title' => 'Book One']);
         $object->create(['title' => 'Book Two']);
@@ -312,7 +333,7 @@ class DataObject_TestCase extends \WP_UnitTestCase {
         $this->assertCount(3, $all);
     }
 
-    public function test_plural_object_stores_fields_as_post_meta(): void {
+    public function test_plural_object_stores_fields_as_json_meta(): void {
         $dataset = new DataSet();
         $dataset->add_string('author');
         $dataset->add_integer('pages');
@@ -320,7 +341,7 @@ class DataObject_TestCase extends \WP_UnitTestCase {
 
         $object = new PluralObject('book');
         $object->set_dataset($dataset);
-        $object->register();
+        $object->register( self::CPT_SETTINGS );
 
         $entity = $object->create([
             'author' => 'Test Author',
@@ -330,15 +351,19 @@ class DataObject_TestCase extends \WP_UnitTestCase {
 
         $post_id = $entity->get_id();
 
-        // Verify stored in post meta
-        $this->assertEquals('Test Author', get_post_meta($post_id, 'author', true));
-        $this->assertEquals(300, get_post_meta($post_id, 'pages', true));
-        $this->assertEquals(true, get_post_meta($post_id, 'published', true));
+        // Verify stored as JSON in post meta
+        $json = get_post_meta($post_id, '_tangible_data', true);
+        $this->assertNotEmpty($json);
+
+        $data = json_decode($json, true);
+        $this->assertEquals('Test Author', $data['author']);
+        $this->assertEquals(300, $data['pages']);
+        $this->assertEquals(true, $data['published']);
     }
 
     public function test_plural_object_registers_custom_post_type(): void {
         $object = new PluralObject('test_book');
-        $object->register();
+        $object->register( self::CPT_SETTINGS );
 
         $this->assertTrue(post_type_exists('test_book'));
     }
@@ -349,7 +374,7 @@ class DataObject_TestCase extends \WP_UnitTestCase {
 
         $object = new PluralObject('book');
         $object->set_dataset($dataset);
-        $object->register();
+        $object->register( self::CPT_SETTINGS );
 
         $found = $object->find(999999);
         $this->assertNull($found);
