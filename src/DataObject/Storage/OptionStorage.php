@@ -2,9 +2,9 @@
 
 namespace Tangible\DataObject\Storage;
 
-use Tangible\DataObject\Storage;
+use Tangible\DataObject\SingularStorage;
 
-class OptionStorage implements Storage {
+class OptionStorage implements SingularStorage {
     protected array $values = [];
     protected string $slug;
 

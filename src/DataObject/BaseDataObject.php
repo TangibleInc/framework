@@ -2,7 +2,7 @@
 
 namespace Tangible\DataObject;
 
-abstract class Customer {
+abstract class BaseDataObject {
 
     /**
      * @var DataSet

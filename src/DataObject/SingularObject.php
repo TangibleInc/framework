@@ -13,18 +13,18 @@ use Tangible\DataObject\Storage\OptionStorage;
  * The SingularObject class is the base for objects that need to exist
  * in a single instance, like plugin settings.
  */
-class SingularObject extends Customer {
+class SingularObject extends BaseDataObject {
 
-    protected Storage $storage;
+    protected SingularStorage $storage;
     protected string $slug;
 
     /**
      * Creates a new singular object with optional storage.
      *
      * @param string $slug the object slug.
-     * @param Storage|null $storage the storage object to use.
+     * @param SingularStorage|null $storage the storage object to use.
      */
-    public function __construct( string $slug, Storage|null $storage = null ) {
+    public function __construct( string $slug, SingularStorage|null $storage = null ) {
         $this->slug = $slug;
 
         if ( $storage !== null ) {
@@ -34,11 +34,11 @@ class SingularObject extends Customer {
         }
     }
 
-    public function get_storage(): Storage {
+    public function get_storage(): SingularStorage {
         return $this->storage;
     }
 
-    public function set( string $slug, mixed $value ): Customer {
+    public function set( string $slug, mixed $value ): BaseDataObject {
         if ( isset( $this->data ) ) {
             $value = $this->data->coerce( $slug, $value );
         }
@@ -54,12 +54,12 @@ class SingularObject extends Customer {
         return $value;
     }
 
-    public function load(): Customer {
+    public function load(): BaseDataObject {
         $this->storage->load();
         return $this;
     }
 
-    public function save(): Customer {
+    public function save(): BaseDataObject {
         $this->storage->save();
         return $this;
     }

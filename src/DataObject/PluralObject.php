@@ -14,7 +14,7 @@ use Tangible\DataObject\Storage\CustomPostTypeStorage;
  * The PluralObject class is the base for objects that may exist
  * in multiple instances, like posts, pages, etc.
  */
-class PluralObject extends Customer {
+class PluralObject extends BaseDataObject {
 
     protected PluralStorage $storage;
     protected string $slug;
