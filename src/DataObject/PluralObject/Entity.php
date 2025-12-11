@@ -33,4 +33,9 @@ class Entity {
     public function get_data(): array {
         return $this->values;
     }
+
+    public function set_data( array $data ): Entity {
+        $this->values = $data;
+        return $this;
+    }
 }
