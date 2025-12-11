@@ -19,6 +19,11 @@ class Result {
      */
     protected array $errors = [];
 
+    /**
+     * @var array Data for singular objects
+     */
+    protected array $data = [];
+
     public function is_error(): bool {
         return $this->is_error;
     }
@@ -69,5 +74,14 @@ class Result {
             $this->errors,
             fn( $e ) => $e->get_field() === $field
         );
+    }
+
+    public function set_data( array $data ): Result {
+        $this->data = $data;
+        return $this;
+    }
+
+    public function get_data(): array {
+        return $this->data;
     }
 }
