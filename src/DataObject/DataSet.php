@@ -24,10 +24,20 @@ class DataSet {
     /**
      * Get defined fields.
      *
-     * @return Array defined fields.
+     * @return array Defined fields.
      */
     public function get_fields(): array {
-        return $this->fields;
+        return $this->fields ?? [];
+    }
+
+    /**
+     * Check if a field is defined in the dataset.
+     *
+     * @param string $slug The field name.
+     * @return bool True if the field exists.
+     */
+    public function has_field( string $slug ): bool {
+        return isset( $this->fields[ $slug ] );
     }
 
     /**
