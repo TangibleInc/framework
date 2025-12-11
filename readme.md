@@ -91,6 +91,10 @@ This guarantees the availability of the newest version of all modules. For more 
 - [Plugin](plugin)
 - [Select](select)
 
+## Tangible Object
+
+This framework provides the Tangible Object suite for easy creation of custom data storage. You can read more about it in the [OBJECT.md](OBJECT.md) file.
+
 ## Develop
 
 Prerequisites: [Git](https://git-scm.com/), [Node](https://nodejs.org/en/) (version 18 and above)
