@@ -562,77 +562,314 @@ $handler->after_delete(function($id) {
 
 ## SingularObject for Settings Pages
 
-For single-instance data (like plugin settings), use `SingularObject`:
+For single-instance data like plugin settings, site configuration, or any data that exists as a single persistent instance, use `SingularObject` and `SingularHandler`.
+
+**Key differences from PluralObject:**
+- No create/delete operations (the object always exists)
+- Only read and update operations
+- Data is stored in a single WordPress option by default
+- Lifecycle hooks receive data arrays instead of entities
+
+### Complete Example: Plugin Settings Page
+
+This example shows how to create a WordPress admin page for managing plugin settings.
+
+#### Step 1: Define Your Settings Object
 
 ```php
 <?php
-use Tangible\DataObject\SingularObject;
+// my-plugin/includes/settings-object.php
+
 use Tangible\DataObject\DataSet;
+use Tangible\DataObject\SingularObject;
 use Tangible\EditorLayout\Layout;
 use Tangible\EditorLayout\Section;
 use Tangible\EditorLayout\Sidebar;
 use Tangible\RequestHandler\SingularHandler;
+use Tangible\RequestHandler\Validators;
 use Tangible\Renderer\HtmlRenderer;
 
-// Define settings
-$dataset = new DataSet();
-$dataset
-    ->add_string('api_key')
-    ->add_boolean('debug_mode')
-    ->add_integer('cache_ttl');
+/**
+ * Plugin settings configuration.
+ * Returns all components needed for the settings page.
+ */
+function get_plugin_settings() {
+    // =========================================================================
+    // LAYER 1: Data Definition
+    // =========================================================================
+    $dataset = new DataSet();
+    $dataset
+        ->add_string('api_key')
+        ->add_string('api_endpoint')
+        ->add_boolean('debug_mode')
+        ->add_integer('cache_ttl')
+        ->add_integer('max_retries');
 
-// Create layout
-$layout = new Layout($dataset);
-$layout->section('API Settings', function(Section $s) {
-    $s->field('api_key')->help('Your API key from the dashboard');
-    $s->field('debug_mode');
-    $s->field('cache_ttl')->help('Cache time-to-live in seconds');
+    // =========================================================================
+    // LAYER 2: Editor Composition
+    // =========================================================================
+    $layout = new Layout($dataset);
+
+    $layout->section('API Configuration', function(Section $s) {
+        $s->field('api_key')
+          ->placeholder('Enter your API key')
+          ->help('Your API key from the dashboard');
+        $s->field('api_endpoint')
+          ->placeholder('https://api.example.com')
+          ->help('The API endpoint URL');
+    });
+
+    $layout->section('Performance', function(Section $s) {
+        $s->field('cache_ttl')
+          ->help('Cache time-to-live in seconds (0 to disable)');
+        $s->field('max_retries')
+          ->help('Maximum retry attempts for failed requests');
+    });
+
+    $layout->section('Development', function(Section $s) {
+        $s->field('debug_mode')
+          ->help('Enable detailed logging for troubleshooting');
+    });
+
+    $layout->sidebar(function(Sidebar $sb) {
+        $sb->actions(['save']);
+    });
+
+    // =========================================================================
+    // LAYER 3: UI Presentation
+    // =========================================================================
+    $renderer = new HtmlRenderer();
+
+    // =========================================================================
+    // LAYER 4: Request Handling
+    // =========================================================================
+    $object = new SingularObject('my_plugin_settings');
+    $object->set_dataset($dataset);
+
+    $handler = new SingularHandler($object);
+    $handler
+        ->add_validator('api_key', Validators::required())
+        ->add_validator('cache_ttl', Validators::min(0))
+        ->add_validator('max_retries', Validators::min(0))
+        ->add_validator('max_retries', Validators::max(10))
+        ->before_update(function($current, $data) {
+            // Clear cache when TTL changes
+            if (($current['cache_ttl'] ?? 0) !== ($data['cache_ttl'] ?? 0)) {
+                delete_transient('my_plugin_api_cache');
+            }
+            return $data;
+        })
+        ->after_update(function($data) {
+            // Log settings change
+            if ($data['debug_mode']) {
+                error_log('Plugin settings updated');
+            }
+        });
+
+    return [
+        'dataset' => $dataset,
+        'layout' => $layout,
+        'renderer' => $renderer,
+        'handler' => $handler,
+    ];
+}
+```
+
+#### Step 2: Create the Admin Page
+
+```php
+<?php
+// my-plugin/includes/settings-admin-page.php
+
+/**
+ * Register the admin menu.
+ */
+add_action('admin_menu', function() {
+    add_options_page(
+        'My Plugin Settings',
+        'My Plugin',
+        'manage_options',
+        'my-plugin-settings',
+        'render_plugin_settings_page'
+    );
 });
-$layout->sidebar(function(Sidebar $sb) {
-    $sb->actions(['save']);
-});
 
-// Create object and handler
-$settings = new SingularObject('my_plugin_settings');
-$settings->set_dataset($dataset);
+/**
+ * Settings page controller.
+ */
+function render_plugin_settings_page() {
+    $settings = get_plugin_settings();
 
-$handler = new SingularHandler($settings);
-$renderer = new HtmlRenderer();
-
-// Settings page callback
-function render_settings_page() {
-    global $handler, $layout, $renderer;
-
-    // Handle save
+    // Handle form submission
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        check_admin_referer('save_settings');
-
-        $result = $handler->update([
-            'api_key' => sanitize_text_field($_POST['api_key'] ?? ''),
-            'debug_mode' => !empty($_POST['debug_mode']),
-            'cache_ttl' => (int) ($_POST['cache_ttl'] ?? 3600),
-        ]);
-
-        if ($result->is_success()) {
-            echo '<div class="notice notice-success"><p>Settings saved.</p></div>';
-        }
+        handle_settings_submission($settings);
+        return;
     }
+
+    // Render settings form
+    render_settings_form($settings);
+}
+```
+
+#### Step 3: Implement the Settings Form
+
+```php
+<?php
+/**
+ * Render the settings form with current values.
+ */
+function render_settings_form($settings, $errors = [], $notice = '') {
+    $handler = $settings['handler'];
+    $layout = $settings['layout'];
+    $renderer = $settings['renderer'];
 
     // Get current values
     $result = $handler->read();
     $data = $result->get_data();
 
-    // Render form
     ?>
     <div class="wrap">
-        <h1>Plugin Settings</h1>
-        <form method="post">
-            <?php wp_nonce_field('save_settings'); ?>
+        <h1>My Plugin Settings</h1>
+
+        <?php if (!empty($notice)): ?>
+            <div class="notice notice-success is-dismissible">
+                <p><?php echo esc_html($notice); ?></p>
+            </div>
+        <?php endif; ?>
+
+        <?php if (!empty($errors)): ?>
+            <div class="notice notice-error">
+                <ul>
+                    <?php foreach ($errors as $error): ?>
+                        <li><?php echo esc_html($error->get_field() . ': ' . $error->get_message()); ?></li>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
+        <?php endif; ?>
+
+        <form method="post" action="<?php echo admin_url('options-general.php?page=my-plugin-settings'); ?>">
+            <?php wp_nonce_field('save_plugin_settings'); ?>
             <?php echo $renderer->render_editor($layout, $data); ?>
         </form>
     </div>
     <?php
 }
+```
+
+#### Step 4: Handle Form Submissions
+
+```php
+<?php
+/**
+ * Handle settings form submission.
+ */
+function handle_settings_submission($settings) {
+    $handler = $settings['handler'];
+
+    // Verify nonce
+    if (!wp_verify_nonce($_POST['_wpnonce'], 'save_plugin_settings')) {
+        wp_die('Security check failed.');
+    }
+
+    // Attempt to update
+    $result = $handler->update([
+        'api_key' => sanitize_text_field($_POST['api_key'] ?? ''),
+        'api_endpoint' => esc_url_raw($_POST['api_endpoint'] ?? ''),
+        'debug_mode' => !empty($_POST['debug_mode']),
+        'cache_ttl' => (int) ($_POST['cache_ttl'] ?? 3600),
+        'max_retries' => (int) ($_POST['max_retries'] ?? 3),
+    ]);
+
+    if ($result->is_error()) {
+        // Re-render form with errors
+        render_settings_form($settings, $result->get_errors());
+    } else {
+        // Re-render with success message
+        render_settings_form($settings, [], 'Settings saved successfully.');
+    }
+}
+```
+
+### SingularHandler Operations
+
+Unlike `PluralHandler`, `SingularHandler` only provides two operations:
+
+```php
+// Read current values
+$result = $handler->read();
+$data = $result->get_data(); // Returns associative array of all field values
+
+// Update values (partial updates supported)
+$result = $handler->update([
+    'api_key' => 'new-key',
+    'debug_mode' => true,
+]);
+
+if ($result->is_success()) {
+    $updated_data = $result->get_data();
+}
+```
+
+### SingularHandler Lifecycle Hooks
+
+The `SingularHandler` supports `before_update` and `after_update` hooks with signatures different from `PluralHandler`:
+
+```php
+// Modify data before update (receives current data and new data)
+$handler->before_update(function(array $current, array $data) {
+    // $current = existing values before update
+    // $data = new values being saved
+
+    // You can compare to detect changes
+    if ($current['api_key'] !== $data['api_key']) {
+        // API key changed, maybe invalidate tokens
+    }
+
+    return $data; // Return modified data
+});
+
+// React after update (receives the updated data)
+$handler->after_update(function(array $data) {
+    // $data = all field values after update
+    do_action('my_plugin_settings_updated', $data);
+});
+```
+
+### Custom Storage
+
+By default, `SingularObject` uses `OptionStorage` which stores data in a single WordPress option. You can provide custom storage by implementing the `SingularStorage` interface:
+
+```php
+use Tangible\DataObject\SingularStorage;
+
+class NetworkOptionStorage implements SingularStorage {
+    protected array $values = [];
+    protected string $slug;
+
+    public function __construct(string $slug) {
+        $this->slug = $slug;
+    }
+
+    public function set(string $slug, mixed $value): void {
+        $this->values[$slug] = $value;
+    }
+
+    public function get(string $slug): mixed {
+        return $this->values[$slug] ?? null;
+    }
+
+    public function save(): void {
+        update_site_option($this->slug, $this->values);
+    }
+
+    public function load(): void {
+        $this->values = get_site_option($this->slug, []);
+    }
+}
+
+// Use custom storage
+$storage = new NetworkOptionStorage('my_network_settings');
+$object = new SingularObject('my_network_settings', $storage);
 ```
 
 ## Requirements
