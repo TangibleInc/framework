@@ -25,7 +25,7 @@ async function fileExists(file) {
   const esbuildOptions = {
     logLevel: 'info',
     jsx: 'automatic',
-    tsconfig: 'env/tsconfig.common.json',
+    tsconfig: 'env/legacy/tsconfig.common.json',
     plugins: [
       // Built ES module format expects import from .js
       transformExtPlugin({ outExtension: { '.ts': '.js' } }),
