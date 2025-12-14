@@ -1,0 +1,37 @@
+# Shared tests workflow before release/publish
+name: Run tests
+permissions:
+  contents: write
+on:
+  # Release workflow calls this manually for main and tags
+  push:
+    branches-ignore:
+      - 'main'
+  workflow_call: # Can be called from other workflows
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml # Build project
+  tests:
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    needs: [build] # Ensure build before tests
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Docker
+        uses: docker/setup-docker-action@v4
+      - name: PHPUnit - Run tests for PHP 7.4
+        run: bun run test:7.4
+      - name: PHPUnit - Run tests for PHP 8.2
+        run: bun run test:8.2
+
+      # - name: Jest - Run tests
+      #   run: bun run jest:test
+
+      # - name: Install playwright
+      #   run: bun playwright install
+      # - name: End to end - Run tests
+      #   run: bun run e2e

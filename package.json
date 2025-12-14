@@ -16,6 +16,7 @@
     "clean": "rm -rf build",
     "dev:libs": "roll dev",
     "build:libs": "roll build",
+    "archive": "roll archive",
     "format": "roll format",
     "version": "node version.js",
     "subrepo": "git-subrepo",
@@ -40,14 +41,14 @@
   },
   "devDependencies": {
     "@gjsify/esbuild-plugin-transform-ext": "^0.0.4",
-    "@playwright/test": "^1.52.0",
+    "@playwright/test": "^1.57.0",
     "@tangible/git-subrepo": "^1.0.1",
     "@tangible/now": "^3.0.2",
-    "@tangible/roller": "^2.1.4",
-    "@wordpress/e2e-test-utils-playwright": "^1.22.0",
-    "esbuild": "^0.25.2",
-    "globby": "^14.1.0",
+    "@tangible/roller": "^2.1.9",
+    "@wordpress/e2e-test-utils-playwright": "^1.36.0",
+    "esbuild": "^0.27.1",
+    "globby": "^16.0.0",
     "testra": "^2.1.5",
-    "typescript": "^5.8.3"
+    "typescript": "^5.9.3"
   }
 }

@@ -1,6 +1,6 @@
 
 /build
-
+/publish
 /vendor
 node_modules
 .idea

@@ -1,0 +1,44 @@
+# Shared build workflow before tests/release/publish
+name: Build project
+permissions:
+  contents: write
+on:
+  workflow_call: # Can be called from other workflows
+# env:
+#   ACCESS_TOKEN: ${{ secrets.TANGIBLE_PIPELINE_ACCESS_TOKEN }}
+jobs:
+  tests:
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Composer install - TODO: Only when needed
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: phpunit-polyfills
+      # Configure workspace as safe for Git, to solve: https://github.com/composer/composer/issues/12221
+      - name: Git safe.directory
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --no-progress --optimize-autoloader
+
+      # NPM install
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Allow Git access to private repositories
+        if: ${{ env.ACCESS_TOKEN != '' }}
+        run: |
+          echo "https://TangibleInc:$ACCESS_TOKEN@github.com" >> $HOME/.git-credentials
+          git config --global credential.helper store
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build assets
+        run: bun run build

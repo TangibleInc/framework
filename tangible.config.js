@@ -6,11 +6,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 export default async () => {
   const build = []
 
-  for (const name of [
-    'api',
-    'preact',
-    'select',
-  ]) {
+  for (const name of ['api', 'preact', 'select']) {
     const tasks = (await import(`./${name}/tangible.config.js`)).default.build
     build.push(
       ...tasks.map((task) => ({
@@ -25,5 +21,25 @@ export default async () => {
   return {
     build,
     format: ['**/*.{php,ts,tsx,scss}', '!build'],
+    archive: {
+      root: 'tangible-framework',
+      dest: 'publish/tangible-framework.zip',
+      src: [
+        '**/*',
+      ],
+      exclude: [
+        '/.*',
+        '/*.json',
+        '/*.js',
+        '/artifacts',
+        '/publish',
+        '/tests',
+        '/vendor',
+        '*.test.js',
+        '*.scss',
+        '*.ts',
+        '*.tsx',
+      ],
+    },
   }
 }
