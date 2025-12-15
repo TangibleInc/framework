@@ -46,6 +46,7 @@
     "@tangible/now": "^3.0.2",
     "@tangible/roller": "^2.1.9",
     "@wordpress/e2e-test-utils-playwright": "^1.36.0",
+    "@wordpress/env": "^10.36.0",
     "esbuild": "^0.27.1",
     "globby": "^16.0.0",
     "testra": "^2.1.5",
