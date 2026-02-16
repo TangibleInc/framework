@@ -22,6 +22,17 @@ function render_features_settings_page($plugin) {
 
         $feature_key = framework\get_plugin_feature_key($plugin, $feature);
         $is_enabled = framework\is_plugin_feature_enabled($plugin, $feature, $settings);
+        $settings = framework\get_plugin_settings($plugin, $feature);
+
+        if (is_callable($feature['description'] ?? '')) {
+          $feature['description'] = function() use($feature, $settings, $feature_key, $is_enabled) {
+            $feature['description'](
+              $settings,
+              $feature_key,
+              $is_enabled
+            );
+          };
+        }
 
         ?>
         <div class="setting-row feature-<?php echo $name; ?>">
