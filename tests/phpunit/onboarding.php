@@ -226,6 +226,37 @@ class Onboarding_TestCase extends \WP_UnitTestCase {
     onboarding\mark('example', 'x', 'maybe');
   }
 
+  function test_a_dependent_of_an_unrun_step_is_pending_not_skipped() {
+    // The "Connected was skipped — no index yet" bug: a verified-state step
+    // whose needed() checks for facts its DEPENDENCY creates must not be
+    // judged before the dependency runs. Deferred, it rails pending…
+    $configured = false;
+    add_filter(self::$filter, function ($steps) use (&$configured) {
+      $steps[] = [ 'id' => 'credentials' ];
+      $steps[] = [ 'id' => 'connected', 'after' => ['credentials'],
+                   'needed' => function () use (&$configured) { return $configured; },
+                   'skip_note' => 'no index yet' ];
+      return $steps;
+    });
+
+    $plan = onboarding\resolve_plan('example', (object) []);
+    $rail = array_column($plan['rail'], 'state', 'id');
+    $this->assertSame('pending', $rail['connected']);
+
+    // …runs once the dependency completed and created its facts…
+    onboarding\mark('example', 'credentials', 'done');
+    $configured = true;
+    $rail = array_column(onboarding\resolve_plan('example', (object) [])['rail'], 'state', 'id');
+    $this->assertSame('current', $rail['connected']);
+
+    // …and only a SETTLED dependency lets needed() say skip for real.
+    $configured = false;
+    delete_option('tangible_onboarding_state__example');
+    onboarding\mark('example', 'credentials', 'skipped');
+    $rail = array_column(onboarding\resolve_plan('example', (object) [])['rail'], 'state', 'id');
+    $this->assertSame('skipped', $rail['connected']);
+  }
+
   // ── the whole story, once ─────────────────────────────────────────
 
   function test_a_paid_second_install_asks_only_the_plugin_specific_step() {

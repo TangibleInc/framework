@@ -191,6 +191,7 @@ function resolve_plan($plugin_name, $facts) {
 
   $plan = [];
   $rail = [];
+  $in_plan = [];
   foreach ($steps as $step) {
     $record = null;
     if ($step['scope'] !== 'account') {
@@ -204,11 +205,23 @@ function resolve_plan($plugin_name, $facts) {
                   'state' => $record['status'] === 'skipped' ? 'skipped' : 'done' ];
       continue;
     }
-    if (is_callable($step['needed']) && !call_user_func($step['needed'], $facts)) {
+
+    // A step behind a dependency that has not RUN yet is not decidable:
+    // its needed() would be judging facts its dependency exists to create
+    // ("Connected was skipped — no index yet", said before the credentials
+    // step ever ran). Defer: it rails pending and re-resolves after the
+    // dependency completes — the plan is recomputed every load anyway.
+    $blocked = false;
+    foreach ((array) $step['after'] as $dep) {
+      if (isset($in_plan[$dep])) { $blocked = true; break; }
+    }
+
+    if (!$blocked && is_callable($step['needed']) && !call_user_func($step['needed'], $facts)) {
       $rail[] = [ 'id' => $step['id'], 'label' => $label, 'state' => 'skipped', 'note' => $step['skip_note'] ];
       continue;
     }
     $plan[] = $step;
+    $in_plan[ $step['id'] ] = true;
     $rail[] = [ 'id' => $step['id'], 'label' => $label, 'state' => 'pending' ];
   }
 
