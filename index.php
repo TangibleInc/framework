@@ -41,6 +41,7 @@ require_once __DIR__ . '/utils/index.php';
     require_once __DIR__ . '/markdown/index.php';
     require_once __DIR__ . '/object/index.php';
     require_once __DIR__ . '/onboarding/index.php';
+    require_once __DIR__ . '/hub/index.php';
     require_once __DIR__ . '/plugin/index.php';
     require_once __DIR__ . '/preact/index.php';
     require_once __DIR__ . '/select/index.php';

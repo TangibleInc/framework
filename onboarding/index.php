@@ -247,3 +247,5 @@ function mark($plugin_name, $step_id, $status) {
   ];
   update_option($key, $state, false);
 }
+
+require_once __DIR__ . '/wizard.php';
