@@ -184,3 +184,97 @@ class Core_Steps_TestCase extends \WP_UnitTestCase {
     remove_all_filters('tangible_onboarding_steps');
   }
 }
+
+/*
+ * The updater module is not part of the framework's wp-env, so the sync tests
+ * stand in its two key functions — same storage contract the real ones have
+ * (the licence key as a subfield of the framework settings array).
+ */
+if (!function_exists('tangible\\updater\\get_license_key_setting_field')) {
+  eval('namespace tangible\\updater;
+    function get_license_key_setting_field() { return "license_key"; }
+    function get_license_key($plugin) {
+      $settings = \\tangible\\framework\\get_plugin_settings($plugin);
+      return $settings["license_key"] ?? "";
+    }');
+}
+
+/**
+ * The consent outbox's delivery client.
+ */
+class Consent_Sync_TestCase extends \WP_UnitTestCase {
+
+  private $plugin;
+  private $requests = [];
+
+  function setUp(): void {
+    parent::setUp();
+    $this->plugin = \tangible\framework\register_plugin([
+      'name' => 'synctest', 'title' => 'Sync Test', 'cloud_id' => 'synctest',
+      'setting_prefix' => 'synctest',
+    ]);
+    $this->plugin->activation_url = 'https://api.example.test/api/edd';
+    // A key on file — the sync precondition.
+    \tangible\framework\update_plugin_settings($this->plugin, [
+      \tangible\updater\get_license_key_setting_field() => 'TGBL-TEST-KEY',
+    ]);
+    onboarding\record_consent_answer('telemetry_extended', 'granted', 'wording v1');
+  }
+
+  function tearDown(): void {
+    delete_option(onboarding\CONSENT_OUTBOX);
+    delete_option('synctest_settings');
+    remove_all_filters('pre_http_request');
+    $this->requests = [];
+    parent::tearDown();
+  }
+
+  private function fake_server($response_body) {
+    add_filter('pre_http_request', function ($pre, $args, $url) use ($response_body) {
+      $this->requests[] = [ 'url' => $url, 'body' => $args['body'] ];
+      if ($response_body instanceof \WP_Error) return $response_body;
+      return [ 'response' => [ 'code' => 200 ], 'body' => wp_json_encode($response_body) ];
+    }, 10, 3);
+  }
+
+  function test_a_successful_delivery_marks_the_answer_synced() {
+    $this->fake_server([ 'success' => true, 'synced' => 1 ]);
+    onboarding\attempt_consent_sync($this->plugin);
+
+    $this->assertCount(1, $this->requests);
+    $body = $this->requests[0]['body'];
+    $this->assertSame('tangible_sync_consent', $body['edd_action']);
+    $this->assertSame('TGBL-TEST-KEY', $body['license']);
+    $answers = json_decode($body['answers'], true);
+    $this->assertSame('telemetry_extended', $answers[0]['key']);
+    $this->assertSame('wording v1', $answers[0]['consentText']);
+
+    $outbox = get_option(onboarding\CONSENT_OUTBOX);
+    $this->assertTrue($outbox['telemetry_extended']['synced']);
+
+    // Nothing left to deliver: the next attempt does not even POST.
+    onboarding\attempt_consent_sync($this->plugin);
+    $this->assertCount(1, $this->requests);
+  }
+
+  function test_a_failed_delivery_leaves_the_answer_for_the_next_trigger() {
+    $this->fake_server(new \WP_Error('http', 'unreachable'));
+    onboarding\attempt_consent_sync($this->plugin);
+    $this->assertFalse(get_option(onboarding\CONSENT_OUTBOX)['telemetry_extended']['synced'] ?? true);
+
+    // Server said no (e.g. licence revoked between answer and delivery):
+    remove_all_filters('pre_http_request');
+    $this->fake_server([ 'success' => false, 'error' => 'license_invalid' ]);
+    onboarding\attempt_consent_sync($this->plugin);
+    $this->assertFalse(get_option(onboarding\CONSENT_OUTBOX)['telemetry_extended']['synced'] ?? true);
+  }
+
+  function test_no_key_means_no_post_the_outbox_just_waits() {
+    \tangible\framework\update_plugin_settings($this->plugin, [
+      \tangible\updater\get_license_key_setting_field() => '',
+    ]);
+    $this->fake_server([ 'success' => true ]);
+    onboarding\attempt_consent_sync($this->plugin);
+    $this->assertCount(0, $this->requests);
+  }
+}

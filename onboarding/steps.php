@@ -69,6 +69,62 @@ add_filter('tangible_onboarding_facts', function ($facts) {
   return $facts;
 }, 5);
 
+/**
+ * Deliver unsynced outbox answers to the platform.
+ *
+ * Auth is the plugin's licence key (same trust as activation), endpoint is
+ * the same activation_url the updater already talks to, action
+ * `tangible_sync_consent`. Server side is idempotent — a redelivered answer
+ * that matches resolved state is dropped there — so this client can retry
+ * forever without bookkeeping beyond the synced flag.
+ *
+ * No key yet (consent answered before licence, or a free build) → answers
+ * simply wait; every call is a cheap no-op until a key exists. Failure of
+ * any kind leaves synced=false and the next trigger retries. Never blocks
+ * rendering: one POST, 15s cap, outcome recorded and forgotten.
+ */
+function attempt_consent_sync($plugin) {
+  if (empty($plugin->activation_url) || !function_exists('tangible\\updater\\get_license_key')) return;
+  $key = \tangible\updater\get_license_key($plugin);
+  if (empty($key)) return;
+
+  $outbox = get_option(CONSENT_OUTBOX, []);
+  $answers = [];
+  foreach ($outbox as $consent_key => $entry) {
+    if (empty($entry['synced'])) {
+      $answers[] = [
+        'key'         => $consent_key,
+        'answer'      => $entry['answer'],
+        'consentText' => $entry['consent_text'],
+        'at'          => (int) (($entry['at'] ?? 0) * 1000),   // seconds → ms, the platform clock unit
+      ];
+    }
+  }
+  if (!$answers) return;
+
+  $response = wp_remote_post($plugin->activation_url, [
+    'timeout'   => 15,
+    'sslverify' => false,   // matches the updater's own cloud_endpoint
+    'body'      => [
+      'edd_action' => 'tangible_sync_consent',
+      'license'    => $key,
+      'url'        => home_url(),
+      'answers'    => wp_json_encode($answers),
+    ],
+  ]);
+  if (is_wp_error($response)) return;
+  $body = json_decode(wp_remote_retrieve_body($response));
+  if (empty($body->success)) return;
+
+  foreach ($answers as $a) {
+    if (isset($outbox[ $a['key'] ])) {
+      $outbox[ $a['key'] ]['synced'] = true;
+      $outbox[ $a['key'] ]['synced_at'] = time();
+    }
+  }
+  update_option(CONSENT_OUTBOX, $outbox, false);
+}
+
 const TELEMETRY_CONSENT_TEXT =
   'Share anonymous usage data — which features are used, content counts, a role histogram, '
   . 'and environment performance. Never content, names, or visitor data. (extended telemetry v1)';
@@ -148,6 +204,12 @@ add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name =
         if (!function_exists('tangible\\updater\\cloud_endpoint')) {
           return new \WP_Error('tangible_onboarding', 'The updater module is not available on this site.');
         }
+
+        // A different key can mean a different ACCOUNT: stale decisions from
+        // the old account must never govern the new one's wizard, so the
+        // facts cache dies with the old key. The activation response
+        // repopulates it.
+        delete_option('tangible_onboarding_facts_cache__' . $plugin->name);
 
         // Save first — the exact subfield the update checker reads. Even on
         // the deferred path, updates must query with this key.
@@ -266,7 +328,7 @@ add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name =
       </script>
       <?php
     },
-    'handle' => function () use ($ask_telemetry, $ask_marketing) {
+    'handle' => function ($plugin) use ($ask_telemetry, $ask_marketing) {
       $answers = [];
       foreach ([
         'telemetry_extended' => [$ask_telemetry, TELEMETRY_CONSENT_TEXT],
@@ -282,6 +344,9 @@ add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name =
       foreach ($answers as $key => [$answer, $text]) {
         record_consent_answer($key, $answer, $text);
       }
+      // Deliver immediately when a key exists; otherwise the outbox waits for
+      // the next trigger (setup-page load, licence activation).
+      if ($plugin) attempt_consent_sync($plugin);
       return true;
     },
   ];

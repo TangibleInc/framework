@@ -141,6 +141,14 @@ function register_wizard($plugin) {
   // Resumable re-entry: the playbook's one universal finding. Dismissible,
   // and it re-resolves each load, so finishing setup removes it without a
   // dismissal ever being recorded.
+  // Outbox retry: any visit to the setup page redelivers unsynced consent
+  // answers (server side is idempotent, so over-triggering costs nothing).
+  add_action('admin_init', function () use ($plugin) {
+    if (($_GET['page'] ?? '') !== get_setup_slug($plugin)) return;
+    if (!current_user_can('manage_options')) return;
+    attempt_consent_sync($plugin);
+  });
+
   add_action('admin_init', function () use ($plugin, $name) {
     if (!current_user_can('manage_options')) return;
     if (($_GET['page'] ?? '') === get_setup_slug($plugin)) return;
