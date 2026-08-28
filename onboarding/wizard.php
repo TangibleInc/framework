@@ -64,8 +64,21 @@ function build_facts($plugin_name) {
  * Wire the shell for one plugin. Call at plugins_loaded, after
  * framework\register_plugin().
  */
+/**
+ * Which plugins have a wizard. The shell's own steps (licence, consent)
+ * attach only to these — a bare resolve_plan() for a name that never
+ * registered a wizard sees exactly the steps its own filters contributed,
+ * which is also what keeps test fixtures hermetic.
+ */
+function registered_wizards($add = null) {
+  static $wizards = [];
+  if ($add !== null) $wizards[$add] = true;
+  return $wizards;
+}
+
 function register_wizard($plugin) {
   $name = $plugin->name;
+  registered_wizards($name);
   $redirect_flag = 'tangible_onboarding_redirect__' . $name;
 
   // Activation → one-shot redirect flag. The flag pattern (not a direct
@@ -150,10 +163,25 @@ function handle_step_submission($plugin_name, $post) {
     $plugin = function_exists('tangible\\framework\\get_plugin')
       ? framework\get_plugin($plugin_name) : null;
     $ok = call_user_func($step['handle'], $plugin, $step);
-    if ($ok === false) return null;   // stay open — nothing recorded
+    // A handler refuses two ways, and the shell treats them differently:
+    //   false     — incomplete input; stay open, no message (the form says why)
+    //   WP_Error  — a TEST failed; stay open and show the reason. This is the
+    //               whole infra behind "a credentials step ends in a test, not
+    //               a save": the shell knows nothing about Algolia or Stripe,
+    //               only that a handler may decline with an explanation.
+    if ($ok === false) return null;
+    if (is_wp_error($ok)) {
+      set_transient(step_error_key($plugin_name), $ok->get_error_message(), 60);
+      return null;
+    }
   }
   onboarding\mark($plugin_name, $step_id, 'done');
   return $step_id;
+}
+
+/** Per-user, so two admins onboarding two sites in parallel don't cross wires. */
+function step_error_key($plugin_name) {
+  return 'tangible_onboarding_error__' . $plugin_name . '__' . get_current_user_id();
 }
 
 add_action('admin_post_tangible_onboarding_step', function () {
@@ -167,6 +195,22 @@ add_action('admin_post_tangible_onboarding_step', function () {
 });
 
 // ── rendering ──────────────────────────────────────────────────────────────
+//
+// The House dial, ported from the design catalogue (/plugin-onboarding-e,
+// /plugin-onboarding-fullscreen). The devices, not approximations of them:
+//
+//   ghost numeral   the step number, 84px mono, in the light purple
+//   tile ladder     the six-tile logo as the progress marker — tiles fill as
+//                   steps complete, the foot tile turns coral at the end
+//   mono labels     10px/uppercase/.13em — eyebrows, rail, footer
+//   double rule     the two-line divider under the step header
+//   three purples   #9E9CF7 marks · #5B51C9 structure · #4265C4 data; the
+//                   interactive colour stays the host's (--wp-admin-theme-color
+//                   via .button-primary), so the wizard follows the reader's
+//                   admin colour scheme instead of fighting it
+//
+// A skipped rail entry renders dashed with its note ("on file") — the promise
+// about what we did not ask, kept visible.
 
 function render_wizard($plugin) {
   $name = $plugin->name;
@@ -174,53 +218,93 @@ function render_wizard($plugin) {
   $plan = onboarding\resolve_plan($name, $facts);
   $step = $plan['steps'][0] ?? null;
   $title = esc_html($plugin->title ?? $name);
+
+  $total = count($plan['rail']);
+  $position = 0; $done = 0;
+  foreach ($plan['rail'] as $idx => $r) {
+    if ($r['id'] === $plan['current']) $position = $idx + 1;
+    if (in_array($r['state'], ['done', 'skipped'], true)) $done++;
+  }
+  $all_done = !$step;
+  // The tile ladder: five body tiles fill with progress, the foot tile is
+  // the completion mark and turns coral only at the end.
+  $filled = $total > 0 ? (int) round(($done / $total) * 5) : 0;
   ?>
   <style>
-    .tgbl-wiz { max-width: 860px; margin: 28px auto 0; }
+    .tgbl-wiz { --mark:#9E9CF7; --deep:#5B51C9; --data:#4265C4; --salmon:#FD9597;
+      max-width: 880px; margin: 34px auto 0; color:#1d2327; }
     .tgbl-wiz .lbl { font-family:ui-monospace,Menlo,monospace; font-size:10px; font-weight:600;
       letter-spacing:.13em; text-transform:uppercase; color:#646970; }
-    .tgbl-wiz-band { display:flex; align-items:center; gap:12px; padding:0 0 14px; }
-    .tgbl-mark { display:inline-grid; grid-template-columns:repeat(3,7px); grid-template-rows:repeat(3,7px); gap:1px; }
-    .tgbl-mark i { display:block; border-radius:1px; background:#9e9cf7; }
-    .tgbl-mark i:nth-child(1){grid-area:1/1}.tgbl-mark i:nth-child(2){grid-area:1/2}
-    .tgbl-mark i:nth-child(3){grid-area:1/3}.tgbl-mark i:nth-child(4){grid-area:2/1}
-    .tgbl-mark i:nth-child(5){grid-area:2/3}.tgbl-mark i:nth-child(6){grid-area:3/2}
-    .tgbl-wiz-rail { display:flex; gap:18px; flex-wrap:wrap; padding:12px 0 18px; border-bottom:1px solid #c3c4c7; }
+    .tgbl-wiz-band { display:flex; align-items:center; gap:13px; padding:0 0 16px; }
+    .tgbl-wiz-band .name { font-size:17px; font-weight:600; letter-spacing:-.01em; }
+    .tgbl-ladder { display:inline-grid; grid-template-columns:repeat(3,8px); grid-template-rows:repeat(3,8px); gap:1px; }
+    .tgbl-ladder i { display:block; border-radius:1px; background:#dcdcde; }
+    .tgbl-ladder i:nth-child(1){grid-area:1/1}.tgbl-ladder i:nth-child(2){grid-area:1/2}
+    .tgbl-ladder i:nth-child(3){grid-area:1/3}.tgbl-ladder i:nth-child(4){grid-area:2/1}
+    .tgbl-ladder i:nth-child(5){grid-area:2/3}.tgbl-ladder i:nth-child(6){grid-area:3/2}
+    .tgbl-ladder i[data-on] { background:var(--mark); }
+    .tgbl-ladder i[data-done] { background:var(--salmon); }
+    .tgbl-wiz-rail { display:flex; gap:20px; flex-wrap:wrap; padding:13px 0 15px;
+      border-top:1px solid #c3c4c7; border-bottom:1px solid #c3c4c7; }
     .tgbl-wiz-rail .st { display:flex; align-items:center; gap:7px; }
-    .tgbl-wiz-rail .dot { width:9px; height:9px; border-radius:1.5px; background:#dcdcde; }
-    .tgbl-wiz-rail .st[data-state="done"] .dot { background:#9e9cf7; }
-    .tgbl-wiz-rail .st[data-state="current"] .dot { background:#2271b1; }
+    .tgbl-wiz-rail .dot { width:8px; height:8px; border-radius:1.5px; background:#dcdcde; flex:none; }
+    .tgbl-wiz-rail .st[data-state="done"] .dot { background:var(--mark); }
+    .tgbl-wiz-rail .st[data-state="current"] .dot { background:var(--deep); }
+    .tgbl-wiz-rail .st[data-state="current"] .lbl { color:#1d2327; }
     .tgbl-wiz-rail .st[data-state="skipped"] .dot { background:transparent; border:1px dashed #a7aaad; }
-    .tgbl-wiz-rail .st[data-state="skipped"] .lbl { text-decoration:none; }
-    .tgbl-wiz-card { background:#fff; border:1px solid #c3c4c7; border-radius:4px; padding:26px 30px 22px; margin-top:22px; }
-    .tgbl-wiz-foot { display:flex; align-items:center; gap:12px; margin-top:22px; padding-top:14px; border-top:1px solid #e4e4e7; }
-    .tgbl-skip { color:#646970; text-decoration:none; border-bottom:1px dashed #a7aaad; }
+    .tgbl-wiz-card { background:#fff; border:1px solid #c3c4c7; border-radius:4px;
+      padding:30px 34px 24px; margin-top:26px; box-shadow:0 1px 1px rgba(0,0,0,.04); }
+    .tgbl-wiz-head { display:flex; gap:24px; align-items:flex-start; }
+    .tgbl-ghost { font-family:ui-monospace,Menlo,monospace; font-size:84px; font-weight:600;
+      line-height:.8; color:var(--mark); opacity:.5; letter-spacing:-.04em; flex:none; user-select:none; }
+    .tgbl-wiz-card h2 { font-size:26px; font-weight:600; margin:7px 0 0; line-height:1.18; letter-spacing:-.012em; padding:0; }
+    .tgbl-wiz-card p { font-size:14px; line-height:1.65; max-width:62ch; }
+    .tgbl-dbl { border:0; border-top:1px solid #c3c4c7; border-bottom:1px solid #c3c4c7; height:3px; margin:22px 0; }
+    .tgbl-wiz-card .code, .tgbl-wiz-card input[type=text], .tgbl-wiz-card input[type=password] {
+      font-family:ui-monospace,Menlo,monospace; font-size:12.5px; color:var(--data); }
+    .tgbl-wiz-foot { display:flex; align-items:center; gap:14px; margin-top:24px;
+      padding-top:15px; border-top:1px solid #e4e4e7; }
+    .tgbl-skip { color:#646970; background:none; border:0; border-bottom:1px dashed #a7aaad;
+      cursor:pointer; padding:0 0 1px; font-size:12.5px; }
+    .tgbl-skip:hover { color:#1d2327; border-bottom-color:#646970; }
+    .tgbl-wiz-error { border:1px solid #c3c4c7; border-inline-start:3px solid var(--salmon);
+      background:#fff; padding:9px 13px; font-size:13px; margin:0 0 14px; }
   </style>
   <div class="tgbl-wiz">
     <div class="tgbl-wiz-band">
-      <span class="tgbl-mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span>
-      <span style="font-size:18px"><?php echo $title; ?></span>
+      <span class="tgbl-ladder" aria-hidden="true"><?php
+        for ($i = 1; $i <= 5; $i++) echo '<i' . ($i <= $filled ? ' data-on' : '') . '></i>';
+        echo '<i' . ($all_done ? ' data-done' : '') . '></i>';
+      ?></span>
+      <span class="name"><?php echo $title; ?></span>
       <span class="lbl">setup</span>
+      <span style="flex:1"></span>
+      <span class="lbl"><?php echo (int) $done; ?> of <?php echo (int) $total; ?> settled</span>
     </div>
 
     <div class="tgbl-wiz-rail">
       <?php foreach ($plan['rail'] as $r) : ?>
         <span class="st" data-state="<?php echo esc_attr($r['state']); ?>">
           <span class="dot"></span>
-          <span class="lbl"><?php echo esc_html(str_replace('-', ' ', $r['id']));
-            if ($r['state'] === 'skipped') echo ' · on file'; ?></span>
+          <span class="lbl"><?php echo esc_html($r['label']);
+            if ($r['state'] === 'skipped') echo ' · ' . esc_html($r['note'] ?? 'on file'); ?></span>
         </span>
       <?php endforeach; ?>
     </div>
 
-    <?php if (!$step) : ?>
+    <?php if ($all_done) : ?>
       <div class="tgbl-wiz-card">
-        <p class="lbl">all set</p>
-        <h2 style="margin:8px 0 6px">Nothing left to ask.</h2>
-        <p>Everything is either configured or already on file.</p>
-        <p style="margin-top:18px">
-          <a class="button button-primary" href="<?php echo esc_url(admin_url('admin.php?page=tangible-home')); ?>">Go to Tangible Home</a>
-        </p>
+        <div class="tgbl-wiz-head">
+          <span class="tgbl-ghost" aria-hidden="true">✓</span>
+          <div>
+            <p class="lbl" style="margin:4px 0 0">setup · complete</p>
+            <h2>Nothing left to ask.</h2>
+            <p>Everything is either configured or already on file.</p>
+            <p style="margin-top:20px">
+              <a class="button button-primary button-large" href="<?php echo esc_url(admin_url('admin.php?page=tangible-home')); ?>">Go to Tangible Home</a>
+            </p>
+          </div>
+        </div>
       </div>
     <?php else : ?>
       <form class="tgbl-wiz-card" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
@@ -229,20 +313,34 @@ function render_wizard($plugin) {
         <input type="hidden" name="plugin" value="<?php echo esc_attr($name); ?>" />
         <input type="hidden" name="step" value="<?php echo esc_attr($step['id']); ?>" />
 
-        <?php if (is_callable($step['render'])) {
-          call_user_func($step['render'], $plugin, $facts, $step);
-        } else {
-          echo '<p>' . esc_html($step['id']) . '</p>';
-        } ?>
+        <?php $error = get_transient(step_error_key($name));
+        if ($error) { delete_transient(step_error_key($name)); } ?>
+        <div class="tgbl-wiz-head">
+          <span class="tgbl-ghost" aria-hidden="true"><?php echo esc_html(str_pad((string) $position, 2, '0', STR_PAD_LEFT)); ?></span>
+          <div style="flex:1;min-width:0">
+            <?php if ($error) : ?>
+              <div class="tgbl-wiz-error" role="alert"><?php echo esc_html($error); ?></div>
+            <?php endif; ?>
+            <p class="lbl" style="margin:4px 0 0">
+              step <?php echo (int) $position; ?> of <?php echo (int) $total; ?> ·
+              <?php echo esc_html($step['label'] ?? str_replace('-', ' ', $step['id'])); ?>
+            </p>
+            <?php if (is_callable($step['render'])) {
+              call_user_func($step['render'], $plugin, $facts, $step);
+            } else {
+              echo '<h2>' . esc_html($step['id']) . '</h2>';
+            } ?>
+          </div>
+        </div>
 
         <div class="tgbl-wiz-foot">
           <span class="lbl">nothing is saved until you continue</span>
           <span style="flex:1"></span>
           <?php if ($step['skippable']) : ?>
-            <button class="tgbl-skip" style="background:none;border-top:0;border-left:0;border-right:0;cursor:pointer"
-                    type="submit" name="do" value="skip">Skip this step</button>
+            <button class="tgbl-skip" type="submit" name="do" value="skip">Skip this step</button>
           <?php endif; ?>
-          <button class="button button-primary button-large" type="submit" name="do" value="continue">Continue</button>
+          <button class="button button-primary button-large" type="submit" name="do" value="continue"><?php
+            echo esc_html($step['submit_label'] ?? 'Continue'); ?></button>
         </div>
       </form>
     <?php endif; ?>

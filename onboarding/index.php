@@ -107,6 +107,7 @@ function get_steps($plugin_name, $facts) {
     $seen[ $step['id'] ] = true;
 
     $step += [
+      'label'     => null,   // display name; id, de-dashed, when absent
       'weight'    => 50,
       'scope'     => 'plugin',
       'needed'    => null,
@@ -197,16 +198,18 @@ function resolve_plan($plugin_name, $facts) {
       $record = $state[ get_record_key($step) ] ?? null;
     }
 
+    $label = $step['label'] ?? str_replace('-', ' ', $step['id']);
     if ($record) {
-      $rail[] = [ 'id' => $step['id'], 'state' => $record['status'] === 'skipped' ? 'skipped' : 'done' ];
+      $rail[] = [ 'id' => $step['id'], 'label' => $label,
+                  'state' => $record['status'] === 'skipped' ? 'skipped' : 'done' ];
       continue;
     }
     if (is_callable($step['needed']) && !call_user_func($step['needed'], $facts)) {
-      $rail[] = [ 'id' => $step['id'], 'state' => 'skipped', 'note' => $step['skip_note'] ];
+      $rail[] = [ 'id' => $step['id'], 'label' => $label, 'state' => 'skipped', 'note' => $step['skip_note'] ];
       continue;
     }
     $plan[] = $step;
-    $rail[] = [ 'id' => $step['id'], 'state' => 'pending' ];
+    $rail[] = [ 'id' => $step['id'], 'label' => $label, 'state' => 'pending' ];
   }
 
   $current = $plan[0]['id'] ?? null;
@@ -249,3 +252,4 @@ function mark($plugin_name, $step_id, $status) {
 }
 
 require_once __DIR__ . '/wizard.php';
+require_once __DIR__ . '/steps.php';

@@ -52,8 +52,13 @@ add_action('admin_bar_menu', function ($bar) {
   if (is_client_managed_site()) return;   // absent, not muted — see header note
 
   $count = hub\get_unread_count();
-  $tiles = '<span class="tgbl-bar-mark" aria-hidden="true">'
-         . str_repeat('<i></i>', 6) . '</span>';
+  // The official six-tile logo (design/tangible-logo.svg geometry), inlined as
+  // SVG: the admin bar's own item CSS scrambles a CSS grid, but has nothing to
+  // break in an SVG. Grey at rest, brand colours on hover.
+  $tiles = '<svg class="tgbl-bar-mark" width="16" height="16" viewBox="0 0 99 99" aria-hidden="true">'
+         . '<path d="M0 0h33v33H0z"/><path d="M33 0h33v33H33z"/><path d="M66 0h33v33H66z"/>'
+         . '<path d="M0 33h33v33H0z"/><path d="M66 33h33v33H66z"/><path d="M33 66h33v33H33z"/>'
+         . '</svg>';
   // Inline pill, the bar's own vocabulary (the Yoast convention). No pill at
   // zero — a "0" is a nag pretending to be a number.
   $pill = $count > 0
@@ -71,13 +76,14 @@ add_action('admin_bar_menu', function ($bar) {
 add_action('wp_before_admin_bar_render', function () {
   if (is_client_managed_site()) return;
   ?><style>
-    #wpadminbar .tgbl-bar-mark { display:inline-grid; grid-template-columns:repeat(3,4px);
-      grid-template-rows:repeat(3,4px); gap:1px; vertical-align:middle; margin-top:9px; }
-    #wpadminbar .tgbl-bar-mark i { display:block; border-radius:.5px; background:#c3c4c7; }
-    #wpadminbar .tgbl-bar-mark i:nth-child(1){grid-area:1/1} #wpadminbar .tgbl-bar-mark i:nth-child(2){grid-area:1/2}
-    #wpadminbar .tgbl-bar-mark i:nth-child(3){grid-area:1/3} #wpadminbar .tgbl-bar-mark i:nth-child(4){grid-area:2/1}
-    #wpadminbar .tgbl-bar-mark i:nth-child(5){grid-area:2/3} #wpadminbar .tgbl-bar-mark i:nth-child(6){grid-area:3/2}
-    #wpadminbar #wp-admin-bar-tangible-hub:hover .tgbl-bar-mark i { background:#9e9cf7; }
+    #wpadminbar .tgbl-bar-mark { vertical-align:middle; margin-top:-2px; }
+    #wpadminbar .tgbl-bar-mark path { fill:#c3c4c7; }
+    #wpadminbar #wp-admin-bar-tangible-hub:hover .tgbl-bar-mark path:nth-child(1){fill:#262262}
+    #wpadminbar #wp-admin-bar-tangible-hub:hover .tgbl-bar-mark path:nth-child(2){fill:#662d91}
+    #wpadminbar #wp-admin-bar-tangible-hub:hover .tgbl-bar-mark path:nth-child(3){fill:#9f1f63}
+    #wpadminbar #wp-admin-bar-tangible-hub:hover .tgbl-bar-mark path:nth-child(4){fill:#2e3192}
+    #wpadminbar #wp-admin-bar-tangible-hub:hover .tgbl-bar-mark path:nth-child(5){fill:#ec008c}
+    #wpadminbar #wp-admin-bar-tangible-hub:hover .tgbl-bar-mark path:nth-child(6){fill:#02aeef}
     #wpadminbar .tgbl-bar-pill { background:#d63638; color:#fff; font-size:10px; font-weight:600;
       line-height:16px; min-width:16px; padding:0 4px; border-radius:8px; display:inline-block;
       text-align:center; margin-left:6px; vertical-align:middle; }
