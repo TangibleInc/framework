@@ -139,9 +139,10 @@ function render_page() {
   $client = is_client_managed_site();
   ?>
   <style>
-    .tgbl-hub { max-width: 1200px; }
-    .tgbl-hub .lbl { font-family:ui-monospace,Menlo,monospace; font-size:10px; font-weight:600;
-      letter-spacing:.13em; text-transform:uppercase; color:#646970; }
+    <?php echo \tangible\design\font_faces_css(); ?>
+    .tgbl-hub { max-width: 1200px; <?php echo \tangible\design\font_tokens_css(); ?> }
+    .tgbl-hub .lbl { font-family:var(--tgbl-font-label); font-size:10.5px; font-weight:600;
+      letter-spacing:.14em; text-transform:uppercase; color:#646970; }
     .tgbl-hub-head { display:flex; align-items:center; gap:12px; padding:14px 0 6px; }
     .tgbl-hub-head h1 { font-size:23px; font-weight:400; margin:0; padding:0; }
     .tgbl-mark { display:inline-grid; grid-template-columns:repeat(3,7px); grid-template-rows:repeat(3,7px); gap:1px; }
@@ -158,7 +159,7 @@ function render_page() {
     .tgbl-hub table { width:100%; border-collapse:collapse; }
     .tgbl-hub td, .tgbl-hub th { text-align:left; padding:11px 16px; border-bottom:1px solid #f0f0f1; font-size:13px; }
     .tgbl-hub tr:last-child td { border-bottom:0; }
-    .tgbl-ver { font-family:ui-monospace,Menlo,monospace; font-size:11.5px; color:#4265c4; }
+    .tgbl-ver { font-family:var(--tgbl-font-data); font-size:11.5px; color:#4265c4; }
     .tgbl-lic::before { content:""; display:inline-block; width:7px; height:7px; border-radius:1px;
       background:#9e9cf7; margin-right:7px; }
     .tgbl-lic--warn::before { background:#fd9597; }

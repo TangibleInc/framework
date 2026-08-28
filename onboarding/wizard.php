@@ -231,10 +231,15 @@ function render_wizard($plugin) {
   $filled = $total > 0 ? (int) round(($done / $total) * 5) : 0;
   ?>
   <style>
+    <?php echo \tangible\design\font_faces_css(); ?>
+    /* The three voices (mono audition, candidate E): Space Mono for DATA ONLY,
+       League Spartan for labels and headings, native sans for sentences. */
     .tgbl-wiz { --mark:#9E9CF7; --deep:#5B51C9; --data:#4265C4; --salmon:#FD9597;
+      <?php echo \tangible\design\font_tokens_css(); ?>
       max-width: 880px; margin: 34px auto 0; color:#1d2327; }
-    .tgbl-wiz .lbl { font-family:ui-monospace,Menlo,monospace; font-size:10px; font-weight:600;
-      letter-spacing:.13em; text-transform:uppercase; color:#646970; }
+    .tgbl-wiz .lbl { font-family:var(--tgbl-font-label); font-size:10.5px; font-weight:600;
+      letter-spacing:.14em; text-transform:uppercase; color:#646970; }
+    .tgbl-wiz .whisper { font-family:var(--tgbl-font-body); font-size:11.5px; color:#8c8f94; }
     .tgbl-wiz-band { display:flex; align-items:center; gap:13px; padding:0 0 16px; }
     .tgbl-wiz-band .name { font-size:17px; font-weight:600; letter-spacing:-.01em; }
     .tgbl-ladder { display:inline-grid; grid-template-columns:repeat(3,8px); grid-template-rows:repeat(3,8px); gap:1px; }
@@ -255,13 +260,14 @@ function render_wizard($plugin) {
     .tgbl-wiz-card { background:#fff; border:1px solid #c3c4c7; border-radius:4px;
       padding:30px 34px 24px; margin-top:26px; box-shadow:0 1px 1px rgba(0,0,0,.04); }
     .tgbl-wiz-head { display:flex; gap:24px; align-items:flex-start; }
-    .tgbl-ghost { font-family:ui-monospace,Menlo,monospace; font-size:84px; font-weight:600;
+    .tgbl-ghost { font-family:var(--tgbl-font-data); font-size:84px; font-weight:700;
       line-height:.8; color:var(--mark); opacity:.5; letter-spacing:-.04em; flex:none; user-select:none; }
-    .tgbl-wiz-card h2 { font-size:26px; font-weight:600; margin:7px 0 0; line-height:1.18; letter-spacing:-.012em; padding:0; }
+    .tgbl-wiz-card h2 { font-family:var(--tgbl-font-label); font-size:25px; font-weight:600;
+      margin:7px 0 0; line-height:1.18; letter-spacing:-.005em; padding:0; }
     .tgbl-wiz-card p { font-size:14px; line-height:1.65; max-width:62ch; }
     .tgbl-dbl { border:0; border-top:1px solid #c3c4c7; border-bottom:1px solid #c3c4c7; height:3px; margin:22px 0; }
     .tgbl-wiz-card .code, .tgbl-wiz-card input[type=text], .tgbl-wiz-card input[type=password] {
-      font-family:ui-monospace,Menlo,monospace; font-size:12.5px; color:var(--data); }
+      font-family:var(--tgbl-font-data); font-size:12.5px; color:var(--data); }
     .tgbl-wiz-foot { display:flex; align-items:center; gap:14px; margin-top:24px;
       padding-top:15px; border-top:1px solid #e4e4e7; }
     .tgbl-skip { color:#646970; background:none; border:0; border-bottom:1px dashed #a7aaad;
@@ -279,7 +285,7 @@ function render_wizard($plugin) {
       <span class="name"><?php echo $title; ?></span>
       <span class="lbl">setup</span>
       <span style="flex:1"></span>
-      <span class="lbl"><?php echo (int) $done; ?> of <?php echo (int) $total; ?> settled</span>
+      <span class="lbl" style="font-family:var(--tgbl-font-data);font-size:10px"><?php echo (int) $done; ?> of <?php echo (int) $total; ?> settled</span>
     </div>
 
     <div class="tgbl-wiz-rail">
@@ -334,7 +340,7 @@ function render_wizard($plugin) {
         </div>
 
         <div class="tgbl-wiz-foot">
-          <span class="lbl">nothing is saved until you continue</span>
+          <span class="whisper">Nothing is saved until you continue.</span>
           <span style="flex:1"></span>
           <?php if ($step['skippable']) : ?>
             <button class="tgbl-skip" type="submit" name="do" value="skip">Skip this step</button>
