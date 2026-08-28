@@ -57,6 +57,23 @@ class Wizard_TestCase extends \WP_UnitTestCase {
     $this->assertCount(1, onboarding\resolve_plan('example', (object) [])['steps']);
   }
 
+  function test_an_object_shaped_facts_cache_still_applies() {
+    // Regression: the cache used to be written with a shallow (array) cast,
+    // leaving `ask` a stdClass — which the reader rejected, silently
+    // re-asking questions the server said were on file. Both shapes must
+    // apply, and neither may fatal.
+    foreach ([
+      json_decode('{"ask":{"telemetry_extended":"skip","marketing":"skip"}}', true),
+      json_decode('{"ask":{"telemetry_extended":"skip","marketing":"skip"}}'),
+    ] as $data) {
+      update_option('tangible_onboarding_facts_cache__example', [ 'at' => 1, 'data' => $data ], false);
+      $facts = onboarding\build_facts('example');
+      $this->assertSame('skip', $facts->ask['telemetry_extended']);
+      $this->assertSame('skip', $facts->ask['marketing']);
+    }
+    delete_option('tangible_onboarding_facts_cache__example');
+  }
+
   function test_facts_default_to_asking_and_the_filter_overrides() {
     $facts = onboarding\build_facts('example');
     $this->assertFalse($facts->licence_active);

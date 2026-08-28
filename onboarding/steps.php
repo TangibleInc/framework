@@ -126,8 +126,8 @@ function attempt_consent_sync($plugin) {
 }
 
 const TELEMETRY_CONSENT_TEXT =
-  'Share anonymous usage data — which features are used, content counts, a role histogram, '
-  . 'and environment performance. Never content, names, or visitor data. (extended telemetry v1)';
+  'Share anonymous performance and usage data — execution times, which features are used, '
+  . 'content counts, a role histogram. Never content, names, or visitor data. (extended telemetry v1)';
 
 const MARKETING_CONSENT_TEXT =
   'Email me release notes and product updates from Tangible. Unsubscribe any time. '
@@ -242,8 +242,13 @@ add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name =
         // carrying onboarding decisions, they land here and build_facts
         // reads them — nothing else changes.
         if (!empty($body->onboarding)) {
+          // Deep-convert: a (array) cast is shallow and leaves nested
+          // stdClass objects, which the reader's is_array guard then
+          // rejects — the bug where a perfectly good skip/skip block was
+          // silently ignored and the wizard re-asked answered questions.
+          $data = json_decode(wp_json_encode($body->onboarding), true);
           update_option('tangible_onboarding_facts_cache__' . $plugin->name,
-            [ 'at' => time(), 'data' => (array) $body->onboarding ], false);
+            [ 'at' => time(), 'data' => is_array($data) ? $data : [] ], false);
         }
         return true;
       },
@@ -287,8 +292,8 @@ add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name =
 
       <?php if ($ask_telemetry) {
         render_answer_pair('telemetry_extended',
-          'Share usage data?',
-          'Which features you use, content counts, a role histogram, environment performance. Never your content, your users, or your visitors.');
+          'Share performance and usage data?',
+          'Execution times and performance timings, which features you use, content counts, a role histogram. Never your content, your users, or your visitors.');
         // Show the payload, not a policy link — this site's actual numbers.
         ?>
         <table style="margin:10px 0 0; border-collapse:collapse">

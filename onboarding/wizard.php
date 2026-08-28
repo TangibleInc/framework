@@ -63,15 +63,21 @@ function build_facts($plugin_name) {
   // Unknown stays 'ask': asking twice is annoying, collecting without
   // consent is illegal, so the failure mode is chosen deliberately.
   $cache = get_option('tangible_onboarding_facts_cache__' . $plugin_name, null);
-  if (!empty($cache['data']['ask']) && is_array($cache['data']['ask'])) {
-    foreach ($cache['data']['ask'] as $k => $v) {
+  // Tolerant read: accept object or array — caches written before the
+  // deep-convert fix hold a stdClass here, and array access on stdClass is
+  // a fatal, not a null.
+  $cached = is_array($cache) ? ($cache['data'] ?? null) : null;
+  if (is_object($cached)) $cached = (array) $cached;
+  $cached_ask = is_array($cached) ? (array) ($cached['ask'] ?? []) : [];
+  if (!empty($cached_ask)) {
+    foreach ($cached_ask as $k => $v) {
       if (in_array($v, ['ask', 'skip'], true)) $facts->ask[$k] = $v;
     }
   }
-  if (isset($cache['data']['steward']) && get_option('tangible_site_steward', '') === '') {
+  if (isset($cached['steward']) && get_option('tangible_site_steward', '') === '') {
     // Account-level default seeds the site answer; a local steward answer,
     // once given, wins for this site's surfaces.
-    $facts->steward_default = $cache['data']['steward'];
+    $facts->steward_default = $cached['steward'];
   }
 
   return apply_filters('tangible_onboarding_facts', $facts, $plugin_name);
