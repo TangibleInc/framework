@@ -74,11 +74,12 @@ function build_facts($plugin_name) {
       if (in_array($v, ['ask', 'skip'], true)) $facts->ask[$k] = $v;
     }
   }
-  if (isset($cached['steward']) && get_option('tangible_site_steward', '') === '') {
-    // Account-level default seeds the site answer; a local steward answer,
-    // once given, wins for this site's surfaces.
-    $facts->steward_default = $cached['steward'];
-  }
+  // The opaque account handle + display name from the last activation. The
+  // handle keys the LOCAL per-account steward map (steward lives on the site
+  // by decision, 2026-08-28); the name lets the wizard say "managed by
+  // Dave's Agency" instead of "a client".
+  $facts->account_id = is_array($cached) && !empty($cached['accountId']) ? (string) $cached['accountId'] : '';
+  $facts->account_name = is_array($cached) && !empty($cached['accountName']) ? (string) $cached['accountName'] : '';
 
   return apply_filters('tangible_onboarding_facts', $facts, $plugin_name);
 }

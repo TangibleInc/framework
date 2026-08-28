@@ -39,7 +39,13 @@ const PAGE = 'tangible-home';
  * the muting is deferred.
  */
 function is_client_managed_site() {
-  return get_option('tangible_site_steward') === 'client';
+  // Per-account map (or legacy bare string). "Client-managed" only when every
+  // recorded answer says so — one self-managed account keeps the hub personal.
+  $value = get_option('tangible_site_steward', []);
+  if (is_string($value)) return $value === 'client';
+  if (!is_array($value) || !$value) return false;
+  foreach ($value as $answer) if ($answer !== 'client') return false;
+  return true;
 }
 
 // ── menu: first item under the shared Tangible top-level ──────────────────

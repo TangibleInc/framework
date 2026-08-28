@@ -125,6 +125,40 @@ function attempt_consent_sync($plugin) {
   update_option(CONSENT_OUTBOX, $outbox, false);
 }
 
+/**
+ * The steward answer — "who will look after this site?" — lives LOCALLY, as a
+ * per-account map (decided 2026-08-28: mirroring account×site pairs on
+ * tangible.one is a lot of work for little benefit, and the question is
+ * deliberately asked once per site anyway).
+ *
+ * Keyed by the opaque accountId from the onboarding block, because one site
+ * can host plugins licensed under two different accounts — rare, but it costs
+ * one array key to be correct about. '' is the key when no account is known
+ * yet (pre-activation, free builds). Legacy shape (a bare string from the
+ * first cut) reads as the ''-keyed answer.
+ */
+const STEWARD_OPTION = 'tangible_site_steward';
+
+function get_steward_map() {
+  $value = get_option(STEWARD_OPTION, []);
+  if (is_string($value) && $value !== '') return [ '' => $value ];   // legacy
+  return is_array($value) ? $value : [];
+}
+
+function get_steward($account_id = '') {
+  $map = get_steward_map();
+  // An account-specific answer wins; the anonymous answer covers the rest —
+  // whoever set up the first plugin answered for the site as they knew it.
+  return $map[$account_id] ?? $map[''] ?? null;
+}
+
+function set_steward($account_id, $value) {
+  if (!in_array($value, ['team', 'client'], true)) return;
+  $map = get_steward_map();
+  $map[$account_id] = $value;
+  update_option(STEWARD_OPTION, $map, false);
+}
+
 const TELEMETRY_CONSENT_TEXT =
   'Share anonymous performance and usage data — execution times, which features are used, '
   . 'content counts, a role histogram. Never content, names, or visitor data. (extended telemetry v1)';
@@ -352,6 +386,50 @@ add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name =
       // Deliver immediately when a key exists; otherwise the outbox waits for
       // the next trigger (setup-page load, licence activation).
       if ($plugin) attempt_consent_sync($plugin);
+      return true;
+    },
+  ];
+
+  // ── Steward: site question, shell-owned — every Tangible plugin asks it
+  //    identically, once per (site, account) ────────────────────────────────
+  $account_id = is_object($facts) ? ($facts->account_id ?? '') : '';
+  $account_name = is_object($facts) ? ($facts->account_name ?? '') : '';
+  $steps[] = [
+    'id'     => 'steward',
+    'label'  => 'this site',
+    'weight' => 40,
+    // 'account' scope = the resolver records nothing; the step's own local
+    // map is the whole state, so a NEW account on the same site re-asks.
+    'scope'  => 'account',
+    'skippable' => false,
+    'needed' => function () use ($account_id) { return get_steward($account_id) === null; },
+    'skip_note' => 'answered',
+    'render' => function () use ($account_id, $account_name) {
+      $current = get_steward($account_id);
+      $who = $account_name !== '' ? $account_name : 'your team';
+      ?>
+      <h2>Who will look after this site?</h2>
+      <p class="step-intro">This decides who we talk to about licences and renewals — here,
+         or the account owner by email. You can change it later.</p>
+      <div class="tgbl-dbl"></div>
+      <label style="display:block;border:1px solid #c3c4c7;border-radius:4px;padding:12px 15px;margin:0 0 10px;cursor:pointer;max-width:560px">
+        <input type="radio" name="steward" value="team" <?php checked($current !== 'client'); ?> />
+        <strong>Me or my team</strong>
+        <span style="display:block;font-size:12.5px;color:#646970;margin:3px 0 0 21px">Licence, renewals and account
+          details show here, where you will actually see them.</span>
+      </label>
+      <label style="display:block;border:1px solid #c3c4c7;border-radius:4px;padding:12px 15px;cursor:pointer;max-width:560px">
+        <input type="radio" name="steward" value="client" <?php checked($current, 'client'); ?> />
+        <strong>A client<?php if ($account_name !== '') echo ' — ' . esc_html($account_name) . ' manages this site for them'; ?></strong>
+        <span style="display:block;font-size:12.5px;color:#646970;margin:3px 0 0 21px">Billing, renewals and offers stay
+          out of this admin — <?php echo esc_html($who); ?> hears about them by email instead.</span>
+      </label>
+      <?php
+    },
+    'handle' => function () use ($account_id) {
+      $v = $_POST['steward'] ?? '';
+      if (!in_array($v, ['team', 'client'], true)) return false;
+      set_steward($account_id, $v);
       return true;
     },
   ];

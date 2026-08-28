@@ -105,6 +105,7 @@ class Core_Steps_TestCase extends \WP_UnitTestCase {
 
   function tearDown(): void {
     delete_option('tangible_onboarding_state__coretest');
+    delete_option(onboarding\STEWARD_OPTION);
     delete_option(onboarding\CONSENT_OUTBOX);
     remove_all_filters('tangible_onboarding_facts');
     parent::tearDown();
@@ -177,6 +178,9 @@ class Core_Steps_TestCase extends \WP_UnitTestCase {
   }
 
   function test_a_handler_wp_error_keeps_the_step_open_and_stores_the_reason() {
+    // The shell's steward step (weight 40) must not outrank the fixture's
+    // creds step (50): answer it up front.
+    onboarding\set_steward('', 'team');
     add_filter('tangible_onboarding_facts', function ($f) {
       $f->licence_active = true;
       $f->ask = [ 'telemetry_extended' => 'skip', 'marketing' => 'skip' ];
@@ -293,5 +297,66 @@ class Consent_Sync_TestCase extends \WP_UnitTestCase {
     $this->fake_server([ 'success' => true ]);
     onboarding\attempt_consent_sync($this->plugin);
     $this->assertCount(0, $this->requests);
+  }
+}
+
+/**
+ * The steward map — local, per-account.
+ */
+class Steward_TestCase extends \WP_UnitTestCase {
+
+  function setUp(): void {
+    parent::setUp();
+    $plugin = \tangible\framework\register_plugin([ 'name' => 'stewtest', 'title' => 'Stew Test' ]);
+    onboarding\register_wizard($plugin);
+  }
+
+  function tearDown(): void {
+    delete_option(onboarding\STEWARD_OPTION);
+    delete_option('tangible_onboarding_facts_cache__stewtest');
+    remove_all_filters('tangible_onboarding_facts');
+    parent::tearDown();
+  }
+
+  private function plan($account_id = '') {
+    add_filter('tangible_onboarding_facts', function ($f) use ($account_id) {
+      $f->account_id = $account_id;
+      $f->ask = [ 'telemetry_extended' => 'skip', 'marketing' => 'skip' ];
+      return $f;
+    });
+    $plan = onboarding\resolve_plan('stewtest', onboarding\build_facts('stewtest'));
+    remove_all_filters('tangible_onboarding_facts');
+    return $plan;
+  }
+
+  function test_a_second_account_on_the_same_site_is_asked_again() {
+    $this->assertContains('steward', array_column($this->plan('acct_A')['steps'], 'id'));
+    onboarding\set_steward('acct_A', 'client');
+    // acct_A answered; the same site under acct_B is a NEW question…
+    $this->assertNotContains('steward', array_column($this->plan('acct_A')['steps'], 'id'));
+    $this->assertContains('steward', array_column($this->plan('acct_B')['steps'], 'id'));
+    // …and each answer is its own record.
+    onboarding\set_steward('acct_B', 'team');
+    $this->assertSame('client', onboarding\get_steward('acct_A'));
+    $this->assertSame('team', onboarding\get_steward('acct_B'));
+  }
+
+  function test_the_legacy_bare_string_reads_as_the_anonymous_answer() {
+    update_option(onboarding\STEWARD_OPTION, 'team');
+    $this->assertSame('team', onboarding\get_steward(''));
+    // The anonymous answer covers accounts too — whoever set up the first
+    // plugin answered for the site as they knew it.
+    $this->assertSame('team', onboarding\get_steward('acct_A'));
+    // Writing upgrades the shape without losing the legacy answer.
+    onboarding\set_steward('acct_A', 'client');
+    $this->assertSame('team', onboarding\get_steward(''));
+    $this->assertSame('client', onboarding\get_steward('acct_A'));
+  }
+
+  function test_hub_client_managed_requires_every_answer_to_say_client() {
+    onboarding\set_steward('acct_A', 'client');
+    $this->assertTrue(\tangible\hub\is_client_managed_site());
+    onboarding\set_steward('acct_B', 'team');
+    $this->assertFalse(\tangible\hub\is_client_managed_site());
   }
 }
