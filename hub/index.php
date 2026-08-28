@@ -29,6 +29,15 @@ require_once __DIR__ . '/notifications.php';
 
 const PAGE = 'tangible-home';
 
+/**
+ * The steward answer, recorded by onboarding. DELIBERATELY NOT ENFORCED here
+ * yet: the first live test showed a wizard answer silently amputating the bar
+ * mark and the rail with no in-place explanation or undo — so the hub stays
+ * whole for both answers until agency-mode muting is designed properly
+ * (per-surface policy, a visible "client-managed" state line, and the
+ * dashboard-side control to flip it). The flag keeps being recorded; only
+ * the muting is deferred.
+ */
 function is_client_managed_site() {
   return get_option('tangible_site_steward') === 'client';
 }
@@ -49,7 +58,6 @@ add_action('init', function () {
 // ── the admin-bar mark ─────────────────────────────────────────────────────
 add_action('admin_bar_menu', function ($bar) {
   if (!current_user_can('manage_options')) return;
-  if (is_client_managed_site()) return;   // absent, not muted — see header note
 
   $count = hub\get_unread_count();
   // The official six-tile logo (design/tangible-logo.svg geometry), inlined as
@@ -74,7 +82,6 @@ add_action('admin_bar_menu', function ($bar) {
 }, 80);
 
 add_action('wp_before_admin_bar_render', function () {
-  if (is_client_managed_site()) return;
   ?><style>
     #wpadminbar .tgbl-bar-mark { vertical-align:middle; margin-top:-2px; }
     #wpadminbar .tgbl-bar-mark path { fill:#c3c4c7; }
@@ -136,7 +143,7 @@ function get_plugin_rows() {
 function render_page() {
   $rows = get_plugin_rows();
   $items = hub\get_notifications();
-  $client = is_client_managed_site();
+  $client = false;   // muting deferred — see is_client_managed_site()
   ?>
   <style>
     <?php echo \tangible\design\font_faces_css(); ?>
