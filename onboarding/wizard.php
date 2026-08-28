@@ -57,6 +57,23 @@ function build_facts($plugin_name) {
     $status = \tangible\updater\get_license_status($plugin);
     $facts->licence_active = in_array($status, ['valid', 'active'], true);
   }
+
+  // Server-resolved decisions from the last activation, when the platform
+  // sends them (steward, ask/skip per consent — decisions, never state).
+  // Unknown stays 'ask': asking twice is annoying, collecting without
+  // consent is illegal, so the failure mode is chosen deliberately.
+  $cache = get_option('tangible_onboarding_facts_cache__' . $plugin_name, null);
+  if (!empty($cache['data']['ask']) && is_array($cache['data']['ask'])) {
+    foreach ($cache['data']['ask'] as $k => $v) {
+      if (in_array($v, ['ask', 'skip'], true)) $facts->ask[$k] = $v;
+    }
+  }
+  if (isset($cache['data']['steward']) && get_option('tangible_site_steward', '') === '') {
+    // Account-level default seeds the site answer; a local steward answer,
+    // once given, wins for this site's surfaces.
+    $facts->steward_default = $cache['data']['steward'];
+  }
+
   return apply_filters('tangible_onboarding_facts', $facts, $plugin_name);
 }
 
@@ -109,6 +126,17 @@ function register_wizard($plugin) {
       function () use ($plugin) { render_wizard($plugin); }
     );
   });
+
+  // While setup is pending, every licence door leads to the wizard: the
+  // updater's plugins-row "Activate License" link is filtered here so the
+  // reader never lands on a bare settings field with no context. Once the
+  // plan is empty, the filter stands down and licence management belongs to
+  // the settings page again — one licence surface at a time.
+  add_filter('tangible_updater_activation_url', function ($url, $for_plugin) use ($plugin, $name) {
+    if (($for_plugin->name ?? null) !== $name) return $url;
+    $plan = onboarding\resolve_plan($name, build_facts($name));
+    return empty($plan['steps']) ? $url : get_setup_url($plugin);
+  }, 10, 2);
 
   // Resumable re-entry: the playbook's one universal finding. Dismissible,
   // and it re-resolves each load, so finishing setup removes it without a

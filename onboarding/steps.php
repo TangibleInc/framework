@@ -125,19 +125,64 @@ add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name =
                   value="<?php echo esc_attr($existing); ?>" placeholder="TGBL-…" /></p>
         <?php
       },
-      // Write-through-updater: the key lands in the exact settings subfield
-      // the update checker reads. A wizard-private key store would show
-      // "activated" while updates silently query keyless.
+      // A REAL activation, through the updater's own machinery — no second
+      // activation path exists. The outcome rules, so no state leaks water:
+      //
+      //   key rejected (invalid/expired/revoked/no seats/site inactive)
+      //     → WP_Error with the updater's own message; the step stays open.
+      //       A wrong key fails HERE, not at the first missed update.
+      //   our API unreachable (timeout, DNS, firewall)
+      //     → the key is SAVED, status set to the real error-free unknown,
+      //       and the step completes with a deferred note. OUR outage never
+      //       blocks THEIR setup; the updater's cron checker retries and the
+      //       plugins-row notice reappears if the key turns out bad.
+      //   success
+      //     → status stored where settings page, plugins row and hub all
+      //       read it, so no surface can disagree. If the response carries
+      //       an `onboarding` block (steward, consent decisions — the
+      //       platform's resolve endpoint, when it ships), it is cached as
+      //       facts for the rest of this wizard.
       'handle' => function ($plugin) {
         $key = sanitize_text_field($_POST['license_key'] ?? '');
         if ($key === '') return false;
-        if (!function_exists('tangible\\updater\\get_license_key_setting_field')) {
+        if (!function_exists('tangible\\updater\\cloud_endpoint')) {
           return new \WP_Error('tangible_onboarding', 'The updater module is not available on this site.');
         }
+
+        // Save first — the exact subfield the update checker reads. Even on
+        // the deferred path, updates must query with this key.
         framework\update_plugin_settings($plugin, [
           \tangible\updater\get_license_key_setting_field() => $key,
         ]);
-        // Remote activation rides the updater's own next check.
+
+        $response = \tangible\updater\cloud_endpoint($plugin, $key, 'activate_license');
+
+        if (is_wp_error($response)) {
+          // Unreachable ≠ rejected. Defer, don't block.
+          \tangible\updater\set_license_status($plugin, 'pending');
+          return true;
+        }
+
+        $body = \tangible\updater\response_body($response);
+        $code = \tangible\updater\response_code($response);
+
+        if ($code === 403 || empty($body->success)) {
+          \tangible\updater\set_license_status($plugin, $body->license ?? 'invalid');
+          $message = $code === 403
+            ? ($body->error ?? 'License validation failed.')
+            : \tangible\updater\check_license_response($body, $plugin);
+          return new \WP_Error('tangible_onboarding', is_string($message) ? $message : 'License validation failed.');
+        }
+
+        \tangible\updater\set_license_status($plugin, $body->license ?? 'valid');
+
+        // The facts seam: when the platform's activate response starts
+        // carrying onboarding decisions, they land here and build_facts
+        // reads them — nothing else changes.
+        if (!empty($body->onboarding)) {
+          update_option('tangible_onboarding_facts_cache__' . $plugin->name,
+            [ 'at' => time(), 'data' => (array) $body->onboarding ], false);
+        }
         return true;
       },
     ];
