@@ -73,7 +73,8 @@ class Onboarding_TestCase extends \WP_UnitTestCase {
     // step renders as "not asked · on file", it does not vanish.
     $rail = array_column($plan['rail'], 'state', 'id');
     $this->assertSame('skipped', $rail['licence']);
-    $this->assertSame('pending', $rail['engine']);
+    // engine is the first (only) runnable step, so it rails as current.
+    $this->assertSame('current', $rail['engine']);
   }
 
   function test_needed_receives_the_facts() {
