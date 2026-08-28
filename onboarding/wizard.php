@@ -196,21 +196,47 @@ add_action('admin_post_tangible_onboarding_step', function () {
 
 // ── rendering ──────────────────────────────────────────────────────────────
 //
-// The House dial, ported from the design catalogue (/plugin-onboarding-e,
-// /plugin-onboarding-fullscreen). The devices, not approximations of them:
+// The frame from the TUI prototype (`/ui-preview/plugin-onboarding` in the
+// app), ported device by device rather than approximated:
 //
-//   ghost numeral   the step number, 84px mono, in the light purple
-//   tile ladder     the six-tile logo as the progress marker — tiles fill as
-//                   steps complete, the foot tile turns coral at the end
-//   mono labels     10px/uppercase/.13em — eyebrows, rail, footer
-//   double rule     the two-line divider under the step header
-//   three purples   #9E9CF7 marks · #5B51C9 structure · #4265C4 data; the
-//                   interactive colour stays the host's (--wp-admin-theme-color
-//                   via .button-primary), so the wizard follows the reader's
-//                   admin colour scheme instead of fighting it
+//   band          one tinted strip — the only place colour appears — carrying
+//                 the assembling brand mark, "{Plugin} setup", and the address
+//                 chip (SS·02): the stable short code for this screen
+//   rail          each step is the six-tile mark filled to its OWN position,
+//                 so the row reads left to right as one object assembling
+//                 itself; wires light as steps resolve; skipped nodes dim
+//                 with their own caption instead of vanishing
+//   skip strip    the sentence under the rail saying WHY something was not
+//                 asked — the honesty device
+//   crop marks    on the BODY, not the outer box (on the box the top pair
+//                 hides under the band — found by rendering, not reading)
+//   ghost numeral Space Mono 700; headings Recoleta; labels League Spartan;
+//                 sentences the native sans. Four voices, one job each.
 //
-// A skipped rail entry renders dashed with its note ("on file") — the promise
-// about what we did not ask, kept visible.
+// The aside slot: a step may declare 'aside' (callable) and the body renders
+// two-column — content plus a 250px facts panel behind a hairline, the
+// prototype's "this site" panel generalized.
+
+/** SS·02 — capitals of the title (minus Tangible/Plugin) + current position. */
+function get_screen_address($plugin, $position) {
+  $title = $plugin->title ?? $plugin->name;
+  $title = trim(str_ireplace(['tangible', 'plugin'], '', $title));
+  preg_match_all('/[A-Z]/', $title, $m);
+  $code = implode('', array_slice($m[0], 0, 3));
+  if ($code === '') $code = strtoupper(substr($title, 0, 2));
+  return $code . '·' . str_pad((string) max(1, $position), 2, '0', STR_PAD_LEFT);
+}
+
+/** The six-tile mark, filled to $filled; current tile in the host accent. */
+function render_mark($filled, $current_at = -1, $size = 'md', $done = false) {
+  $u = $size === 'lg' ? '9px' : ($size === 'sm' ? '5px' : '7px');
+  echo '<span class="tgbl-mark" style="--u:' . $u . '" aria-hidden="true">';
+  for ($i = 0; $i < 5; $i++) {
+    $attr = $i === $current_at ? ' data-now' : ($i < $filled ? ' data-on' : '');
+    echo "<i$attr></i>";
+  }
+  echo '<i' . ($done ? ' data-done' : '') . '></i></span>';
+}
 
 function render_wizard($plugin) {
   $name = $plugin->name;
@@ -218,6 +244,8 @@ function render_wizard($plugin) {
   $plan = onboarding\resolve_plan($name, $facts);
   $step = $plan['steps'][0] ?? null;
   $title = esc_html($plugin->title ?? $name);
+  // The band title strips the vendor prefix — the band already wears the mark.
+  $short_title = esc_html(trim(str_ireplace(['tangible ', ' plugin'], ['', ''], $plugin->title ?? $name)));
 
   $total = count($plan['rail']);
   $position = 0; $done = 0;
@@ -226,130 +254,210 @@ function render_wizard($plugin) {
     if (in_array($r['state'], ['done', 'skipped'], true)) $done++;
   }
   $all_done = !$step;
-  // The tile ladder: five body tiles fill with progress, the foot tile is
-  // the completion mark and turns coral only at the end.
-  $filled = $total > 0 ? (int) round(($done / $total) * 5) : 0;
+
+  // The skip strip: one sentence per skipped-with-note step.
+  $skip_sentences = [];
+  foreach ($plan['rail'] as $r) {
+    if ($r['state'] === 'skipped' && !empty($r['note'])) {
+      $skip_sentences[] = '<strong>' . esc_html(ucfirst($r['label'])) . '</strong> was skipped — '
+        . esc_html($r['note']) . '.';
+    }
+  }
   ?>
   <style>
     <?php echo \tangible\design\font_faces_css(); ?>
-    /* The three voices (mono audition, candidate E): Space Mono for DATA ONLY,
-       League Spartan for labels and headings, native sans for sentences. */
     .tgbl-wiz { --mark:#9E9CF7; --deep:#5B51C9; --data:#4265C4; --salmon:#FD9597;
+      --accent:var(--wp-admin-theme-color, #2271b1);
       <?php echo \tangible\design\font_tokens_css(); ?>
-      max-width: 880px; margin: 34px auto 0; color:#1d2327; }
+      max-width: 920px; margin: 30px auto 0; color:#1d2327;
+      font-family:var(--tgbl-font-body); font-size:13px; }
     .tgbl-wiz .lbl { font-family:var(--tgbl-font-label); font-size:10.5px; font-weight:600;
       letter-spacing:.14em; text-transform:uppercase; color:#646970; }
+    .tgbl-wiz .eyebrow { font-family:var(--tgbl-font-data); font-size:10px; font-weight:700;
+      letter-spacing:.18em; text-transform:uppercase; color:#646970; }
     .tgbl-wiz .whisper { font-family:var(--tgbl-font-body); font-size:11.5px; color:#8c8f94; }
-    .tgbl-wiz-band { display:flex; align-items:center; gap:13px; padding:0 0 16px; }
-    .tgbl-wiz-band .name { font-size:17px; font-weight:600; letter-spacing:-.01em; }
-    .tgbl-ladder { display:inline-grid; grid-template-columns:repeat(3,8px); grid-template-rows:repeat(3,8px); gap:1px; }
-    .tgbl-ladder i { display:block; border-radius:1px; background:#dcdcde; }
-    .tgbl-ladder i:nth-child(1){grid-area:1/1}.tgbl-ladder i:nth-child(2){grid-area:1/2}
-    .tgbl-ladder i:nth-child(3){grid-area:1/3}.tgbl-ladder i:nth-child(4){grid-area:2/1}
-    .tgbl-ladder i:nth-child(5){grid-area:2/3}.tgbl-ladder i:nth-child(6){grid-area:3/2}
-    .tgbl-ladder i[data-on] { background:var(--mark); }
-    .tgbl-ladder i[data-done] { background:var(--salmon); }
-    .tgbl-wiz-rail { display:flex; gap:20px; flex-wrap:wrap; padding:13px 0 15px;
-      border-top:1px solid #c3c4c7; border-bottom:1px solid #c3c4c7; }
-    .tgbl-wiz-rail .st { display:flex; align-items:center; gap:7px; }
-    .tgbl-wiz-rail .dot { width:8px; height:8px; border-radius:1.5px; background:#dcdcde; flex:none; }
-    .tgbl-wiz-rail .st[data-state="done"] .dot { background:var(--mark); }
-    .tgbl-wiz-rail .st[data-state="current"] .dot { background:var(--deep); }
-    .tgbl-wiz-rail .st[data-state="current"] .lbl { color:#1d2327; }
-    .tgbl-wiz-rail .st[data-state="skipped"] .dot { background:transparent; border:1px dashed #a7aaad; }
-    .tgbl-wiz-card { background:#fff; border:1px solid #c3c4c7; border-radius:4px;
-      padding:30px 34px 24px; margin-top:26px; box-shadow:0 1px 1px rgba(0,0,0,.04); }
-    .tgbl-wiz-head { display:flex; gap:24px; align-items:flex-start; }
+    .tgbl-wiz .code { font-family:var(--tgbl-font-data); font-size:12px; color:var(--data); }
+
+    .tgbl-frame { border:1px solid #c3c4c7; border-radius:4px; background:#fff;
+      overflow:hidden; box-shadow:0 1px 1px rgba(0,0,0,.04); }
+
+    /* the band — the only place colour appears */
+    .tgbl-band { display:flex; align-items:center; gap:12px; padding:12px 20px;
+      background:color-mix(in srgb, var(--accent) 16%, #fff);
+      border-bottom:2px solid var(--accent); }
+    .tgbl-band .bt { font-size:14px; font-weight:600; }
+    .tgbl-addr { font-family:var(--tgbl-font-data); font-size:11px; font-weight:700;
+      letter-spacing:.22em; color:var(--accent); margin-left:auto; }
+
+    /* the mark */
+    .tgbl-mark { --u:7px; display:inline-grid; gap:1px; flex:none;
+      grid-template-columns:repeat(3,var(--u)); grid-template-rows:repeat(3,var(--u)); }
+    .tgbl-mark i { display:block; border-radius:1px; background:#dcdcde; }
+    .tgbl-mark i:nth-child(1){grid-area:1/1}.tgbl-mark i:nth-child(2){grid-area:1/2}
+    .tgbl-mark i:nth-child(3){grid-area:1/3}.tgbl-mark i:nth-child(4){grid-area:2/1}
+    .tgbl-mark i:nth-child(5){grid-area:2/3}.tgbl-mark i:nth-child(6){grid-area:3/2}
+    .tgbl-mark i[data-on] { background:var(--mark); }
+    .tgbl-mark i[data-now] { background:var(--accent); }
+    .tgbl-mark i[data-done] { background:var(--salmon); }
+
+    /* the rail — each node the mark filled to its own position */
+    .tgbl-rail { display:flex; align-items:flex-start; padding:16px 20px;
+      background:#f6f6f7; border-bottom:1px solid #c3c4c7; }
+    .tgbl-rail .node { display:flex; flex-direction:column; align-items:center; gap:7px;
+      flex:0 0 auto; max-width:140px; text-align:center; }
+    .tgbl-rail .node .t { font-family:var(--tgbl-font-label); font-size:11px; font-weight:600;
+      letter-spacing:.03em; color:#646970; line-height:1.3; }
+    .tgbl-rail .node[data-state="current"] .t { color:#1d2327; }
+    .tgbl-rail .node[data-state="skipped"] { opacity:.5; }
+    .tgbl-rail .wire { flex:1 1 0; min-width:20px; height:1.5px; margin-top:13px; background:#dcdcde; }
+    .tgbl-rail .wire[data-on] { background:var(--mark); }
+
+    .tgbl-skipstrip { padding:9px 20px; background:#fff; border-bottom:1px solid #e4e4e7;
+      font-size:12px; color:#646970; }
+    .tgbl-skipstrip a { color:var(--accent); }
+
+    /* the body, wearing the crop marks */
+    .tgbl-body { position:relative; padding:30px 34px 24px; }
+    .tgbl-body::before, .tgbl-body::after, .tgbl-body .cm::before, .tgbl-body .cm::after {
+      content:''; position:absolute; width:14px; height:14px; pointer-events:none; }
+    .tgbl-body::before { top:10px; left:10px; border-top:1px solid var(--mark); border-left:1px solid var(--mark); }
+    .tgbl-body::after { top:10px; right:10px; border-top:1px solid var(--mark); border-right:1px solid var(--mark); }
+    .tgbl-body .cm::before { bottom:10px; left:10px; border-bottom:1px solid var(--mark); border-left:1px solid var(--mark); }
+    .tgbl-body .cm::after { bottom:10px; right:10px; border-bottom:1px solid var(--mark); border-right:1px solid var(--mark); }
+
+    .tgbl-wiz-head { display:flex; gap:26px; align-items:flex-start; }
     .tgbl-ghost { font-family:var(--tgbl-font-data); font-size:84px; font-weight:700;
-      line-height:.8; color:var(--mark); opacity:.5; letter-spacing:-.04em; flex:none; user-select:none; }
-    .tgbl-wiz-card h2 { font-family:var(--tgbl-font-label); font-size:25px; font-weight:600;
-      margin:7px 0 0; line-height:1.18; letter-spacing:-.005em; padding:0; }
-    .tgbl-wiz-card p { font-size:14px; line-height:1.65; max-width:62ch; }
-    .tgbl-dbl { border:0; border-top:1px solid #c3c4c7; border-bottom:1px solid #c3c4c7; height:3px; margin:22px 0; }
-    .tgbl-wiz-card .code, .tgbl-wiz-card input[type=text], .tgbl-wiz-card input[type=password] {
+      line-height:.8; color:var(--mark); opacity:.55; letter-spacing:-.04em; flex:none; user-select:none; }
+    .tgbl-wiz h2 { font-family:var(--tgbl-font-display); font-size:28px; font-weight:600;
+      margin:7px 0 0; line-height:1.15; letter-spacing:-.008em; padding:0; color:#1d2327; }
+    .tgbl-wiz .step-intro { font-size:14px; line-height:1.68; color:#50575e; margin:9px 0 0; max-width:62ch; }
+    .tgbl-wiz p { font-size:13.5px; line-height:1.6; }
+    .tgbl-dbl { border:0; border-top:1px solid #1d2327; border-bottom:1px solid #1d2327;
+      height:3px; margin:22px 0 20px; opacity:.75; }
+    .tgbl-wiz input[type=text], .tgbl-wiz input[type=password] {
       font-family:var(--tgbl-font-data); font-size:12.5px; color:var(--data); }
+
+    /* the aside slot — content + facts panel */
+    .tgbl-cols { display:flex; gap:30px; align-items:flex-start; }
+    .tgbl-cols .main { flex:1 1 auto; min-width:0; }
+    .tgbl-aside { flex:0 0 250px; border-left:1px solid #dcdcde; padding-left:20px; }
+    .tgbl-aside dl { display:grid; grid-template-columns:1fr auto; gap:5px 10px; font-size:12.5px; margin:0; }
+    .tgbl-aside dt { font-family:var(--tgbl-font-label); font-size:9.5px; font-weight:600;
+      letter-spacing:.14em; text-transform:uppercase; color:#646970; }
+    .tgbl-aside dd { margin:0; text-align:right; font-family:var(--tgbl-font-data); font-size:11.5px; color:var(--data); }
+
+    /* the schematic — hairlines and boxes, no illustration */
+    .tgbl-schem { display:flex; align-items:center; margin:14px 0 4px; }
+    .tgbl-schem .snode { border:1px solid #c3c4c7; border-radius:3px; background:#fafafa;
+      padding:8px 12px; min-width:104px; text-align:center; font-size:12px; }
+    .tgbl-schem .snode b { display:block; font-size:12.5px; }
+    .tgbl-schem .snode .sk { font-family:var(--tgbl-font-label); font-size:9px; font-weight:600;
+      letter-spacing:.1em; text-transform:uppercase; color:#646970; }
+    .tgbl-schem .snode[data-on] { border-color:var(--accent); box-shadow:inset 0 0 0 1px var(--accent); background:#fff; }
+    .tgbl-schem .snode[data-ghost] { border-style:dashed; opacity:.55; }
+    .tgbl-schem .swire { flex:1 1 0; min-width:26px; height:1.5px; background:var(--mark); position:relative; }
+    .tgbl-schem .swire em { position:absolute; top:-16px; left:50%; transform:translateX(-50%);
+      font-family:var(--tgbl-font-label); font-style:normal; font-size:9px; font-weight:600;
+      letter-spacing:.1em; text-transform:uppercase; color:#646970; white-space:nowrap; }
+
     .tgbl-wiz-foot { display:flex; align-items:center; gap:14px; margin-top:24px;
       padding-top:15px; border-top:1px solid #e4e4e7; }
     .tgbl-skip { color:#646970; background:none; border:0; border-bottom:1px dashed #a7aaad;
-      cursor:pointer; padding:0 0 1px; font-size:12.5px; }
+      cursor:pointer; padding:0 0 1px; font-size:12.5px; font-family:var(--tgbl-font-body); }
     .tgbl-skip:hover { color:#1d2327; border-bottom-color:#646970; }
-    .tgbl-wiz-error { border:1px solid #c3c4c7; border-inline-start:3px solid var(--salmon);
+    .tgbl-wiz-error { border:1px solid #c3c4c7; border-left:3px solid var(--salmon);
       background:#fff; padding:9px 13px; font-size:13px; margin:0 0 14px; }
   </style>
   <div class="tgbl-wiz">
-    <div class="tgbl-wiz-band">
-      <span class="tgbl-ladder" aria-hidden="true"><?php
-        for ($i = 1; $i <= 5; $i++) echo '<i' . ($i <= $filled ? ' data-on' : '') . '></i>';
-        echo '<i' . ($all_done ? ' data-done' : '') . '></i>';
-      ?></span>
-      <span class="name"><?php echo $title; ?></span>
-      <span class="lbl">setup</span>
-      <span style="flex:1"></span>
-      <span class="lbl" style="font-family:var(--tgbl-font-data);font-size:10px"><?php echo (int) $done; ?> of <?php echo (int) $total; ?> settled</span>
-    </div>
-
-    <div class="tgbl-wiz-rail">
-      <?php foreach ($plan['rail'] as $r) : ?>
-        <span class="st" data-state="<?php echo esc_attr($r['state']); ?>">
-          <span class="dot"></span>
-          <span class="lbl"><?php echo esc_html($r['label']);
-            if ($r['state'] === 'skipped') echo ' · ' . esc_html($r['note'] ?? 'on file'); ?></span>
-        </span>
-      <?php endforeach; ?>
-    </div>
-
-    <?php if ($all_done) : ?>
-      <div class="tgbl-wiz-card">
-        <div class="tgbl-wiz-head">
-          <span class="tgbl-ghost" aria-hidden="true">✓</span>
-          <div>
-            <p class="lbl" style="margin:4px 0 0">setup · complete</p>
-            <h2>Nothing left to ask.</h2>
-            <p>Everything is either configured or already on file.</p>
-            <p style="margin-top:20px">
-              <a class="button button-primary button-large" href="<?php echo esc_url(admin_url('admin.php?page=tangible-home')); ?>">Go to Tangible Home</a>
-            </p>
-          </div>
-        </div>
+    <div class="tgbl-frame">
+      <div class="tgbl-band">
+        <?php render_mark($done, $position > 0 ? $position - 1 : -1, 'md', $all_done); ?>
+        <span class="bt"><?php echo $short_title; ?> setup</span>
+        <span class="tgbl-addr"><?php echo esc_html(get_screen_address($plugin, $all_done ? $total : $position)); ?></span>
       </div>
-    <?php else : ?>
-      <form class="tgbl-wiz-card" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
-        <?php wp_nonce_field('tangible_onboarding_step'); ?>
-        <input type="hidden" name="action" value="tangible_onboarding_step" />
-        <input type="hidden" name="plugin" value="<?php echo esc_attr($name); ?>" />
-        <input type="hidden" name="step" value="<?php echo esc_attr($step['id']); ?>" />
 
-        <?php $error = get_transient(step_error_key($name));
-        if ($error) { delete_transient(step_error_key($name)); } ?>
-        <div class="tgbl-wiz-head">
-          <span class="tgbl-ghost" aria-hidden="true"><?php echo esc_html(str_pad((string) $position, 2, '0', STR_PAD_LEFT)); ?></span>
-          <div style="flex:1;min-width:0">
+      <div class="tgbl-rail">
+        <?php $n = count($plan['rail']);
+        foreach ($plan['rail'] as $i => $r) :
+          $reached = in_array($r['state'], ['done', 'current'], true); ?>
+          <div class="node" data-state="<?php echo esc_attr($r['state']); ?>">
+            <?php render_mark($reached ? $i + 1 : 0, $r['state'] === 'current' ? $i : -1, 'lg'); ?>
+            <span class="t"><?php echo esc_html(ucfirst($r['label'])); ?></span>
+            <?php if ($r['state'] === 'skipped') : ?>
+              <span class="eyebrow" style="font-size:8.5px"><?php echo esc_html($r['note'] ?? 'on file'); ?></span>
+            <?php endif; ?>
+          </div>
+          <?php if ($i < $n - 1) : ?>
+            <span class="wire" <?php echo $r['state'] !== 'pending' ? 'data-on' : ''; ?>></span>
+          <?php endif;
+        endforeach; ?>
+      </div>
+
+      <?php if ($skip_sentences) : ?>
+        <div class="tgbl-skipstrip"><?php echo implode(' ', $skip_sentences); ?>
+          <a href="https://tangible.one/account" target="_blank" rel="noopener">Manage in your account</a>.</div>
+      <?php endif; ?>
+
+      <div class="tgbl-body"><span class="cm"></span>
+        <?php if ($all_done) : ?>
+          <div class="tgbl-wiz-head">
+            <span class="tgbl-ghost" aria-hidden="true">OK</span>
+            <div>
+              <p class="eyebrow" style="margin:4px 0 0">setup · complete</p>
+              <h2>Nothing left to ask.</h2>
+              <p class="step-intro">Everything is either configured or already on file.</p>
+              <p style="margin-top:18px">
+                <a class="button button-primary button-large" href="<?php echo esc_url(admin_url('admin.php?page=tangible-home')); ?>">Go to Tangible Home</a>
+              </p>
+            </div>
+          </div>
+        <?php else : ?>
+          <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+            <?php wp_nonce_field('tangible_onboarding_step'); ?>
+            <input type="hidden" name="action" value="tangible_onboarding_step" />
+            <input type="hidden" name="plugin" value="<?php echo esc_attr($name); ?>" />
+            <input type="hidden" name="step" value="<?php echo esc_attr($step['id']); ?>" />
+
+            <?php $error = get_transient(step_error_key($name));
+            if ($error) { delete_transient(step_error_key($name)); } ?>
             <?php if ($error) : ?>
               <div class="tgbl-wiz-error" role="alert"><?php echo esc_html($error); ?></div>
             <?php endif; ?>
-            <p class="lbl" style="margin:4px 0 0">
-              step <?php echo (int) $position; ?> of <?php echo (int) $total; ?> ·
-              <?php echo esc_html($step['label'] ?? str_replace('-', ' ', $step['id'])); ?>
-            </p>
-            <?php if (is_callable($step['render'])) {
-              call_user_func($step['render'], $plugin, $facts, $step);
-            } else {
-              echo '<h2>' . esc_html($step['id']) . '</h2>';
-            } ?>
-          </div>
-        </div>
 
-        <div class="tgbl-wiz-foot">
-          <span class="whisper">Nothing is saved until you continue.</span>
-          <span style="flex:1"></span>
-          <?php if ($step['skippable']) : ?>
-            <button class="tgbl-skip" type="submit" name="do" value="skip">Skip this step</button>
-          <?php endif; ?>
-          <button class="button button-primary button-large" type="submit" name="do" value="continue"><?php
-            echo esc_html($step['submit_label'] ?? 'Continue'); ?></button>
-        </div>
-      </form>
-    <?php endif; ?>
+            <div class="tgbl-wiz-head">
+              <span class="tgbl-ghost" aria-hidden="true"><?php echo esc_html(str_pad((string) $position, 2, '0', STR_PAD_LEFT)); ?></span>
+              <div style="flex:1;min-width:0">
+                <p class="eyebrow" style="margin:4px 0 0">
+                  step <?php echo (int) $position; ?> of <?php echo (int) $total; ?> ·
+                  <?php echo esc_html($step['label'] ?? str_replace('-', ' ', $step['id'])); ?>
+                </p>
+                <?php
+                $render = function () use ($step, $plugin, $facts) {
+                  if (is_callable($step['render'])) call_user_func($step['render'], $plugin, $facts, $step);
+                  else echo '<h2>' . esc_html($step['id']) . '</h2>';
+                };
+                if (is_callable($step['aside'] ?? null)) : ?>
+                  <div class="tgbl-cols">
+                    <div class="main"><?php $render(); ?></div>
+                    <aside class="tgbl-aside"><?php call_user_func($step['aside'], $plugin, $facts, $step); ?></aside>
+                  </div>
+                <?php else : $render(); endif; ?>
+              </div>
+            </div>
+
+            <div class="tgbl-wiz-foot">
+              <span class="whisper">Nothing is saved until you continue.</span>
+              <span style="flex:1"></span>
+              <?php if ($step['skippable']) : ?>
+                <button class="tgbl-skip" type="submit" name="do" value="skip">Skip this step</button>
+              <?php endif; ?>
+              <button class="button button-primary button-large" type="submit" name="do" value="continue"><?php
+                echo esc_html($step['submit_label'] ?? 'Continue'); ?></button>
+            </div>
+          </form>
+        <?php endif; ?>
+      </div>
+    </div>
   </div>
   <?php
 }

@@ -158,25 +158,33 @@ add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name =
     },
     'skip_note' => 'on file',
     'render' => function ($plugin) use ($ask_telemetry, $ask_marketing) {
-      global $wp_version;
+      // The tier boundary, kept visibly straight: on a paid build, BASIC
+      // telemetry (WP/PHP/plugin versions, site URL) is already held as a
+      // term of purchase — checkout was the portal for it. This step asks
+      // for EXTENDED — usage data — so the payload shown is the extended
+      // payload: real values from this site, none of them version basics.
+      $roles = function_exists('wp_roles') ? count(wp_roles()->roles) : 0;
+      $posts = wp_count_posts('post'); $pages = wp_count_posts('page');
       $payload = [
-        'site'      => wp_parse_url(home_url(), PHP_URL_HOST),
-        'wordpress' => $wp_version,
-        'php'       => PHP_VERSION,
-        ($plugin->name ?? 'plugin') => $plugin->version ?? '',
+        'published items' => number_format_i18n((int) ($posts->publish ?? 0) + (int) ($pages->publish ?? 0)),
+        'user roles'      => number_format_i18n($roles),
+        'active plugins'  => number_format_i18n(count((array) get_option('active_plugins', []))),
+        'locale'          => get_locale(),
       ];
+      $paid = !empty($plugin->cloud_id);
       ?>
       <h2>Two optional things</h2>
-      <p><strong>No</strong> is a complete answer to both — the plugin works exactly the same
-         either way. We ask rather than assume, so you do have to answer.</p>
+      <p class="step-intro"><strong>No</strong> is a complete answer to both — the plugin works
+         exactly the same either way. We ask rather than assume, so you do have to answer.</p>
+      <div class="tgbl-dbl"></div>
 
       <?php if ($ask_telemetry) {
         render_answer_pair('telemetry_extended',
-          'Send us usage data?',
+          'Share usage data?',
           'Which features you use, content counts, a role histogram, environment performance. Never your content, your users, or your visitors.');
-        // Show the payload, not a policy link — the facts themselves.
+        // Show the payload, not a policy link — this site's actual numbers.
         ?>
-        <table style="margin:10px 0 0; border-collapse:collapse; font-size:12px">
+        <table style="margin:10px 0 0; border-collapse:collapse">
           <?php foreach ($payload as $k => $v) : ?>
             <tr>
               <td class="lbl" style="padding:2px 14px 2px 0; font-size:9.5px"><?php echo esc_html($k); ?></td>
@@ -184,7 +192,12 @@ add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name =
             </tr>
           <?php endforeach; ?>
         </table>
-      <?php } ?>
+        <?php if ($paid) : ?>
+          <p class="whisper" style="margin:8px 0 0">Version and environment basics (WordPress, PHP,
+             plugin version) are already shared under your licence terms — this question is about
+             the rest.</p>
+        <?php endif;
+      } ?>
 
       <?php if ($ask_marketing) {
         render_answer_pair('marketing',

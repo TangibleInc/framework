@@ -24,7 +24,16 @@ namespace tangible\design;
 
 use tangible\framework;
 
-/** The @font-face block, with URLs resolved wherever the framework lives. */
+/**
+ * The @font-face block, with URLs resolved wherever the framework lives.
+ *
+ * ⚠ LICENCE CHECK BEFORE ANY PUBLIC RELEASE: Recoleta is a commercial face
+ * (Latinotype). Our webfont licence covers Tangible's own sites; REDISTRIBUTING
+ * the woff2 inside a plugin ZIP to customer sites is a different grant and has
+ * not been verified. Fine for local/demo builds; a release that bundles this
+ * file needs the licence question answered first, or Recoleta dropped to the
+ * Georgia fallback (which the tokens below already carry).
+ */
 function font_faces_css() {
   $base = framework\module_url(__FILE__) . 'fonts/';
   return "
@@ -34,12 +43,15 @@ function font_faces_css() {
       font-display:swap; src:url('{$base}space-mono-700.woff2') format('woff2'); }
     @font-face { font-family:'League Spartan'; font-weight:600; font-style:normal;
       font-display:swap; src:url('{$base}league-spartan-600.woff2') format('woff2'); }
+    @font-face { font-family:'Recoleta'; font-weight:500 600; font-style:normal;
+      font-display:swap; src:url('{$base}recoleta-600.woff2') format('woff2'); }
   ";
 }
 
 /** The three voices, as tokens the surfaces share. */
 function font_tokens_css() {
   return "
+    --tgbl-font-display: 'Recoleta', Georgia, serif;
     --tgbl-font-data: 'Space Mono', ui-monospace, Menlo, monospace;
     --tgbl-font-label: 'League Spartan', system-ui, sans-serif;
     --tgbl-font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
