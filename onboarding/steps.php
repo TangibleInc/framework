@@ -206,7 +206,11 @@ add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name =
     ? framework\get_plugin($plugin_name) : null;
 
   // ── Licence: always first, never skippable, absent on free builds ────────
-  if (!empty($plugin->cloud_id)) {
+  // "Free build" has two spellings: no cloud_id, or no updater module at all —
+  // the wp.org-distributed build deliberately ships without the updater (two
+  // things claiming one slug), and a licence ask with no activation machinery
+  // behind it could only end in an error.
+  if (!empty($plugin->cloud_id) && function_exists('tangible\\updater\\get_license_key')) {
     $steps[] = [
       'id'     => 'licence',
       'label'  => 'licence',
