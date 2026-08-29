@@ -206,6 +206,15 @@ function handle_step_submission($plugin_name, $post) {
 
   if ($do === 'skip') {
     if (!$step['skippable']) return null;
+    // A step may declare 'on_skip' (callable) when skipping is itself a
+    // decision with a consequence — "skip Connect" means "stay on the Local
+    // backend", and that has to be RECORDED, not implied, or the promise in
+    // the skip note quietly stops being true.
+    if (is_callable($step['on_skip'] ?? null)) {
+      $plugin = function_exists('tangible\\framework\\get_plugin')
+        ? framework\get_plugin($plugin_name) : null;
+      call_user_func($step['on_skip'], $plugin, $step);
+    }
     onboarding\mark($plugin_name, $step_id, 'skipped');
     return $step_id;
   }
