@@ -127,11 +127,19 @@ function register_wizard($plugin) {
 
   // The hidden setup page. Parent null = reachable by URL, absent from menus.
   add_action('admin_menu', function () use ($plugin) {
-    add_submenu_page(
+    $hook = add_submenu_page(
       '', $plugin->title ?? $plugin->name, '', 'manage_options',
       get_setup_slug($plugin),
       function () use ($plugin) { render_wizard($plugin); }
     );
+    // Hidden pages resolve no page title, and WP trunk's admin-header now
+    // deprecation-warns on strip_tags(null) — which also breaks any header()
+    // sent later in the request. Supply the title before admin-header runs.
+    if ($hook) {
+      add_action('load-' . $hook, function () use ($plugin) {
+        $GLOBALS['title'] = ($plugin->title ?? $plugin->name) . ' setup';
+      });
+    }
   });
 
   // While setup is pending, every licence door leads to the wizard: the
