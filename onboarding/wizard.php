@@ -239,36 +239,29 @@ add_action('admin_post_tangible_onboarding_step', function () {
 
 // ── rendering ──────────────────────────────────────────────────────────────
 //
-// The frame from the TUI prototype (`/ui-preview/plugin-onboarding` in the
-// app), ported device by device rather than approximated:
+// The frame is the Plugin Wizard design (Cristian, Figma 2026-08), rendered
+// with the TUI wizard element catalog (@tangible/ui `Compositions/Wizard`):
 //
-//   band          one tinted strip — the only place colour appears — carrying
-//                 the assembling brand mark, "{Plugin} setup", and the address
-//                 chip (SS·02): the stable short code for this screen
-//   rail          each step is the six-tile mark filled to its OWN position,
-//                 so the row reads left to right as one object assembling
-//                 itself; wires light as steps resolve; skipped nodes dim
-//                 with their own caption instead of vanishing
-//   skip strip    the sentence under the rail saying WHY something was not
-//                 asked — the honesty device
-//   crop marks    on the BODY, not the outer box (on the box the top pair
-//                 hides under the band — found by rendering, not reading)
-//   ghost numeral Space Mono 700; headings Recoleta; labels League Spartan;
-//                 sentences the native sans. Four voices, one job each.
+//   top bar    the House mark + product lockup left, "Exit setup" right
+//   stepper    horizontal, every step named, in its own white band —
+//              done = success dot, current = filled pill, skipped = hollow
+//              dot (the honesty device, folded into the strip), upcoming =
+//              muted dot. Server-rendered .tui-stepper markup, so the TUI
+//              component can hydrate over it without re-deciding anything.
+//   well       tinted content well carrying one card; a step may declare
+//              'aside' (callable) for the two-column facts-panel layout
+//   footer     whisper left ("nothing is saved until you continue"),
+//              dashed skip + outcome-named primary right (submit_label)
 //
-// The aside slot: a step may declare 'aside' (callable) and the body renders
-// two-column — content plus a 250px facts panel behind a hairline, the
-// prototype's "this site" panel generalized.
-
-/** SS·02 — capitals of the title (minus Tangible/Plugin) + current position. */
-function get_screen_address($plugin, $position) {
-  $title = $plugin->title ?? $plugin->name;
-  $title = trim(str_ireplace(['tangible', 'plugin'], '', $title));
-  preg_match_all('/[A-Z]/', $title, $m);
-  $code = implode('', array_slice($m[0], 0, 3));
-  if ($code === '') $code = strtoupper(substr($title, 0, 2));
-  return $code . '·' . str_pad((string) max(1, $position), 2, '0', STR_PAD_LEFT);
-}
+// Styling is the compiled TUI subset (onboarding/wizard.css — button,
+// notice, stepper, option-card, checkbox, switch, progress, chip, inputs)
+// plus the brand faces from tangible\design: Recoleta for the step heading,
+// Space Mono for data, the native sans for sentences. Step BODIES keep core
+// form controls unstyled in our panel — that is the archetype contract.
+//
+// v1 stays server-rendered on purpose: the markup is the TUI components'
+// own DOM (classes and all), so the preact hydration layer can land on it
+// later without a redesign.
 
 /** The six-tile mark, filled to $filled; current tile in the host accent. */
 function render_mark($filled, $current_at = -1, $size = 'md', $done = false) {
@@ -281,13 +274,88 @@ function render_mark($filled, $current_at = -1, $size = 'md', $done = false) {
   echo '<i' . ($done ? ' data-done' : '') . '></i></span>';
 }
 
+/** Server-rendered .tui-stepper — the same DOM the TUI component emits. */
+function render_stepper($rail, $current_id) {
+  $map = [ 'done' => 'complete', 'skipped' => 'skipped', 'current' => 'current', 'pending' => 'upcoming' ];
+  ?>
+  <nav aria-label="Setup progress" class="tui-stepper">
+    <ol class="tui-stepper__list">
+      <?php foreach ($rail as $r) :
+        $status = $map[$r['state']] ?? 'upcoming';
+        $suffix = $status === 'complete' ? 'complete' : ($status === 'skipped' ? 'skipped' : ''); ?>
+        <li class="tui-stepper__step" data-status="<?php echo esc_attr($status); ?>"
+            <?php if ($status === 'current') echo 'aria-current="step"'; ?>>
+          <span class="tui-stepper__marker" aria-hidden="true"></span>
+          <span class="tui-stepper__label"><?php echo esc_html(ucfirst($r['label'])); ?></span>
+          <?php if ($suffix) : ?><span class="tui-visually-hidden">, <?php echo esc_html($suffix); ?></span><?php endif; ?>
+        </li>
+      <?php endforeach; ?>
+    </ol>
+  </nav>
+  <?php
+}
+
+/**
+ * A selectable option card — the same DOM @tangible/ui's OptionCard emits,
+ * over a native input the browser owns. Steps compose these for the Choice
+ * and steward archetypes; the group wrapper is render_option_group().
+ *
+ * $args: name, value, title, checked, type (radio|checkbox), description,
+ *        badge, meta, variant (card|row), bullets (string[])
+ */
+function render_option_card($args) {
+  $a = wp_parse_args($args, [
+    'type' => 'radio', 'variant' => 'card', 'checked' => false,
+    'description' => '', 'badge' => '', 'meta' => '', 'bullets' => [],
+  ]);
+  $check_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10.687 16.567 18.14 3.99l1.72 1.02-8.547 14.423-7.382-5.111 1.138-1.644z" clip-rule="evenodd"/></svg>';
+  $classes = 'tui-option-card' . ($a['variant'] === 'row' ? ' is-row' : '') . ($a['checked'] ? ' is-selected' : '');
+  ?>
+  <label class="<?php echo esc_attr($classes); ?>" data-tgbl-option>
+    <input class="tui-option-card__input tui-visually-hidden"
+           type="<?php echo esc_attr($a['type']); ?>"
+           name="<?php echo esc_attr($a['name']); ?>"
+           value="<?php echo esc_attr($a['value']); ?>"
+           <?php checked($a['checked']); ?> />
+    <span class="tui-option-card__control" aria-hidden="true"><span class="tui-icon"><?php echo $check_svg; ?></span></span>
+    <span class="tui-option-card__body">
+      <span class="tui-option-card__heading">
+        <span class="tui-option-card__title"><?php echo esc_html($a['title']); ?></span>
+        <?php if ($a['badge']) : ?><span class="tui-option-card__badge"><?php echo esc_html($a['badge']); ?></span><?php endif; ?>
+      </span>
+      <?php if ($a['description']) : ?>
+        <span class="tui-option-card__description"><?php echo esc_html($a['description']); ?></span>
+      <?php endif; ?>
+      <?php if ($a['variant'] === 'card' && $a['bullets']) : ?>
+        <span class="tui-option-card__bullets">
+          <?php foreach ($a['bullets'] as $b) : ?>
+            <span class="tui-option-card__bullet"><span class="tui-icon"><?php echo $check_svg; ?></span><?php echo esc_html($b); ?></span>
+          <?php endforeach; ?>
+        </span>
+      <?php endif; ?>
+    </span>
+    <?php if ($a['meta']) : ?><span class="tui-option-card__meta"><?php echo esc_html($a['meta']); ?></span><?php endif; ?>
+  </label>
+  <?php
+}
+
+/** Group wrapper for option cards. $layout: grid|stack. */
+function render_option_group($aria_label, $render_cards, $layout = 'stack', $single = true) {
+  ?>
+  <div role="<?php echo $single ? 'radiogroup' : 'group'; ?>"
+       aria-label="<?php echo esc_attr($aria_label); ?>"
+       class="tui-option-card-group<?php echo $layout === 'stack' ? ' is-stack' : ''; ?>">
+    <?php $render_cards(); ?>
+  </div>
+  <?php
+}
+
 function render_wizard($plugin) {
   $name = $plugin->name;
   $facts = build_facts($name);
   $plan = onboarding\resolve_plan($name, $facts);
   $step = $plan['steps'][0] ?? null;
-  $title = esc_html($plugin->title ?? $name);
-  // The band title strips the vendor prefix — the band already wears the mark.
+  // The lockup strips the vendor prefix — the top bar already wears the mark.
   $short_title = esc_html(trim(str_ireplace(['tangible ', ' plugin'], ['', ''], $plugin->title ?? $name)));
 
   $total = count($plan['rail']);
@@ -298,7 +366,8 @@ function render_wizard($plugin) {
   }
   $all_done = !$step;
 
-  // The skip strip: one sentence per skipped-with-note step.
+  // The skip strip: one sentence per skipped-with-note step — the stepper
+  // shows THAT something was skipped, this line says WHY.
   $skip_sentences = [];
   foreach ($plan['rail'] as $r) {
     if ($r['state'] === 'skipped' && !empty($r['note'])) {
@@ -306,201 +375,198 @@ function render_wizard($plugin) {
         . esc_html($r['note']) . '.';
     }
   }
+  // module_url carries no trailing slash and may answer with the wrong
+  // scheme behind SSL proxies — normalize both or the stylesheet 404s.
+  $css_url = set_url_scheme(trailingslashit(framework\module_url(__FILE__)) . 'wizard.css')
+    . '?v=' . rawurlencode(framework::$state->version ?? '1');
   ?>
+  <link rel="stylesheet" href="<?php echo esc_url($css_url); ?>" />
   <style>
     <?php echo \tangible\design\font_faces_css(); ?>
-    .tgbl-wiz { --mark:#9E9CF7; --deep:#5B51C9; --data:#4265C4; --salmon:#FD9597;
-      --accent:var(--wp-admin-theme-color, #2271b1);
+    /* Full-screen takeover: the wizard owns the page (Figma: no admin chrome). */
+    html.wp-toolbar { padding-top: 0 !important; }
+    #wpadminbar, #adminmenumain, #adminmenuback, #wpfooter,
+    .notice, .update-nag, .updated, .error:not(.tgbl-keep) { display: none !important; }
+    #wpcontent, #wpbody-content { margin-left: 0 !important; padding: 0 !important; float: none; }
+    #wpbody-content .tgbl-wizard { min-height: 100vh; }
+
+    .tgbl-wizard {
       <?php echo \tangible\design\font_tokens_css(); ?>
-      max-width: 920px; margin: 30px auto 0; color:#1d2327;
-      font-family:var(--tgbl-font-body); font-size:13px; }
-    .tgbl-wiz .lbl { font-family:var(--tgbl-font-label); font-size:10.5px; font-weight:600;
-      letter-spacing:.14em; text-transform:uppercase; color:#646970; }
-    .tgbl-wiz .eyebrow { font-family:var(--tgbl-font-data); font-size:10px; font-weight:700;
-      letter-spacing:.18em; text-transform:uppercase; color:#646970; }
-    .tgbl-wiz .whisper { font-family:var(--tgbl-font-body); font-size:11.5px; color:#8c8f94; }
-    .tgbl-wiz .code { font-family:var(--tgbl-font-data); font-size:12px; color:var(--data); }
+      display: flex; flex-direction: column;
+      background: var(--tui-color-bg);
+      color: var(--tui-color-fg);
+      font-size: 13px;
+    }
+    .tgbl-wizard__topbar { display:flex; align-items:center; gap:12px;
+      padding: 12px 28px; border-bottom: 1px solid var(--tui-color-border); }
+    .tgbl-wizard__lockup { font-family: var(--tgbl-font-label); font-size: 12px;
+      font-weight: 600; letter-spacing: .14em; text-transform: uppercase; }
+    .tgbl-wizard__lockup span { color: var(--tui-color-fg-muted); letter-spacing: .04em; }
+    .tgbl-wizard__exit { margin-left: auto; }
+    .tgbl-wizard__stepper-band { padding: 10px 28px;
+      border-bottom: 1px solid var(--tui-color-border); }
+    .tgbl-wizard__skipstrip { padding: 8px 28px; font-size: 12px;
+      color: var(--tui-color-fg-muted); border-bottom: 1px solid var(--tui-color-border); }
+    .tgbl-wizard__skipstrip a { color: var(--tui-theme-primary-base); }
+    .tgbl-wizard__well { flex: 1; background: var(--tui-color-bg-muted);
+      padding: 40px 28px 60px; display: flex; justify-content: center; align-items: flex-start; }
+    .tgbl-wizard__content { width: 100%; max-width: 760px; display: flex;
+      flex-direction: column; gap: 16px; }
+    .tgbl-wizard__card { background: var(--tui-color-bg-surface);
+      border: 1px solid var(--tui-color-border); border-radius: var(--tui-radius-md);
+      padding: 28px 32px; }
+    .tgbl-wizard__footer { display: flex; align-items: center; gap: 14px;
+      padding: 12px 28px; border-top: 1px solid var(--tui-color-border);
+      background: var(--tui-color-bg); position: sticky; bottom: 0; }
 
-    .tgbl-frame { border:1px solid #c3c4c7; border-radius:4px; background:#fff;
-      overflow:hidden; box-shadow:0 1px 1px rgba(0,0,0,.04); }
+    /* The step heading voices: Recoleta display, mono data, native sentences. */
+    .tgbl-wizard h2 { font-family: var(--tgbl-font-display); font-size: 26px;
+      font-weight: 600; line-height: 1.15; letter-spacing: -.008em; margin: 0 0 8px; padding: 0; }
+    .tgbl-wizard .step-intro { font-size: 14px; line-height: 1.68;
+      color: var(--tui-color-fg-muted); margin: 0 0 6px; max-width: 62ch; }
+    .tgbl-wizard p { font-size: 13.5px; line-height: 1.6; }
+    .tgbl-wizard .lbl { font-family: var(--tgbl-font-label); font-size: 10.5px; font-weight: 600;
+      letter-spacing: .14em; text-transform: uppercase; color: var(--tui-color-fg-muted); }
+    .tgbl-wizard .eyebrow { font-family: var(--tgbl-font-data); font-size: 10px; font-weight: 700;
+      letter-spacing: .18em; text-transform: uppercase; color: var(--tui-color-fg-muted); }
+    .tgbl-wizard .whisper { font-size: 11.5px; color: var(--tui-color-fg-muted); }
+    .tgbl-wizard .code, .tgbl-wizard input[type=text], .tgbl-wizard input[type=password] {
+      font-family: var(--tgbl-font-data); font-size: 12.5px; }
+    .tgbl-dbl { border: 0; border-top: 1px solid var(--tui-color-fg); border-bottom: 1px solid var(--tui-color-fg);
+      height: 3px; margin: 18px 0 16px; opacity: .75; }
 
-    /* the band — the only place colour appears */
-    .tgbl-band { display:flex; align-items:center; gap:12px; padding:12px 20px;
-      background:color-mix(in srgb, var(--accent) 16%, #fff);
-      border-bottom:2px solid var(--accent); }
-    .tgbl-band .bt { font-size:14px; font-weight:600; }
-    .tgbl-addr { font-family:var(--tgbl-font-data); font-size:11px; font-weight:700;
-      letter-spacing:.22em; color:var(--accent); margin-left:auto; }
-
-    /* the mark */
+    /* the mark (top bar brand element) */
     .tgbl-mark { --u:7px; display:inline-grid; gap:1px; flex:none;
       grid-template-columns:repeat(3,var(--u)); grid-template-rows:repeat(3,var(--u)); }
     .tgbl-mark i { display:block; border-radius:1px; background:#dcdcde; }
     .tgbl-mark i:nth-child(1){grid-area:1/1}.tgbl-mark i:nth-child(2){grid-area:1/2}
     .tgbl-mark i:nth-child(3){grid-area:1/3}.tgbl-mark i:nth-child(4){grid-area:2/1}
     .tgbl-mark i:nth-child(5){grid-area:2/3}.tgbl-mark i:nth-child(6){grid-area:3/2}
-    .tgbl-mark i[data-on] { background:var(--mark); }
-    .tgbl-mark i[data-now] { background:var(--accent); }
-    .tgbl-mark i[data-done] { background:var(--salmon); }
+    .tgbl-mark i[data-on] { background:#9E9CF7; }
+    .tgbl-mark i[data-now] { background:var(--tui-theme-primary-base); }
+    .tgbl-mark i[data-done] { background:#FD9597; }
 
-    /* the rail — each node the mark filled to its own position */
-    .tgbl-rail { display:flex; align-items:flex-start; padding:16px 20px;
-      background:#f6f6f7; border-bottom:1px solid #c3c4c7; }
-    .tgbl-rail .node { display:flex; flex-direction:column; align-items:center; gap:7px;
-      flex:0 0 auto; max-width:140px; text-align:center; }
-    .tgbl-rail .node .t { font-family:var(--tgbl-font-label); font-size:11px; font-weight:600;
-      letter-spacing:.03em; color:#646970; line-height:1.3; }
-    .tgbl-rail .node[data-state="current"] .t { color:#1d2327; }
-    .tgbl-rail .node[data-state="skipped"] { opacity:.5; }
-    .tgbl-rail .wire { flex:1 1 0; min-width:20px; height:1.5px; margin-top:13px; background:#dcdcde; }
-    .tgbl-rail .wire[data-on] { background:var(--mark); }
-
-    .tgbl-skipstrip { padding:9px 20px; background:#fff; border-bottom:1px solid #e4e4e7;
-      font-size:12px; color:#646970; }
-    .tgbl-skipstrip a { color:var(--accent); }
-
-    /* the body, wearing the crop marks */
-    .tgbl-body { position:relative; padding:30px 34px 24px; }
-    .tgbl-body::before, .tgbl-body::after, .tgbl-body .cm::before, .tgbl-body .cm::after {
-      content:''; position:absolute; width:14px; height:14px; pointer-events:none; }
-    .tgbl-body::before { top:10px; left:10px; border-top:1px solid var(--mark); border-left:1px solid var(--mark); }
-    .tgbl-body::after { top:10px; right:10px; border-top:1px solid var(--mark); border-right:1px solid var(--mark); }
-    .tgbl-body .cm::before { bottom:10px; left:10px; border-bottom:1px solid var(--mark); border-left:1px solid var(--mark); }
-    .tgbl-body .cm::after { bottom:10px; right:10px; border-bottom:1px solid var(--mark); border-right:1px solid var(--mark); }
-
-    .tgbl-wiz-head { display:flex; gap:26px; align-items:flex-start; }
-    .tgbl-ghost { font-family:var(--tgbl-font-data); font-size:84px; font-weight:700;
-      line-height:.8; color:var(--mark); opacity:.55; letter-spacing:-.04em; flex:none; user-select:none; }
-    .tgbl-wiz h2 { font-family:var(--tgbl-font-display); font-size:28px; font-weight:600;
-      margin:7px 0 0; line-height:1.15; letter-spacing:-.008em; padding:0; color:#1d2327; }
-    .tgbl-wiz .step-intro { font-size:14px; line-height:1.68; color:#50575e; margin:9px 0 0; max-width:62ch; }
-    .tgbl-wiz p { font-size:13.5px; line-height:1.6; }
-    .tgbl-dbl { border:0; border-top:1px solid #1d2327; border-bottom:1px solid #1d2327;
-      height:3px; margin:22px 0 20px; opacity:.75; }
-    .tgbl-wiz input[type=text], .tgbl-wiz input[type=password] {
-      font-family:var(--tgbl-font-data); font-size:12.5px; color:var(--data); }
-
-    /* the aside slot — content + facts panel */
+    /* the aside slot — content + facts panel, unchanged contract */
     .tgbl-cols { display:flex; gap:30px; align-items:flex-start; }
     .tgbl-cols .main { flex:1 1 auto; min-width:0; }
-    .tgbl-aside { flex:0 0 250px; border-left:1px solid #dcdcde; padding-left:20px; }
+    .tgbl-aside { flex:0 0 250px; border-left:1px solid var(--tui-color-border); padding-left:20px; }
     .tgbl-aside dl { display:grid; grid-template-columns:1fr auto; gap:5px 10px; font-size:12.5px; margin:0; }
     .tgbl-aside dt { font-family:var(--tgbl-font-label); font-size:9.5px; font-weight:600;
-      letter-spacing:.14em; text-transform:uppercase; color:#646970; }
-    .tgbl-aside dd { margin:0; text-align:right; font-family:var(--tgbl-font-data); font-size:11.5px; color:var(--data); }
+      letter-spacing:.14em; text-transform:uppercase; color:var(--tui-color-fg-muted); }
+    .tgbl-aside dd { margin:0; text-align:right; font-family:var(--tgbl-font-data); font-size:11.5px; }
 
     /* the schematic — hairlines and boxes, no illustration */
     .tgbl-schem { display:flex; align-items:center; margin:14px 0 4px; }
-    .tgbl-schem .snode { border:1px solid #c3c4c7; border-radius:3px; background:#fafafa;
-      padding:8px 12px; min-width:104px; text-align:center; font-size:12px; }
+    .tgbl-schem .snode { border:1px solid var(--tui-color-border); border-radius:3px;
+      background:var(--tui-color-bg-muted); padding:8px 12px; min-width:104px; text-align:center; font-size:12px; }
     .tgbl-schem .snode b { display:block; font-size:12.5px; }
     .tgbl-schem .snode .sk { font-family:var(--tgbl-font-label); font-size:9px; font-weight:600;
-      letter-spacing:.1em; text-transform:uppercase; color:#646970; }
-    .tgbl-schem .snode[data-on] { border-color:var(--accent); box-shadow:inset 0 0 0 1px var(--accent); background:#fff; }
+      letter-spacing:.1em; text-transform:uppercase; color:var(--tui-color-fg-muted); }
+    .tgbl-schem .snode[data-on] { border-color:var(--tui-theme-primary-base);
+      box-shadow:inset 0 0 0 1px var(--tui-theme-primary-base); background:var(--tui-color-bg-surface); }
     .tgbl-schem .snode[data-ghost] { border-style:dashed; opacity:.55; }
-    .tgbl-schem .swire { flex:1 1 0; min-width:26px; height:1.5px; background:var(--mark); position:relative; }
+    .tgbl-schem .swire { flex:1 1 0; min-width:26px; height:1.5px; background:#9E9CF7; position:relative; }
     .tgbl-schem .swire em { position:absolute; top:-16px; left:50%; transform:translateX(-50%);
       font-family:var(--tgbl-font-label); font-style:normal; font-size:9px; font-weight:600;
-      letter-spacing:.1em; text-transform:uppercase; color:#646970; white-space:nowrap; }
+      letter-spacing:.1em; text-transform:uppercase; color:var(--tui-color-fg-muted); white-space:nowrap; }
 
-    .tgbl-wiz-foot { display:flex; align-items:center; gap:14px; margin-top:24px;
-      padding-top:15px; border-top:1px solid #e4e4e7; }
-    .tgbl-skip { color:#646970; background:none; border:0; border-bottom:1px dashed #a7aaad;
-      cursor:pointer; padding:0 0 1px; font-size:12.5px; font-family:var(--tgbl-font-body); }
-    .tgbl-skip:hover { color:#1d2327; border-bottom-color:#646970; }
-    .tgbl-wiz-error { border:1px solid #c3c4c7; border-left:3px solid var(--salmon);
-      background:#fff; padding:9px 13px; font-size:13px; margin:0 0 14px; }
+    .tgbl-skip { color: var(--tui-color-fg-muted); background: none; border: 0;
+      border-bottom: 1px dashed var(--tui-color-border); cursor: pointer; padding: 0 0 1px;
+      font-size: 12.5px; font-family: var(--tgbl-font-body); }
+    .tgbl-skip:hover { color: var(--tui-color-fg); border-bottom-color: var(--tui-color-fg-muted); }
   </style>
-  <div class="tgbl-wiz">
-    <div class="tgbl-frame">
-      <div class="tgbl-band">
-        <?php render_mark($done, $position > 0 ? $position - 1 : -1, 'md', $all_done); ?>
-        <span class="bt"><?php echo $short_title; ?> setup</span>
-        <span class="tgbl-addr"><?php echo esc_html(get_screen_address($plugin, $all_done ? $total : $position)); ?></span>
-      </div>
+  <div class="tui-interface tgbl-wizard">
+    <header class="tgbl-wizard__topbar">
+      <?php render_mark($done, $position > 0 ? $position - 1 : -1, 'md', $all_done); ?>
+      <span class="tgbl-wizard__lockup">Tangible <span><?php echo $short_title; ?></span></span>
+      <a class="tui-button is-size-sm is-style-ghost is-theme-secondary tgbl-wizard__exit"
+         href="<?php echo esc_url(admin_url('admin.php?page=tangible-home')); ?>">Exit setup</a>
+    </header>
 
-      <div class="tgbl-rail">
-        <?php $n = count($plan['rail']);
-        foreach ($plan['rail'] as $i => $r) :
-          $reached = in_array($r['state'], ['done', 'current'], true); ?>
-          <div class="node" data-state="<?php echo esc_attr($r['state']); ?>">
-            <?php render_mark($reached ? $i + 1 : 0, $r['state'] === 'current' ? $i : -1, 'lg'); ?>
-            <span class="t"><?php echo esc_html(ucfirst($r['label'])); ?></span>
-            <?php if ($r['state'] === 'skipped') : ?>
-              <span class="eyebrow" style="font-size:8.5px"><?php echo esc_html($r['note'] ?? 'on file'); ?></span>
-            <?php endif; ?>
+    <div class="tgbl-wizard__stepper-band">
+      <?php render_stepper($plan['rail'], $plan['current']); ?>
+    </div>
+
+    <?php if ($skip_sentences) : ?>
+      <div class="tgbl-wizard__skipstrip"><?php echo implode(' ', $skip_sentences); ?>
+        <a href="https://tangible.one/account" target="_blank" rel="noopener">Manage in your account</a>.</div>
+    <?php endif; ?>
+
+    <?php if ($all_done) : ?>
+      <main class="tgbl-wizard__well">
+        <div class="tgbl-wizard__content">
+          <div class="tgbl-wizard__card">
+            <p class="eyebrow" style="margin:0 0 6px">setup · complete</p>
+            <h2>Nothing left to ask.</h2>
+            <p class="step-intro">Everything is either configured or already on file.</p>
+            <p style="margin-top:18px">
+              <a class="tui-button is-theme-primary" href="<?php echo esc_url(admin_url('admin.php?page=tangible-home')); ?>">Go to Tangible Home</a>
+            </p>
           </div>
-          <?php if ($i < $n - 1) : ?>
-            <span class="wire" <?php echo $r['state'] !== 'pending' ? 'data-on' : ''; ?>></span>
-          <?php endif;
-        endforeach; ?>
-      </div>
+        </div>
+      </main>
+    <?php else : ?>
+      <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"
+            style="display:flex; flex-direction:column; flex:1; min-height:0">
+        <?php wp_nonce_field('tangible_onboarding_step'); ?>
+        <input type="hidden" name="action" value="tangible_onboarding_step" />
+        <input type="hidden" name="plugin" value="<?php echo esc_attr($name); ?>" />
+        <input type="hidden" name="step" value="<?php echo esc_attr($step['id']); ?>" />
 
-      <?php if ($skip_sentences) : ?>
-        <div class="tgbl-skipstrip"><?php echo implode(' ', $skip_sentences); ?>
-          <a href="https://tangible.one/account" target="_blank" rel="noopener">Manage in your account</a>.</div>
-      <?php endif; ?>
-
-      <div class="tgbl-body"><span class="cm"></span>
-        <?php if ($all_done) : ?>
-          <div class="tgbl-wiz-head">
-            <span class="tgbl-ghost" aria-hidden="true">OK</span>
-            <div>
-              <p class="eyebrow" style="margin:4px 0 0">setup · complete</p>
-              <h2>Nothing left to ask.</h2>
-              <p class="step-intro">Everything is either configured or already on file.</p>
-              <p style="margin-top:18px">
-                <a class="button button-primary button-large" href="<?php echo esc_url(admin_url('admin.php?page=tangible-home')); ?>">Go to Tangible Home</a>
-              </p>
-            </div>
-          </div>
-        <?php else : ?>
-          <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
-            <?php wp_nonce_field('tangible_onboarding_step'); ?>
-            <input type="hidden" name="action" value="tangible_onboarding_step" />
-            <input type="hidden" name="plugin" value="<?php echo esc_attr($name); ?>" />
-            <input type="hidden" name="step" value="<?php echo esc_attr($step['id']); ?>" />
-
+        <main class="tgbl-wizard__well">
+          <div class="tgbl-wizard__content">
             <?php $error = get_transient(step_error_key($name));
             if ($error) { delete_transient(step_error_key($name)); } ?>
             <?php if ($error) : ?>
-              <div class="tgbl-wiz-error" role="alert"><?php echo esc_html($error); ?></div>
+              <div class="tui-notice is-theme-danger tgbl-keep" role="alert">
+                <div class="tui-notice__inner"><div class="tui-notice__body"><?php echo esc_html($error); ?></div></div>
+              </div>
             <?php endif; ?>
 
-            <div class="tgbl-wiz-head">
-              <span class="tgbl-ghost" aria-hidden="true"><?php echo esc_html(str_pad((string) $position, 2, '0', STR_PAD_LEFT)); ?></span>
-              <div style="flex:1;min-width:0">
-                <p class="eyebrow" style="margin:4px 0 0">
-                  step <?php echo (int) $position; ?> of <?php echo (int) $total; ?> ·
-                  <?php echo esc_html($step['label'] ?? str_replace('-', ' ', $step['id'])); ?>
-                </p>
-                <?php
-                $render = function () use ($step, $plugin, $facts) {
-                  if (is_callable($step['render'])) call_user_func($step['render'], $plugin, $facts, $step);
-                  else echo '<h2>' . esc_html($step['id']) . '</h2>';
-                };
-                if (is_callable($step['aside'] ?? null)) : ?>
-                  <div class="tgbl-cols">
-                    <div class="main"><?php $render(); ?></div>
-                    <aside class="tgbl-aside"><?php call_user_func($step['aside'], $plugin, $facts, $step); ?></aside>
-                  </div>
-                <?php else : $render(); endif; ?>
-              </div>
-            </div>
+            <p class="eyebrow" style="margin:0">
+              step <?php echo (int) $position; ?> of <?php echo (int) $total; ?> ·
+              <?php echo esc_html($step['label'] ?? str_replace('-', ' ', $step['id'])); ?>
+            </p>
 
-            <div class="tgbl-wiz-foot">
-              <span class="whisper">Nothing is saved until you continue.</span>
-              <span style="flex:1"></span>
-              <?php if ($step['skippable']) : ?>
-                <button class="tgbl-skip" type="submit" name="do" value="skip">Skip this step</button>
-              <?php endif; ?>
-              <button class="button button-primary button-large" type="submit" name="do" value="continue"><?php
-                echo esc_html($step['submit_label'] ?? 'Continue'); ?></button>
+            <div class="tgbl-wizard__card">
+              <?php
+              $render = function () use ($step, $plugin, $facts) {
+                if (is_callable($step['render'])) call_user_func($step['render'], $plugin, $facts, $step);
+                else echo '<h2>' . esc_html($step['id']) . '</h2>';
+              };
+              if (is_callable($step['aside'] ?? null)) : ?>
+                <div class="tgbl-cols">
+                  <div class="main"><?php $render(); ?></div>
+                  <aside class="tgbl-aside"><?php call_user_func($step['aside'], $plugin, $facts, $step); ?></aside>
+                </div>
+              <?php else : $render(); endif; ?>
             </div>
-          </form>
-        <?php endif; ?>
-      </div>
-    </div>
+          </div>
+        </main>
+
+        <footer class="tgbl-wizard__footer">
+          <span class="whisper">Nothing is saved until you continue.</span>
+          <span style="flex:1"></span>
+          <?php if ($step['skippable']) : ?>
+            <button class="tgbl-skip" type="submit" name="do" value="skip">Skip this step</button>
+          <?php endif; ?>
+          <button class="tui-button is-theme-primary" type="submit" name="do" value="continue"><?php
+            echo esc_html($step['submit_label'] ?? 'Continue'); ?></button>
+        </footer>
+      </form>
+    <?php endif; ?>
   </div>
+  <script>
+  /* is-selected follows the native input without a framework — one delegated
+     listener covers every option card the page renders. */
+  document.addEventListener('change', function (e) {
+    var input = e.target.closest && e.target.closest('.tui-option-card__input');
+    if (!input) return;
+    document.querySelectorAll('.tui-option-card__input[name="' + input.name + '"]').forEach(function (i) {
+      var card = i.closest('[data-tgbl-option]');
+      if (card) card.classList.toggle('is-selected', i.checked);
+    });
+  });
+  </script>
   <?php
 }

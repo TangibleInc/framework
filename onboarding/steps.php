@@ -167,20 +167,31 @@ const MARKETING_CONSENT_TEXT =
   'Email me release notes and product updates from Tangible. Unsubscribe any time. '
   . '(plugin wizard opt-in v1)';
 
-/** One unbiased answer pair: same size, same weight, nothing preselected. */
+/**
+ * One unbiased answer pair: same size, same weight, nothing preselected.
+ * Wears the catalog's option-card DOM (a Yes/No two-card radiogroup) —
+ * the Wordfence-shape properties are unchanged, only the skin moved.
+ */
 function render_answer_pair($field, $question, $detail) {
   $id = esc_attr($field);
+  $check_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10.687 16.567 18.14 3.99l1.72 1.02-8.547 14.423-7.382-5.111 1.138-1.644z" clip-rule="evenodd"/></svg>';
   ?>
-  <div style="border:1px solid #c3c4c7; border-radius:4px; padding:14px 16px; margin-top:12px">
+  <div style="margin-top:14px">
     <p style="margin:0 0 3px; font-size:13.5px; font-weight:600"><?php echo esc_html($question); ?></p>
-    <p style="margin:0 0 10px; font-size:12.5px; color:#646970"><?php echo esc_html($detail); ?></p>
-    <div style="display:flex; gap:10px">
-      <label style="flex:1 1 0; border:1px solid #c3c4c7; border-radius:2px; padding:9px 13px; cursor:pointer; text-align:center">
-        <input type="radio" name="<?php echo $id; ?>" value="granted" data-tgbl-consent /> Yes
-      </label>
-      <label style="flex:1 1 0; border:1px solid #c3c4c7; border-radius:2px; padding:9px 13px; cursor:pointer; text-align:center">
-        <input type="radio" name="<?php echo $id; ?>" value="declined" data-tgbl-consent /> No
-      </label>
+    <p style="margin:0 0 10px; font-size:12.5px; color:var(--tui-color-fg-muted)"><?php echo esc_html($detail); ?></p>
+    <div role="radiogroup" aria-label="<?php echo esc_attr($question); ?>" class="tui-option-card-group">
+      <?php foreach ([ 'granted' => 'Yes', 'declined' => 'No' ] as $value => $label) : ?>
+        <label class="tui-option-card is-row" data-tgbl-option>
+          <input class="tui-option-card__input tui-visually-hidden" type="radio"
+                 name="<?php echo $id; ?>" value="<?php echo esc_attr($value); ?>" data-tgbl-consent />
+          <span class="tui-option-card__control" aria-hidden="true"><span class="tui-icon"><?php echo $check_svg; ?></span></span>
+          <span class="tui-option-card__body">
+            <span class="tui-option-card__heading">
+              <span class="tui-option-card__title"><?php echo esc_html($label); ?></span>
+            </span>
+          </span>
+        </label>
+      <?php endforeach; ?>
     </div>
   </div>
   <?php
@@ -412,18 +423,22 @@ add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name =
       <p class="step-intro">This decides who we talk to about licences and renewals — here,
          or the account owner by email. You can change it later.</p>
       <div class="tgbl-dbl"></div>
-      <label style="display:block;border:1px solid #c3c4c7;border-radius:4px;padding:12px 15px;margin:0 0 10px;cursor:pointer;max-width:560px">
-        <input type="radio" name="steward" value="team" <?php checked($current !== 'client'); ?> />
-        <strong>Me or my team</strong>
-        <span style="display:block;font-size:12.5px;color:#646970;margin:3px 0 0 21px">Licence, renewals and account
-          details show here, where you will actually see them.</span>
-      </label>
-      <label style="display:block;border:1px solid #c3c4c7;border-radius:4px;padding:12px 15px;cursor:pointer;max-width:560px">
-        <input type="radio" name="steward" value="client" <?php checked($current, 'client'); ?> />
-        <strong>A client<?php if ($account_name !== '') echo ' — ' . esc_html($account_name) . ' manages this site for them'; ?></strong>
-        <span style="display:block;font-size:12.5px;color:#646970;margin:3px 0 0 21px">Billing, renewals and offers stay
-          out of this admin — <?php echo esc_html($who); ?> hears about them by email instead.</span>
-      </label>
+      <?php
+      render_option_group('Who will look after this site?', function () use ($current, $account_name, $who) {
+        render_option_card([
+          'name' => 'steward', 'value' => 'team', 'variant' => 'row',
+          'checked' => $current !== 'client',
+          'title' => 'Me or my team',
+          'description' => 'Licence, renewals and account details show here, where you will actually see them.',
+        ]);
+        render_option_card([
+          'name' => 'steward', 'value' => 'client', 'variant' => 'row',
+          'checked' => $current === 'client',
+          'title' => 'A client' . ($account_name !== '' ? ' — ' . $account_name . ' manages this site for them' : ''),
+          'description' => 'Billing, renewals and offers stay out of this admin — ' . $who . ' hears about them by email instead.',
+        ]);
+      });
+      ?>
       <?php
     },
     'handle' => function () use ($account_id) {

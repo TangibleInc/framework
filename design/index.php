@@ -35,7 +35,9 @@ use tangible\framework;
  * Georgia fallback (which the tokens below already carry).
  */
 function font_faces_css() {
-  $base = framework\module_url(__FILE__) . 'fonts/';
+  // module_url carries no trailing slash — without this the URLs read
+  // "designfonts/…" and every face 404s to its fallback.
+  $base = trailingslashit(framework\module_url(__FILE__)) . 'fonts/';
   return "
     @font-face { font-family:'Space Mono'; font-weight:400; font-style:normal;
       font-display:swap; src:url('{$base}space-mono-400.woff2') format('woff2'); }
