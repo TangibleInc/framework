@@ -700,7 +700,12 @@ function render_wizard($plugin) {
       color: var(--tui-color-fg); }
     .tgbl-wizard .step-intro { font-size: var(--tgbl-lede); line-height: 1.55;
       color: var(--tui-color-fg-muted); margin: 8px 0 0; max-width: 76ch; }
-    .tgbl-wizard p { font-size: var(--tgbl-body); line-height: 1.6; margin: 0; }
+    /* :where() so this reset carries no specificity of its own. As a plain
+       `.tgbl-wizard p` it was (0,1,1) and quietly beat every single-class rule
+       on a paragraph — .tgbl-done__actions, .tgbl-build__meta and
+       .tgbl-result__excerpt all had their margins zeroed by it, which is why
+       the finish screen's buttons sat flush against the sentence above them. */
+    .tgbl-wizard :where(p) { font-size: var(--tgbl-body); line-height: 1.6; margin: 0; }
     /* Section labels open a block, so they carry the air above and a tight
        gap below — steps no longer hand-tune this per instance. */
     .tgbl-wizard .lbl, .tgbl-wizard .eyebrow { display: block; font-size: var(--tgbl-label);
@@ -906,7 +911,7 @@ function render_wizard($plugin) {
       background: var(--tui-theme-success-subtle); color: var(--tui-theme-success-stronger); }
     .tgbl-done .step-intro { margin-left: auto; margin-right: auto; }
     .tgbl-done__actions { display: flex; flex-direction: column; align-items: center;
-      gap: 10px; margin-top: 24px; }
+      gap: 10px; margin-top: 28px; }
     .tgbl-done__actions .tui-button { min-width: 280px; justify-content: center; }
 
     .tgbl-wizard .tgbl-notice__p { margin: 0 0 10px; }
