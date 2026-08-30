@@ -895,8 +895,11 @@ function render_wizard($plugin) {
        a column of its own. */
     .tgbl-result { display: block; }
     .tgbl-result__title { font-size: var(--tgbl-title); font-weight: 600; line-height: 1.4; }
+    /* No tracking: these chips carry sentence-case words ("Posts", "Tangible
+       Templates"), where letter-spacing reads as a mistake. It stays on the
+       uppercase badges, which are set in caps and need it to stay legible. */
     .tgbl-result__chip { display: inline-block; margin-left: 8px; vertical-align: 1px;
-      font-size: var(--tgbl-micro); font-weight: 700; letter-spacing: .04em;
+      font-size: var(--tgbl-micro); font-weight: 700; letter-spacing: normal;
       padding: 2px 8px; border-radius: 999px; white-space: nowrap;
       background: var(--tui-theme-primary-subtlest); color: var(--tui-theme-primary-stronger); }
     .tgbl-result__excerpt { margin: 3px 0 0; font-size: var(--tgbl-body);
