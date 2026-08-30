@@ -355,7 +355,14 @@ function render_option_card($args) {
     'description' => '', 'badge' => '', 'meta' => '', 'bullets' => [],
   ]);
   $check_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10.687 16.567 18.14 3.99l1.72 1.02-8.547 14.423-7.382-5.111 1.138-1.644z" clip-rule="evenodd"/></svg>';
-  $classes = 'tui-option-card' . ($a['variant'] === 'row' ? ' is-row' : '') . ($a['checked'] ? ' is-selected' : '');
+  // The control's shape follows the input type, not the card variant: a tick
+  // in a square says "pick as many as you like", a dot in a circle says "pick
+  // one". TUI's own is-row variant squares the control either way, which
+  // makes every single-choice row lie about itself — hence is-radio here.
+  $classes = 'tui-option-card'
+    . ($a['type'] === 'radio' ? ' is-radio' : ' is-checkbox')
+    . ($a['variant'] === 'row' ? ' is-row' : '')
+    . ($a['checked'] ? ' is-selected' : '');
   ?>
   <label class="<?php echo esc_attr($classes); ?>" data-tgbl-option>
     <input class="tui-option-card__input tui-visually-hidden"
@@ -363,7 +370,8 @@ function render_option_card($args) {
            name="<?php echo esc_attr($a['name']); ?>"
            value="<?php echo esc_attr($a['value']); ?>"
            <?php checked($a['checked']); ?> />
-    <span class="tui-option-card__control" aria-hidden="true"><span class="tui-icon"><?php echo $check_svg; ?></span></span>
+    <span class="tui-option-card__control" aria-hidden="true"><?php
+    if ($a['type'] !== 'radio') : ?><span class="tui-icon"><?php echo $check_svg; ?></span><?php endif; ?></span>
     <span class="tui-option-card__body">
       <span class="tui-option-card__heading">
         <span class="tui-option-card__title"><?php echo esc_html($a['title']); ?></span>
@@ -385,12 +393,79 @@ function render_option_card($args) {
   <?php
 }
 
-/** Group wrapper for option cards. $layout: grid|stack. */
+/**
+ * A toggle row — "index this, or don't".
+ *
+ * The design (Cristian's Index frame) puts a switch on the right of a titled
+ * row, with the count beside it, and the same row tinted and two-up when what
+ * it describes was detected rather than always there. A box with a tick reads
+ * as "add this to a list"; a switch reads as "this is on", which is the
+ * truthful shape for a thing that either indexes or does not.
+ *
+ * TUI's <Switch> is a <button role="switch"> that needs JS to hold its state.
+ * This renders inside a plain form, so the control underneath is a native
+ * checkbox wearing a track and a thumb: it submits, it keyboard-focuses, and
+ * it still works with JS off.
+ *
+ * $args: name, value, title, checked, description, meta, note, tone, count
+ */
+function render_toggle_row($args) {
+  $a = wp_parse_args($args, [
+    'checked' => false, 'description' => '', 'meta' => '', 'note' => '',
+    'tone' => '', 'count' => null, 'value' => '1',
+  ]);
+  // Title, description, meta and control are siblings rather than nested, so
+  // each variant can place them with grid areas — the two-up card wants the
+  // control top-right, the full-width row wants it centred at the end, and no
+  // amount of ordering reaches into a wrapper to do that.
+  $classes = 'tgbl-toggle-row'
+    . ($a['tone'] ? ' is-tone-' . $a['tone'] : '')
+    . ($a['description'] ? ' has-desc' : '')
+    . ($a['checked'] ? ' is-on' : '');
+  ?>
+  <label class="<?php echo esc_attr($classes); ?>">
+    <span class="tgbl-toggle-row__title"><?php echo esc_html($a['title']);
+      if ($a['note']) : ?> <em class="tgbl-toggle-row__note"><?php
+        echo esc_html($a['note']); ?></em><?php endif; ?></span>
+    <?php if ($a['description']) : ?>
+      <span class="tgbl-toggle-row__desc"><?php echo esc_html($a['description']); ?></span>
+    <?php endif; ?>
+    <?php if ($a['meta']) : ?>
+      <span class="tgbl-toggle-row__meta"><?php echo esc_html($a['meta']); ?></span>
+    <?php endif; ?>
+    <input class="tgbl-toggle" type="checkbox"
+           name="<?php echo esc_attr($a['name']); ?>"
+           value="<?php echo esc_attr($a['value']); ?>"
+           <?php if ($a['count'] !== null) : ?>data-count="<?php echo (int) $a['count']; ?>"<?php endif; ?>
+           <?php checked($a['checked']); ?> />
+  </label>
+  <?php
+}
+
+/** Wrapper for toggle rows. $cols: 1 (full-width rows) or 2 (the tinted pair). */
+function render_toggle_group($aria_label, $render_rows, $cols = 1) {
+  ?>
+  <div role="group" aria-label="<?php echo esc_attr($aria_label); ?>"
+       class="tgbl-toggle-group<?php echo (int) $cols === 2 ? ' is-cols-2' : ''; ?>">
+    <?php $render_rows(); ?>
+  </div>
+  <?php
+}
+
+/**
+ * Group wrapper for option cards.
+ *
+ * $layout: 'stack' (one per row), 'grid' (auto-fit), or an integer column
+ * count — short choices read as a row of siblings, not a vertical list.
+ */
 function render_option_group($aria_label, $render_cards, $layout = 'stack', $single = true) {
+  $class = 'tui-option-card-group';
+  if ($layout === 'stack') $class .= ' is-stack';
+  elseif (is_int($layout) || ctype_digit((string) $layout)) $class .= ' is-cols-' . (int) $layout;
   ?>
   <div role="<?php echo $single ? 'radiogroup' : 'group'; ?>"
        aria-label="<?php echo esc_attr($aria_label); ?>"
-       class="tui-option-card-group<?php echo $layout === 'stack' ? ' is-stack' : ''; ?>">
+       class="<?php echo esc_attr($class); ?>">
     <?php $render_cards(); ?>
   </div>
   <?php
@@ -482,13 +557,16 @@ function render_wizard($plugin) {
       --tui-select-content-radius: 8px;
       --tui-card-radius: 12px;
       --tui-notice-radius: 8px;
-      --tui-typography-size: 14px;
-      --tui-control-height-md: 40px;
-      --tui-control-height-lg: 44px;
-      --tui-control-font-size-md: 14px;
-      --tui-control-font-size-lg: 14px;
-      --tui-button-font-size: 14px;
-      --tui-button-font-weight: 500;
+      --tui-typography-size: 13px;
+      --tui-typography-size-sm: 13px;
+      --tui-typography-size-xs: 12px;
+      --tui-control-height-md: 36px;
+      --tui-control-height-lg: 40px;
+      --tui-control-font-size-md: 13px;
+      --tui-control-font-size-lg: 13px;
+      --tui-button-font-size: 13px;
+      --tui-button-font-size-sm: 13px;
+      --tui-button-font-weight: 600;
     }
 
     .tgbl-wizard {
@@ -497,11 +575,32 @@ function render_wizard($plugin) {
       --tgbl-font-data: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
       --tgbl-modal: 960px;
       --tgbl-pad: 40px;
+
+      /* ----------------------------------------------------------------
+         Seven roles, and nothing outside them.
+
+         An earlier pass left eleven different size/weight pairs on a
+         single step — some from here, some from TUI's component tokens,
+         some from the host plugin's WP-native override. That is what
+         "the font feels weird" is: no ramp, just accidents. Every rule
+         below spends one of these and none invents its own number.
+
+         The base is 13px because this lives inside wp-admin, which is
+         13px; 14 read oversized against the screens either side of it.
+         ---------------------------------------------------------------- */
+      --tgbl-display: 28px;    /* step heading            700 */
+      --tgbl-lede:    15px;    /* step subtitle           400 */
+      --tgbl-title:   14px;    /* row / card titles       600 */
+      --tgbl-body:    13px;    /* everything else         400 */
+      --tgbl-meta:    13px;    /* counts, emphasis        600 */
+      --tgbl-label:   12px;    /* section labels          600 caps */
+      --tgbl-micro:   11px;    /* badges                  700 caps */
+
       display: flex; flex-direction: column;
       background: var(--tui-color-bg-muted);
       color: var(--tui-color-fg);
       font-family: var(--tgbl-font);
-      font-size: 14px; line-height: 1.5;
+      font-size: var(--tgbl-body); line-height: 1.5;
       -webkit-font-smoothing: antialiased;
     }
     .tgbl-wizard *, .tgbl-wizard *::before, .tgbl-wizard *::after { box-sizing: border-box; }
@@ -510,9 +609,9 @@ function render_wizard($plugin) {
     .tgbl-wizard__topbar { display:flex; align-items:center; gap:10px;
       padding: 14px 28px; background: var(--tui-color-bg);
       border-bottom: 1px solid var(--tui-color-divider); }
-    .tgbl-wizard__lockup { font-size: 13px; font-weight: 600; letter-spacing: .04em;
-      text-transform: uppercase; }
-    .tgbl-wizard__lockup span { color: var(--tui-color-fg-muted); font-weight: 500; }
+    .tgbl-wizard__lockup { font-size: var(--tgbl-label); font-weight: 600;
+      letter-spacing: .06em; text-transform: uppercase; }
+    .tgbl-wizard__lockup span { color: var(--tui-color-fg-muted); font-weight: 600; }
     .tgbl-wizard__exit { margin-left: auto; }
 
     /* The well holds one modal, centred, at the design's fixed measure. */
@@ -544,10 +643,10 @@ function render_wizard($plugin) {
     .tgbl-steps__list { display: flex; flex-wrap: wrap; gap: 8px 20px;
       margin: 0; padding: 0; list-style: none; }
     .tgbl-steps__step { display: flex; align-items: center; gap: 7px; margin: 0;
-      font-size: 13px; line-height: 1.2; color: var(--tui-color-fg-muted); }
+      font-size: var(--tgbl-body); line-height: 1.2; color: var(--tui-color-fg-muted); }
     .tgbl-steps__disc { flex: none; width: 21px; height: 21px; border-radius: 50%;
       display: inline-flex; align-items: center; justify-content: center;
-      font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums;
+      font-size: var(--tgbl-micro); font-weight: 600; font-variant-numeric: tabular-nums;
       background: var(--tui-color-fill); color: var(--tui-color-fg-muted); }
     .tgbl-steps__step[data-state="done"] { color: var(--tui-color-fg); }
     .tgbl-steps__step[data-state="done"] .tgbl-steps__disc {
@@ -565,20 +664,20 @@ function render_wizard($plugin) {
       transition: width var(--tui-motion-duration) var(--tui-motion-timing); }
 
     /* The skipped-step explanations, as one quiet line under the strip. */
-    .tgbl-wizard__skipstrip { font-size: 13px; color: var(--tui-color-fg-muted);
+    .tgbl-wizard__skipstrip { font-size: var(--tgbl-body); color: var(--tui-color-fg-muted);
       margin: -12px 0 0; }
     .tgbl-wizard__skipstrip a { color: var(--tui-theme-primary-base); }
 
     /* Type scale ---------------------------------------------------------- */
-    .tgbl-wizard h2 { font-family: inherit; font-size: 30px; font-weight: 700;
-      line-height: 1.2; letter-spacing: -.018em; margin: 0; padding: 0;
+    .tgbl-wizard h2 { font-family: inherit; font-size: var(--tgbl-display); font-weight: 700;
+      line-height: 1.22; letter-spacing: -.015em; margin: 0; padding: 0;
       color: var(--tui-color-fg); }
-    .tgbl-wizard .step-intro { font-size: 15px; line-height: 1.55;
+    .tgbl-wizard .step-intro { font-size: var(--tgbl-lede); line-height: 1.55;
       color: var(--tui-color-fg-muted); margin: 8px 0 0; max-width: 76ch; }
-    .tgbl-wizard p { font-size: 14px; line-height: 1.55; margin: 0; }
+    .tgbl-wizard p { font-size: var(--tgbl-body); line-height: 1.6; margin: 0; }
     /* Section labels open a block, so they carry the air above and a tight
        gap below — steps no longer hand-tune this per instance. */
-    .tgbl-wizard .lbl, .tgbl-wizard .eyebrow { display: block; font-size: 12px;
+    .tgbl-wizard .lbl, .tgbl-wizard .eyebrow { display: block; font-size: var(--tgbl-label);
       font-weight: 600; letter-spacing: .05em; text-transform: uppercase;
       color: var(--tui-color-fg-muted); margin: 28px 0 10px; }
     .tgbl-wizard__body > .lbl:first-child { margin-top: 0; }
@@ -586,20 +685,20 @@ function render_wizard($plugin) {
 
     /* A labelled field: <p class="tgbl-field"><label>Name<br/><input/></label></p> */
     .tgbl-wizard .tgbl-field { margin-top: 16px; }
-    .tgbl-wizard .tgbl-field label { font-weight: 600; font-size: 13px; }
+    .tgbl-wizard .tgbl-field label { font-weight: 600; font-size: var(--tgbl-meta); }
     .tgbl-wizard .tgbl-field input, .tgbl-wizard .tgbl-field select { margin-top: 6px; }
     .tgbl-wizard .tgbl-field__hint { display: block; margin-top: 6px; }
 
     /* Consent question pairs (framework steps.php) */
     .tgbl-wizard .tgbl-answer { margin-top: 24px; }
-    .tgbl-wizard .tgbl-answer__q { font-size: 15px; font-weight: 600; margin: 0 0 4px; }
-    .tgbl-wizard .tgbl-answer__d { font-size: 13px; color: var(--tui-color-fg-muted);
+    .tgbl-wizard .tgbl-answer__q { font-size: var(--tgbl-title); font-weight: 600; margin: 0 0 4px; }
+    .tgbl-wizard .tgbl-answer__d { font-size: var(--tgbl-body); color: var(--tui-color-fg-muted);
       margin: 0 0 12px; }
-    .tgbl-wizard .tgbl-factkey { padding: 3px 16px 3px 0; font-size: 11px;
+    .tgbl-wizard .tgbl-factkey { padding: 3px 16px 3px 0; font-size: var(--tgbl-label);
       margin: 0; letter-spacing: .05em; }
-    .tgbl-wizard .whisper { font-size: 13px; color: var(--tui-color-fg-muted); }
-    .tgbl-wizard .code { font-family: var(--tgbl-font-data); font-size: 13px; }
-    .tgbl-wizard label { font-size: 14px; }
+    .tgbl-wizard .whisper { font-size: var(--tgbl-body); color: var(--tui-color-fg-muted); }
+    .tgbl-wizard .code { font-family: var(--tgbl-font-data); font-size: var(--tgbl-body); }
+    .tgbl-wizard label { font-size: var(--tgbl-body); }
     .tgbl-wizard strong, .tgbl-wizard b { font-weight: 600; }
     .tgbl-wizard a { color: var(--tui-theme-primary-base); }
     /* WP admin underlines anchors; a link-as-button must not wear it. */
@@ -610,7 +709,7 @@ function render_wizard($plugin) {
     .tgbl-wizard input[type=text], .tgbl-wizard input[type=password],
     .tgbl-wizard input[type=email], .tgbl-wizard input[type=url],
     .tgbl-wizard select, .tgbl-wizard textarea { width: 100%; max-width: 100%;
-      font-family: inherit; font-size: 14px; }
+      font-family: inherit; font-size: var(--tgbl-body); }
     .tgbl-wizard .tui-field, .tgbl-wizard .tui-input-wrap { width: 100%; }
 
     /* Steps emit .tgbl-dbl between the heading block and the controls.
@@ -634,12 +733,107 @@ function render_wizard($plugin) {
     .tgbl-mark i[data-done] { background:#FD9597; }
 
     /* Option cards — the design's card is roomier than TUI's default. */
-    .tgbl-wizard .tui-option-card { --tui-option-card-padding: 18px;
-      --tui-option-card-radius: 10px; }
-    .tgbl-wizard .tui-option-card__title { font-size: 15px; }
+    .tgbl-wizard .tui-option-card { --tui-option-card-padding: 14px 16px;
+      --tui-option-card-radius: 10px; --_control-size: 18px; }
+    .tgbl-wizard .tui-option-card.is-row { --tui-option-card-padding: 12px 16px; }
+
+    /* A tick in a square means "as many as you like"; a dot in a circle means
+       "one of these". TUI's is-row squares the control whichever it is, so the
+       shape is restated here from the input type the card actually holds. */
+    .tgbl-wizard .tui-option-card.is-radio .tui-option-card__control {
+      border-radius: 999px; background: var(--tui-color-bg);
+      border-color: var(--tui-color-border); }
+    .tgbl-wizard .tui-option-card.is-radio.is-selected .tui-option-card__control {
+      background: var(--tui-color-bg); border-color: var(--tui-theme-primary-base);
+      box-shadow: inset 0 0 0 5px var(--tui-theme-primary-base); }
+    .tgbl-wizard .tui-option-card.is-checkbox .tui-option-card__control {
+      border-radius: 4px; }
+
+    /* Short choices belong side by side. A four-item pick spread down 880px
+       of column is the "vertical instead of horizontal" complaint. */
+    .tgbl-wizard .tui-option-card-group.is-cols-2 { grid-template-columns: repeat(2, 1fr); }
+    .tgbl-wizard .tui-option-card-group.is-cols-3 { grid-template-columns: repeat(3, 1fr); }
+    .tgbl-wizard .tui-option-card-group.is-cols-4 { grid-template-columns: repeat(4, 1fr); }
+    @media (max-width: 860px) {
+      .tgbl-wizard .tui-option-card-group[class*="is-cols-"] {
+        grid-template-columns: repeat(2, 1fr); }
+    }
+    .tgbl-wizard .tui-option-card__title { font-size: var(--tgbl-title); font-weight: 600; }
     .tgbl-wizard .tui-option-card__description,
-    .tgbl-wizard .tui-option-card__bullet { font-size: 13px; font-weight: 400; }
+    .tgbl-wizard .tui-option-card__bullet { font-size: var(--tgbl-body); font-weight: 400; }
+    .tgbl-wizard .tui-option-card__badge { font-size: var(--tgbl-micro); font-weight: 700; }
+    .tgbl-wizard .tui-option-card__meta { font-size: var(--tgbl-meta); font-weight: 600;
+      color: var(--tui-theme-primary-base); font-variant-numeric: tabular-nums; }
     .tgbl-wizard .tui-option-card-group { --tui-option-card-group-gap: 14px; }
+
+    /* Toggle rows — the design's Index step. A native checkbox wearing a
+       track and a thumb, so the form still works with JS off. */
+    .tgbl-toggle-group { display: grid; gap: 10px; }
+    .tgbl-toggle-group.is-cols-2 { grid-template-columns: repeat(2, 1fr); align-items: stretch; }
+    @media (max-width: 860px) { .tgbl-toggle-group.is-cols-2 { grid-template-columns: 1fr; } }
+
+    .tgbl-toggle-row { display: grid; cursor: pointer;
+      grid-template-columns: 1fr auto auto; gap: 2px 14px; align-items: center;
+      grid-template-areas: "title meta toggle";
+      padding: 12px 16px; border: 1px solid var(--tui-color-border); border-radius: 10px;
+      background: var(--tui-color-bg);
+      transition: border-color var(--tui-motion-duration) var(--tui-motion-timing); }
+    .tgbl-toggle-row.has-desc { grid-template-areas: "title meta toggle" "desc meta toggle"; }
+    .tgbl-toggle-row:hover { border-color: var(--tui-color-fill-strong); }
+    .tgbl-toggle-row__title { grid-area: title; font-size: var(--tgbl-title);
+      font-weight: 600; line-height: 1.35; }
+    .tgbl-toggle-row__note { font-style: normal; font-weight: 600;
+      color: var(--tui-theme-primary-base); }
+    .tgbl-toggle-row__desc { grid-area: desc; font-size: var(--tgbl-body);
+      color: var(--tui-color-fg-muted); line-height: 1.45; }
+    .tgbl-toggle-row__meta { grid-area: meta; font-size: var(--tgbl-meta); font-weight: 600;
+      color: var(--tui-color-fg-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .tgbl-toggle-row.is-on .tgbl-toggle-row__meta { color: var(--tui-theme-primary-base); }
+    .tgbl-toggle-row .tgbl-toggle { grid-area: toggle; }
+
+    /* Two-up: the control goes top-right, the copy runs the full card width. */
+    .tgbl-toggle-group.is-cols-2 .tgbl-toggle-row { grid-template-columns: 1fr auto;
+      grid-template-areas: "title toggle" "meta meta"; align-items: start;
+      align-content: start; gap: 6px 12px; padding: 16px; }
+    .tgbl-toggle-group.is-cols-2 .tgbl-toggle-row.has-desc {
+      grid-template-areas: "title toggle" "desc desc" "meta meta"; }
+
+    /* Tint is reserved for things we DETECTED — a plugin we found active.
+       A site's own custom post types are ordinary and stay on white. */
+    .tgbl-toggle-row.is-tone-detected { background: var(--tui-theme-primary-subtlest);
+      border-color: var(--tui-theme-primary-subtle); }
+    .tgbl-toggle-row.is-tone-detected .tgbl-toggle-row__title { color: var(--tui-theme-primary-stronger); }
+    .tgbl-toggle-row.is-tone-detected .tgbl-toggle-row__desc { color: var(--tui-theme-primary-strong); }
+
+    /* wp-admin styles `input[type=checkbox]` (0,1,1) — a bare .tgbl-toggle
+       (0,1,0) loses to it and renders as a blue tick box. Match on the
+       attribute too so the track actually wins. */
+    .tgbl-wizard input.tgbl-toggle[type=checkbox] {
+      appearance: none; -webkit-appearance: none; flex: none; margin: 0;
+      position: relative; width: 38px; height: 22px; min-width: 38px; border-radius: 999px;
+      background: var(--tui-color-fill-strong); cursor: pointer; border: 0; padding: 0;
+      box-shadow: none;
+      transition: background-color var(--tui-motion-duration) var(--tui-motion-timing); }
+    .tgbl-wizard input.tgbl-toggle[type=checkbox]::before { content: none; }
+    .tgbl-wizard input.tgbl-toggle[type=checkbox]::after { content: ""; position: absolute;
+      top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff;
+      box-shadow: 0 1px 2px rgba(0,0,0,.2); margin: 0;
+      transition: transform var(--tui-motion-duration) var(--tui-motion-timing); }
+    .tgbl-wizard input.tgbl-toggle[type=checkbox]:checked {
+      background: var(--tui-theme-primary-base); }
+    .tgbl-wizard input.tgbl-toggle[type=checkbox]:checked::after { transform: translateX(16px); }
+    .tgbl-wizard input.tgbl-toggle[type=checkbox]:focus-visible {
+      outline: var(--tui-focus-ring-width) solid var(--tui-color-focus-ring);
+      outline-offset: var(--tui-focus-ring-offset); }
+
+    /* The estimate the design closes the Index step with. */
+    .tgbl-estimate { display: flex; align-items: center; gap: 9px;
+      padding: 12px 16px; border-radius: 10px;
+      background: var(--tui-theme-success-subtlest);
+      color: var(--tui-theme-success-stronger);
+      font-size: var(--tgbl-body); font-weight: 600; }
+    .tgbl-estimate svg { flex: none; align-self: center; }
+    .tgbl-estimate b { font-variant-numeric: tabular-nums; }
 
     /* Build step — the design's progress panel, log and preview.
        These live here rather than inline in the step so the step markup
@@ -647,22 +841,35 @@ function render_wizard($plugin) {
     .tgbl-build__panel { border: 1px solid var(--tui-color-divider); border-radius: 10px;
       background: var(--tui-color-bg-surface); padding: 18px 20px; }
     .tgbl-build__head { display: flex; align-items: baseline; gap: 12px; }
-    .tgbl-build__title { font-size: 14px; font-weight: 600; }
-    .tgbl-build__pct { margin-left: auto; font-size: 13px; font-weight: 600;
+    .tgbl-build__title { font-size: var(--tgbl-title); font-weight: 600; }
+    .tgbl-build__pct { margin-left: auto; font-size: var(--tgbl-meta); font-weight: 600;
       color: var(--tui-theme-primary-base); font-variant-numeric: tabular-nums; }
     .tgbl-build__track { margin-top: 12px; height: 8px; border-radius: 999px;
       background: var(--tui-color-fill-subtle); overflow: hidden; }
     .tgbl-build__fill { display: block; height: 100%; width: 0%; border-radius: inherit;
       background: var(--tui-theme-primary-base); transition: width .4s ease; }
-    .tgbl-build__count { margin-top: 10px; font-size: 13px; color: var(--tui-color-fg-muted);
+    .tgbl-build__count { margin-top: 10px; font-size: var(--tgbl-body); color: var(--tui-color-fg-muted);
       font-variant-numeric: tabular-nums; }
     .tgbl-build__log { list-style: none; margin: 0; padding: 14px 16px; border-radius: 10px;
       background: #1d2327; color: #c3c4c7; font-family: var(--tgbl-font-data);
-      font-size: 12.5px; line-height: 1.9; max-height: 190px; overflow-y: auto; }
+      font-size: var(--tgbl-body); line-height: 1.85; max-height: 190px; overflow-y: auto; }
     .tgbl-build__log li { margin: 0; }
     .tgbl-build__sample { border: 1px solid var(--tui-color-divider); border-radius: 10px;
-      padding: 16px 20px; }
-    .tgbl-build__sample .lbl { margin-top: 0; }
+      padding: 16px; background: var(--tui-color-bg-muted); }
+    .tgbl-build__caption { margin-top: 12px; text-align: center;
+      color: var(--tui-color-fg-muted); }
+
+    /* A search result, shaped like one: title and its kind on the same line. */
+    .tgbl-result { display: flex; align-items: baseline; gap: 12px;
+      padding: 14px 16px; border-radius: 8px; background: var(--tui-color-bg);
+      border: 1px solid var(--tui-theme-primary-base); }
+    .tgbl-result__title { flex: 1; min-width: 0; font-size: var(--tgbl-title);
+      font-weight: 600; line-height: 1.35; }
+    .tgbl-result__chip { flex: none; font-size: var(--tgbl-micro); font-weight: 700;
+      letter-spacing: .06em; text-transform: uppercase; padding: 3px 8px;
+      border-radius: 999px; background: var(--tui-theme-primary-subtlest);
+      color: var(--tui-theme-primary-stronger); }
+    .tgbl-result__chip[hidden] { display: none; }
 
     /* Done step — the design's centred finish: a mark, the claim, the two
        ways onward. Anything conditional (staging paused, global search)
@@ -679,7 +886,7 @@ function render_wizard($plugin) {
     .tgbl-wizard .tgbl-notice__p { margin: 0 0 10px; }
     /* No margin reset here — that would out-specify the body's flow rhythm
        and jam the list under its heading. */
-    .tgbl-wizard .tgbl-list { list-style: disc; padding-left: 20px; font-size: 14px;
+    .tgbl-wizard .tgbl-list { list-style: disc; padding-left: 20px; font-size: var(--tgbl-body);
       line-height: 1.7; margin-bottom: 0; }
     .tgbl-wizard .tgbl-list li + li { margin-top: 4px; }
 
@@ -687,28 +894,30 @@ function render_wizard($plugin) {
     .tgbl-cols { display:flex; gap:32px; align-items:flex-start; }
     .tgbl-cols .main { flex:1 1 auto; min-width:0; }
     .tgbl-aside { flex:0 0 240px; border-left:1px solid var(--tui-color-divider); padding-left:24px; }
-    .tgbl-aside dl { display:grid; grid-template-columns:1fr auto; gap:6px 12px; font-size:13px; margin:0; }
-    .tgbl-aside dt { font-size:12px; font-weight:600; color:var(--tui-color-fg-muted); }
+    .tgbl-aside dl { display:grid; grid-template-columns:1fr auto; gap:6px 12px;
+      font-size:var(--tgbl-body); margin:0; }
+    .tgbl-aside dt { font-size:var(--tgbl-body); font-weight:400; color:var(--tui-color-fg-muted); }
     .tgbl-aside dd { margin:0; text-align:right; font-variant-numeric: tabular-nums;
-      font-weight:600; font-size:13px; }
+      font-weight:600; font-size:var(--tgbl-meta); }
 
     /* the schematic — hairlines and boxes, no illustration */
     .tgbl-schem { display:flex; align-items:center; margin:8px 0 4px; }
     .tgbl-schem .snode { border:1px solid var(--tui-color-border); border-radius:8px;
       background:var(--tui-color-bg-surface); padding:10px 14px; min-width:110px;
-      text-align:center; font-size:13px; }
-    .tgbl-schem .snode b { display:block; font-size:13px; font-weight:600; }
-    .tgbl-schem .snode .sk { font-size:11px; font-weight:600; color:var(--tui-color-fg-muted); }
+      text-align:center; font-size:var(--tgbl-body); }
+    .tgbl-schem .snode b { display:block; font-size:var(--tgbl-title); font-weight:600; }
+    .tgbl-schem .snode .sk { font-size:var(--tgbl-micro); font-weight:600;
+      color:var(--tui-color-fg-muted); }
     .tgbl-schem .snode[data-on] { border-color:var(--tui-theme-primary-base);
       box-shadow:inset 0 0 0 1px var(--tui-theme-primary-base); background:var(--tui-color-bg); }
     .tgbl-schem .snode[data-ghost] { border-style:dashed; opacity:.55; }
     .tgbl-schem .swire { flex:1 1 0; min-width:26px; height:1.5px; background:#9E9CF7; position:relative; }
     .tgbl-schem .swire em { position:absolute; top:-16px; left:50%; transform:translateX(-50%);
-      font-style:normal; font-size:11px; font-weight:600;
+      font-style:normal; font-size:var(--tgbl-micro); font-weight:600;
       color:var(--tui-color-fg-muted); white-space:nowrap; }
 
     .tgbl-skip { color: var(--tui-color-fg-muted); background: none; border: 0;
-      cursor: pointer; padding: 0; font-size: 13px; font-family: inherit;
+      cursor: pointer; padding: 0; font-size: var(--tgbl-body); font-family: inherit;
       text-decoration: underline; text-underline-offset: 3px;
       text-decoration-color: var(--tui-color-border); }
     .tgbl-skip:hover { color: var(--tui-color-fg); text-decoration-color: currentColor; }
@@ -716,7 +925,7 @@ function render_wizard($plugin) {
     @media (max-width: 782px) {
       .tgbl-wizard { --tgbl-pad: 24px; }
       .tgbl-wizard__well { padding: 20px 14px 40px; }
-      .tgbl-wizard h2 { font-size: 24px; }
+      .tgbl-wizard { --tgbl-display: 22px; }
       .tgbl-cols { flex-direction: column; }
       .tgbl-aside { flex: 1 1 auto; border-left: 0; border-top: 1px solid var(--tui-color-divider);
         padding-left: 0; padding-top: 16px; width: 100%; }
@@ -801,6 +1010,20 @@ function render_wizard($plugin) {
   /* is-selected follows the native input without a framework — one delegated
      listener covers every option card the page renders. */
   document.addEventListener('change', function (e) {
+    var toggle = e.target.closest && e.target.closest('.tgbl-toggle');
+    if (toggle) {
+      var row = toggle.closest('.tgbl-toggle-row');
+      if (row) row.classList.toggle('is-on', toggle.checked);
+      var out = document.querySelector('[data-tgbl-estimate]');
+      if (out) {
+        var total = 0;
+        document.querySelectorAll('.tgbl-toggle[data-count]').forEach(function (t) {
+          if (t.checked) total += parseInt(t.dataset.count, 10) || 0;
+        });
+        out.textContent = total.toLocaleString();
+      }
+      return;
+    }
     var input = e.target.closest && e.target.closest('.tui-option-card__input');
     if (!input) return;
     document.querySelectorAll('.tui-option-card__input[name="' + input.name + '"]').forEach(function (i) {
