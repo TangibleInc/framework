@@ -393,7 +393,10 @@ function render_option_card($args) {
  * a logo doing someone else's job.
  */
 function render_lockup($plugin) {
-  $logo  = $plugin->logo ?? '';
+  // Behind an SSL proxy plugins_url() can answer http:// while the page is
+  // served over https — the logo would then be blocked as mixed content and
+  // the top bar would sit empty. Same normalisation the stylesheet URL needs.
+  $logo  = $plugin->logo ? set_url_scheme($plugin->logo) : '';
   $title = trim(str_ireplace(['tangible ', ' plugin'], ['', ''], $plugin->title ?? $plugin->name));
   if ($logo) {
     ?>
