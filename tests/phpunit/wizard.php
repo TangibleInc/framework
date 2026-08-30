@@ -98,7 +98,12 @@ class Core_Steps_TestCase extends \WP_UnitTestCase {
     parent::setUp();
     $this->plugin = \tangible\framework\register_plugin([
       'name' => 'coretest', 'title' => 'Core Test', 'version' => '1.0.0',
+      // Both halves of a licensed build: cloud_id is the plugin's own
+      // declaration, activation_url is what the updater's register_plugin()
+      // gives it. A fixture with only the first models a plugin that could
+      // never activate — see test_licence_is_absent_without_an_activation_url.
       'cloud_id' => 'coretest',
+      'activation_url' => 'https://cloud.tangible.one/api/edd',
     ]);
     onboarding\register_wizard($this->plugin);
   }
@@ -132,6 +137,23 @@ class Core_Steps_TestCase extends \WP_UnitTestCase {
     $plan = onboarding\resolve_plan('freetest', onboarding\build_facts('freetest'));
     $this->assertNotContains('licence', array_column($plan['steps'], 'id'));
     delete_option('tangible_onboarding_state__freetest');
+  }
+
+  /**
+   * The updater's functions can be on the site because ANOTHER plugin shipped
+   * them — that does not make THIS plugin activatable. activation_url is only
+   * defaulted inside the updater's own register_plugin(), so a plugin that
+   * never registered with it would post its key to a null URL and take the
+   * request down. Offering the step at all is the bug.
+   */
+  function test_licence_is_absent_without_an_activation_url() {
+    $unregistered = \tangible\framework\register_plugin([
+      'name' => 'noactivation', 'title' => 'No Activation', 'cloud_id' => 'noactivation',
+    ]);
+    onboarding\register_wizard($unregistered);
+    $plan = onboarding\resolve_plan('noactivation', onboarding\build_facts('noactivation'));
+    $this->assertNotContains('licence', array_column($plan['steps'], 'id'));
+    delete_option('tangible_onboarding_state__noactivation');
   }
 
   function test_consent_refuses_half_an_answer() {

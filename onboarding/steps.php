@@ -206,11 +206,24 @@ add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name =
     ? framework\get_plugin($plugin_name) : null;
 
   // ── Licence: always first, never skippable, absent on free builds ────────
-  // "Free build" has two spellings: no cloud_id, or no updater module at all —
-  // the wp.org-distributed build deliberately ships without the updater (two
-  // things claiming one slug), and a licence ask with no activation machinery
-  // behind it could only end in an error.
-  if (!empty($plugin->cloud_id) && function_exists('tangible\\updater\\get_license_key')) {
+  // A licence ask with no activation machinery behind it could only end in an
+  // error, and "no machinery" has three spellings:
+  //
+  //   no cloud_id            — a free build, nothing to activate
+  //   no updater functions   — the wp.org build deliberately ships without the
+  //                            updater (two things claiming one slug)
+  //   no activation_url      — THIS plugin never registered with the updater,
+  //                            even though another plugin on the site loaded
+  //                            its functions. activation_url is only defaulted
+  //                            inside the updater's own register_plugin(), so
+  //                            without it the handler posts the key to null
+  //                            and takes the whole request down with it.
+  //
+  // function_exists() answers a site-wide question; activation_url answers the
+  // per-plugin one, which is the question that actually matters here. Same
+  // predicate attempt_consent_sync() uses above, for the same reason.
+  if (!empty($plugin->cloud_id) && !empty($plugin->activation_url)
+      && function_exists('tangible\\updater\\get_license_key')) {
     $steps[] = [
       'id'     => 'licence',
       'label'  => 'licence',
