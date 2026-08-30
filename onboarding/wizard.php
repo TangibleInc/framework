@@ -587,7 +587,7 @@ function render_wizard($plugin) {
         "Helvetica Neue", Arial, sans-serif;
       --tgbl-font-data: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
       --tgbl-modal: 960px;
-      --tgbl-pad: 40px;
+      --tgbl-pad: 32px;
 
       /* ----------------------------------------------------------------
          Seven roles, and nothing outside them.
@@ -620,7 +620,7 @@ function render_wizard($plugin) {
 
     /* Top strip — the design's breadcrumb line, plus the exit affordance. */
     .tgbl-wizard__topbar { display:flex; align-items:center; gap:10px;
-      padding: 14px 28px; background: var(--tui-color-bg);
+      padding: 12px 28px; background: var(--tui-color-bg);
       border-bottom: 1px solid var(--tui-color-divider); }
     .tgbl-wizard__logo { display: block; height: 22px; width: auto; flex: none; }
     .tgbl-wizard__logo.is-plugin { height: 26px; }
@@ -630,13 +630,13 @@ function render_wizard($plugin) {
     .tgbl-wizard__exit { margin-left: auto; }
 
     /* The well holds one modal, centred, at the design's fixed measure. */
-    .tgbl-wizard__well { flex: 1; padding: 32px 24px 56px;
+    .tgbl-wizard__well { flex: 1; padding: 20px 24px 28px;
       display: flex; justify-content: center; align-items: flex-start; }
     .tgbl-wizard__modal { width: 100%; max-width: var(--tgbl-modal);
       background: var(--tui-color-bg); border: 1px solid var(--tui-color-divider);
       border-radius: 16px; padding: var(--tgbl-pad);
       box-shadow: 0 0.7px 1px rgba(0,0,0,.05), 0 2.7px 3.8px -0.2px rgba(0,0,0,.06);
-      display: flex; flex-direction: column; gap: 32px; }
+      display: flex; flex-direction: column; gap: 20px; }
     /* Steps author their own markup with a margin-bottom convention, so the
        body is a block with a default flow rhythm rather than a flex gap —
        a gap would stack on top of those margins and pull the heading block
@@ -655,8 +655,10 @@ function render_wizard($plugin) {
 
     /* Step strip ---------------------------------------------------------- */
     .tgbl-steps { display: flex; flex-direction: column; gap: 12px; }
-    .tgbl-steps__list { display: flex; flex-wrap: wrap; gap: 8px 20px;
-      margin: 0; padding: 0; list-style: none; }
+    /* Grid, not wrap: when the rail needs a second row the columns still line
+       up, instead of eight items on one line and two trailing on the next. */
+    .tgbl-steps__list { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px 16px; margin: 0; padding: 0; list-style: none; }
     .tgbl-steps__step { display: flex; align-items: center; gap: 7px; margin: 0;
       font-size: var(--tgbl-body); line-height: 1.2; color: var(--tui-color-fg-muted); }
     .tgbl-steps__disc { flex: none; width: 21px; height: 21px; border-radius: 50%;
@@ -694,7 +696,7 @@ function render_wizard($plugin) {
        gap below — steps no longer hand-tune this per instance. */
     .tgbl-wizard .lbl, .tgbl-wizard .eyebrow { display: block; font-size: var(--tgbl-label);
       font-weight: 600; letter-spacing: .05em; text-transform: uppercase;
-      color: var(--tui-color-fg-muted); margin: 28px 0 10px; }
+      color: var(--tui-color-fg-muted); margin: 22px 0 9px; }
     .tgbl-wizard__body > .lbl:first-child { margin-top: 0; }
     .tgbl-wizard .lbl + *, .tgbl-wizard .eyebrow + * { margin-top: 0; }
 
@@ -734,7 +736,7 @@ function render_wizard($plugin) {
 
     /* Footer sits inside the modal, above the fold of its own card. */
     .tgbl-wizard__footer { display: flex; align-items: center; gap: 14px;
-      padding-top: 24px; border-top: 1px solid var(--tui-color-divider); }
+      padding-top: 20px; border-top: 1px solid var(--tui-color-divider); }
 
     /* Option cards — the design's card is roomier than TUI's default. */
     .tgbl-wizard .tui-option-card { --tui-option-card-padding: 14px 16px;
@@ -772,7 +774,7 @@ function render_wizard($plugin) {
 
     /* Toggle rows — the design's Index step. A native checkbox wearing a
        track and a thumb, so the form still works with JS off. */
-    .tgbl-toggle-group { display: grid; gap: 10px; }
+    .tgbl-toggle-group { display: grid; gap: 8px; }
     .tgbl-toggle-group.is-cols-2 { grid-template-columns: repeat(2, 1fr); align-items: stretch; }
     @media (max-width: 860px) { .tgbl-toggle-group.is-cols-2 { grid-template-columns: 1fr; } }
 

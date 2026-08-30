@@ -323,7 +323,9 @@ add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name =
 
   $steps[] = [
     'id'     => 'consent',
-    'label'  => 'two optional things',
+    // The rail is a table of contents: short enough that eleven of them fit a
+    // row. The step's own heading still says "Two optional things".
+    'label'  => 'optional',
     'weight' => 20,
     'scope'  => 'account',
     'skippable' => false,   // "no" is a complete answer, which is why there is no skip
