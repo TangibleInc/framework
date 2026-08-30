@@ -176,9 +176,9 @@ function render_answer_pair($field, $question, $detail) {
   $id = esc_attr($field);
   $check_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10.687 16.567 18.14 3.99l1.72 1.02-8.547 14.423-7.382-5.111 1.138-1.644z" clip-rule="evenodd"/></svg>';
   ?>
-  <div style="margin-top:14px">
-    <p style="margin:0 0 3px; font-size:13.5px; font-weight:600"><?php echo esc_html($question); ?></p>
-    <p style="margin:0 0 10px; font-size:12.5px; color:var(--tui-color-fg-muted)"><?php echo esc_html($detail); ?></p>
+  <div class="tgbl-answer">
+    <p class="tgbl-answer__q"><?php echo esc_html($question); ?></p>
+    <p class="tgbl-answer__d"><?php echo esc_html($detail); ?></p>
     <div role="radiogroup" aria-label="<?php echo esc_attr($question); ?>" class="tui-option-card-group">
       <?php foreach ([ 'granted' => 'Yes', 'declined' => 'No' ] as $value => $label) : ?>
         <label class="tui-option-card is-row" data-tgbl-option>
@@ -224,9 +224,9 @@ add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name =
           ? \tangible\updater\get_license_key($plugin) : '';
         ?>
         <h2>Your licence key</h2>
-        <p>From your <a href="https://tangible.one/licensing" target="_blank" rel="noopener">tangible.one account</a>.
+        <p class="step-intro">From your <a href="https://tangible.one/licensing" target="_blank" rel="noopener">tangible.one account</a>.
            Identifies your account and unlocks updates for this site.</p>
-        <p><input type="text" name="license_key" class="regular-text code"
+        <p><input type="text" name="license_key" class="code"
                   value="<?php echo esc_attr($existing); ?>" placeholder="TGBL-…" /></p>
         <?php
       },
@@ -348,13 +348,13 @@ add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name =
         <table style="margin:10px 0 0; border-collapse:collapse">
           <?php foreach ($payload as $k => $v) : ?>
             <tr>
-              <td class="lbl" style="padding:2px 14px 2px 0; font-size:9.5px"><?php echo esc_html($k); ?></td>
+              <td class="lbl tgbl-factkey"><?php echo esc_html($k); ?></td>
               <td class="code" style="padding:2px 0"><?php echo esc_html($v); ?></td>
             </tr>
           <?php endforeach; ?>
         </table>
         <?php if ($paid) : ?>
-          <p class="whisper" style="margin:8px 0 0">Version and environment basics (WordPress, PHP,
+          <p class="whisper">Version and environment basics (WordPress, PHP,
              plugin version) are already shared under your licence terms — this question is about
              the rest.</p>
         <?php endif;

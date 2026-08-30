@@ -138,6 +138,12 @@ function register_wizard($plugin) {
     if ($hook) {
       add_action('load-' . $hook, function () use ($plugin) {
         $GLOBALS['title'] = ($plugin->title ?? $plugin->name) . ' setup';
+        // The wizard is a takeover: the CSS hides the admin bar, but WP still
+        // emits its markup and a remote gravatar request for it. Inside
+        // wp-admin the `show_admin_bar` filter is never consulted
+        // (is_admin_bar_showing() returns true outright for is_admin()), so
+        // the render action is what has to go.
+        remove_action('in_admin_header', 'wp_admin_bar_render', 0);
       });
     }
   });
@@ -291,23 +297,46 @@ function render_mark($filled, $current_at = -1, $size = 'md', $done = false) {
   echo '<i' . ($done ? ' data-done' : '') . '></i></span>';
 }
 
-/** Server-rendered .tui-stepper — the same DOM the TUI component emits. */
+/**
+ * The wizard's step strip — Cristian's Plugin Wizard geometry: a numbered
+ * disc per step, a checkmark once done, and one progress bar under the row.
+ *
+ * TUI's own <Stepper> is the dot-rail variant (small marker, no numerals);
+ * this numbered variant does not exist there yet, so the classes below are
+ * wizard-local (.tgbl-steps) rather than pretending to be .tui-stepper DOM.
+ * If TUI grows a `numbered` variant, this renderer is what it should emit.
+ */
 function render_stepper($rail, $current_id) {
-  $map = [ 'done' => 'complete', 'skipped' => 'skipped', 'current' => 'current', 'pending' => 'upcoming' ];
+  $check = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" '
+    . 'stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    . '<path d="M20 6 9 17l-5-5"/></svg>';
+  $total = count($rail);
+  $reached = 0;
+  foreach ($rail as $i => $r) {
+    if (in_array($r['state'], ['done', 'skipped'], true)) $reached = $i + 1;
+    if ($r['id'] === $current_id) { $reached = $i; break; }
+  }
+  // The bar fills to the middle of the current disc, so it reads as "here",
+  // not "this step is finished".
+  $pct = $total > 1 ? max(0, min(100, ($reached + 0.5) / $total * 100)) : 100;
   ?>
-  <nav aria-label="Setup progress" class="tui-stepper">
-    <ol class="tui-stepper__list">
-      <?php foreach ($rail as $r) :
-        $status = $map[$r['state']] ?? 'upcoming';
-        $suffix = $status === 'complete' ? 'complete' : ($status === 'skipped' ? 'skipped' : ''); ?>
-        <li class="tui-stepper__step" data-status="<?php echo esc_attr($status); ?>"
-            <?php if ($status === 'current') echo 'aria-current="step"'; ?>>
-          <span class="tui-stepper__marker" aria-hidden="true"></span>
-          <span class="tui-stepper__label"><?php echo esc_html(ucfirst($r['label'])); ?></span>
+  <nav aria-label="Setup progress" class="tgbl-steps">
+    <ol class="tgbl-steps__list">
+      <?php foreach ($rail as $i => $r) :
+        $state = $r['state'];
+        $suffix = $state === 'done' ? 'complete' : ($state === 'skipped' ? 'skipped' : ''); ?>
+        <li class="tgbl-steps__step" data-state="<?php echo esc_attr($state); ?>"
+            <?php if ($r['id'] === $current_id) echo 'aria-current="step"'; ?>>
+          <span class="tgbl-steps__disc" aria-hidden="true"><?php
+            echo $state === 'done' ? $check : ($i + 1); ?></span>
+          <span class="tgbl-steps__label"><?php echo esc_html(ucfirst($r['label'])); ?></span>
           <?php if ($suffix) : ?><span class="tui-visually-hidden">, <?php echo esc_html($suffix); ?></span><?php endif; ?>
         </li>
       <?php endforeach; ?>
     </ol>
+    <div class="tgbl-steps__track" aria-hidden="true">
+      <span class="tgbl-steps__fill" style="width:<?php echo round($pct, 2); ?>%"></span>
+    </div>
   </nav>
   <?php
 }
@@ -399,7 +428,16 @@ function render_wizard($plugin) {
   ?>
   <link rel="stylesheet" href="<?php echo esc_url($css_url); ?>" />
   <style>
-    <?php echo \tangible\design\font_faces_css(); ?>
+    /* ------------------------------------------------------------------
+       Wizard shell — Cristian's Plugin Wizard geometry (960 modal, 40
+       padding, 16 radius) on the native admin type stack.
+
+       No brand faces here. Recoleta / League Spartan / Space Mono are
+       licensed for Tangible's own sites, not for redistribution inside a
+       plugin ZIP, so the wizard that ships to customer sites uses the
+       system stack only — which is also what the design specifies.
+       ------------------------------------------------------------------ */
+
     /* Full-screen takeover: the wizard owns the page (Figma: no admin chrome). */
     html.wp-toolbar { padding-top: 0 !important; }
     #wpadminbar, #adminmenumain, #adminmenuback, #wpfooter,
@@ -407,50 +445,180 @@ function render_wizard($plugin) {
     #wpcontent, #wpbody-content { margin-left: 0 !important; padding: 0 !important; float: none; }
     #wpbody-content .tgbl-wizard { min-height: 100vh; }
 
-    .tgbl-wizard {
-      <?php echo \tangible\design\font_tokens_css(); ?>
-      display: flex; flex-direction: column;
-      background: var(--tui-color-bg);
-      color: var(--tui-color-fg);
-      font-size: 13px;
-    }
-    .tgbl-wizard__topbar { display:flex; align-items:center; gap:12px;
-      padding: 12px 28px; border-bottom: 1px solid var(--tui-color-border); }
-    .tgbl-wizard__lockup { font-family: var(--tgbl-font-label); font-size: 12px;
-      font-weight: 600; letter-spacing: .14em; text-transform: uppercase; }
-    .tgbl-wizard__lockup span { color: var(--tui-color-fg-muted); letter-spacing: .04em; }
-    .tgbl-wizard__exit { margin-left: auto; }
-    .tgbl-wizard__stepper-band { padding: 10px 28px;
-      border-bottom: 1px solid var(--tui-color-border); }
-    .tgbl-wizard__skipstrip { padding: 8px 28px; font-size: 12px;
-      color: var(--tui-color-fg-muted); border-bottom: 1px solid var(--tui-color-border); }
-    .tgbl-wizard__skipstrip a { color: var(--tui-theme-primary-base); }
-    .tgbl-wizard__well { flex: 1; background: var(--tui-color-bg-muted);
-      padding: 40px 28px 60px; display: flex; justify-content: center; align-items: flex-start; }
-    .tgbl-wizard__content { width: 100%; max-width: 760px; display: flex;
-      flex-direction: column; gap: 16px; }
-    .tgbl-wizard__card { background: var(--tui-color-bg-surface);
-      border: 1px solid var(--tui-color-border); border-radius: var(--tui-radius-md);
-      padding: 28px 32px; }
-    .tgbl-wizard__footer { display: flex; align-items: center; gap: 14px;
-      padding: 12px 28px; border-top: 1px solid var(--tui-color-border);
-      background: var(--tui-color-bg); position: sticky; bottom: 0; }
+    /* ------------------------------------------------------------------
+       Token pinning.
 
-    /* The step heading voices: Recoleta display, mono data, native sentences. */
-    .tgbl-wizard h2 { font-family: var(--tgbl-font-display); font-size: 26px;
-      font-weight: 600; line-height: 1.15; letter-spacing: -.008em; margin: 0 0 8px; padding: 0; }
-    .tgbl-wizard .step-intro { font-size: 14px; line-height: 1.68;
-      color: var(--tui-color-fg-muted); margin: 0 0 6px; max-width: 62ch; }
-    .tgbl-wizard p { font-size: 13.5px; line-height: 1.6; }
-    .tgbl-wizard .lbl { font-family: var(--tgbl-font-label); font-size: 10.5px; font-weight: 600;
-      letter-spacing: .14em; text-transform: uppercase; color: var(--tui-color-fg-muted); }
-    .tgbl-wizard .eyebrow { font-family: var(--tgbl-font-data); font-size: 10px; font-weight: 700;
-      letter-spacing: .18em; text-transform: uppercase; color: var(--tui-color-fg-muted); }
-    .tgbl-wizard .whisper { font-size: 11.5px; color: var(--tui-color-fg-muted); }
-    .tgbl-wizard .code, .tgbl-wizard input[type=text], .tgbl-wizard input[type=password] {
-      font-family: var(--tgbl-font-data); font-size: 12.5px; }
-    .tgbl-dbl { border: 0; border-top: 1px solid var(--tui-color-fg); border-bottom: 1px solid var(--tui-color-fg);
-      height: 3px; margin: 18px 0 16px; opacity: .75; }
+       The host plugin ships its own WP-native TUI theme at
+       `.wp-admin .tui-interface` (2px radii, 13px controls, and
+       --tui-color-bg: #f0f0f0 — which turns every "white" surface grey).
+       That is right for its settings screens and wrong for a full-page
+       takeover, and it outranks :where(.tui-interface), so the wizard
+       has to state its own surfaces at matching specificity.
+
+       The accent is deliberately NOT pinned: it stays the WP admin theme
+       colour, which is what the design draws and what the rest of the
+       plugin already wears.
+       ------------------------------------------------------------------ */
+    .wp-admin .tui-interface.tgbl-wizard {
+      --tui-color-bg: #fff;
+      --tui-color-bg-surface: #fff;
+      --tui-color-bg-elevated: #fff;
+      --tui-color-bg-muted: #f6f7f7;
+      --tui-color-fg: #1e1e1e;
+      --tui-color-fg-secondary: #3c434a;
+      --tui-color-fg-muted: #646970;
+      --tui-color-border: #dcdcde;
+      --tui-color-divider: #e6e7e8;
+      --tui-color-fill: #eef0f1;
+      --tui-color-fill-subtle: #f0f0f1;
+      /* Selection reads as a tint, not a fill — the host theme's
+         primary-subtlest (#c5d9ed) is a mid blue and swamps a selected row. */
+      --tui-theme-primary-subtlest: #eef2ff;
+      --tui-theme-primary-subtle: #dbe3fe;
+      --tui-radius-md: 10px;
+      --tui-button-radius: 6px;
+      --tui-input-radius: 6px;
+      --tui-select-trigger-radius: 6px;
+      --tui-select-content-radius: 8px;
+      --tui-card-radius: 12px;
+      --tui-notice-radius: 8px;
+      --tui-typography-size: 14px;
+      --tui-control-height-md: 40px;
+      --tui-control-height-lg: 44px;
+      --tui-control-font-size-md: 14px;
+      --tui-control-font-size-lg: 14px;
+      --tui-button-font-size: 14px;
+      --tui-button-font-weight: 500;
+    }
+
+    .tgbl-wizard {
+      --tgbl-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+        "Helvetica Neue", Arial, sans-serif;
+      --tgbl-font-data: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      --tgbl-modal: 960px;
+      --tgbl-pad: 40px;
+      display: flex; flex-direction: column;
+      background: var(--tui-color-bg-muted);
+      color: var(--tui-color-fg);
+      font-family: var(--tgbl-font);
+      font-size: 14px; line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+    .tgbl-wizard *, .tgbl-wizard *::before, .tgbl-wizard *::after { box-sizing: border-box; }
+
+    /* Top strip — the design's breadcrumb line, plus the exit affordance. */
+    .tgbl-wizard__topbar { display:flex; align-items:center; gap:10px;
+      padding: 14px 28px; background: var(--tui-color-bg);
+      border-bottom: 1px solid var(--tui-color-divider); }
+    .tgbl-wizard__lockup { font-size: 13px; font-weight: 600; letter-spacing: .04em;
+      text-transform: uppercase; }
+    .tgbl-wizard__lockup span { color: var(--tui-color-fg-muted); font-weight: 500; }
+    .tgbl-wizard__exit { margin-left: auto; }
+
+    /* The well holds one modal, centred, at the design's fixed measure. */
+    .tgbl-wizard__well { flex: 1; padding: 32px 24px 56px;
+      display: flex; justify-content: center; align-items: flex-start; }
+    .tgbl-wizard__modal { width: 100%; max-width: var(--tgbl-modal);
+      background: var(--tui-color-bg); border: 1px solid var(--tui-color-divider);
+      border-radius: 16px; padding: var(--tgbl-pad);
+      box-shadow: 0 0.7px 1px rgba(0,0,0,.05), 0 2.7px 3.8px -0.2px rgba(0,0,0,.06);
+      display: flex; flex-direction: column; gap: 32px; }
+    /* Steps author their own markup with a margin-bottom convention, so the
+       body is a block with a default flow rhythm rather than a flex gap —
+       a gap would stack on top of those margins and pull the heading block
+       apart. Anything with its own inline margin still wins. */
+    .tgbl-wizard__body { display: block; }
+    .tgbl-wizard__body > * + *,
+    .tgbl-wizard .tgbl-cols > .main > * + *,
+    .tgbl-wizard .tgbl-flow > * + * { margin-top: 20px; }
+    /* A trailing note after a card group is a caption for it, not a new
+       block — but it still needs air, or it reads as card overflow. */
+    .tgbl-wizard__body > .tui-option-card-group + .whisper,
+    .tgbl-wizard__body > .tui-option-card-group + p { margin-top: 18px; }
+    .tgbl-wizard .tgbl-flow > [hidden] { display: none; }
+
+    /* Step strip ---------------------------------------------------------- */
+    .tgbl-steps { display: flex; flex-direction: column; gap: 12px; }
+    .tgbl-steps__list { display: flex; flex-wrap: wrap; gap: 8px 20px;
+      margin: 0; padding: 0; list-style: none; }
+    .tgbl-steps__step { display: flex; align-items: center; gap: 7px; margin: 0;
+      font-size: 13px; line-height: 1.2; color: var(--tui-color-fg-muted); }
+    .tgbl-steps__disc { flex: none; width: 21px; height: 21px; border-radius: 50%;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums;
+      background: var(--tui-color-fill); color: var(--tui-color-fg-muted); }
+    .tgbl-steps__step[data-state="done"] { color: var(--tui-color-fg); }
+    .tgbl-steps__step[data-state="done"] .tgbl-steps__disc {
+      background: var(--tui-theme-success-subtle); color: var(--tui-theme-success-stronger); }
+    .tgbl-steps__step[data-state="skipped"] .tgbl-steps__disc {
+      background: transparent; color: var(--tui-color-fg-muted);
+      box-shadow: inset 0 0 0 1px var(--tui-color-border); }
+    .tgbl-steps__step[aria-current="step"] { color: var(--tui-color-fg); font-weight: 600; }
+    .tgbl-steps__step[aria-current="step"] .tgbl-steps__disc {
+      background: var(--tui-theme-primary-base); color: var(--tui-color-fg-on-accent); }
+    .tgbl-steps__track { height: 4px; border-radius: 999px;
+      background: var(--tui-color-fill-subtle); overflow: hidden; }
+    .tgbl-steps__fill { display: block; height: 100%; border-radius: inherit;
+      background: var(--tui-theme-primary-base);
+      transition: width var(--tui-motion-duration) var(--tui-motion-timing); }
+
+    /* The skipped-step explanations, as one quiet line under the strip. */
+    .tgbl-wizard__skipstrip { font-size: 13px; color: var(--tui-color-fg-muted);
+      margin: -12px 0 0; }
+    .tgbl-wizard__skipstrip a { color: var(--tui-theme-primary-base); }
+
+    /* Type scale ---------------------------------------------------------- */
+    .tgbl-wizard h2 { font-family: inherit; font-size: 30px; font-weight: 700;
+      line-height: 1.2; letter-spacing: -.018em; margin: 0; padding: 0;
+      color: var(--tui-color-fg); }
+    .tgbl-wizard .step-intro { font-size: 15px; line-height: 1.55;
+      color: var(--tui-color-fg-muted); margin: 8px 0 0; max-width: 76ch; }
+    .tgbl-wizard p { font-size: 14px; line-height: 1.55; margin: 0; }
+    /* Section labels open a block, so they carry the air above and a tight
+       gap below — steps no longer hand-tune this per instance. */
+    .tgbl-wizard .lbl, .tgbl-wizard .eyebrow { display: block; font-size: 12px;
+      font-weight: 600; letter-spacing: .05em; text-transform: uppercase;
+      color: var(--tui-color-fg-muted); margin: 28px 0 10px; }
+    .tgbl-wizard__body > .lbl:first-child { margin-top: 0; }
+    .tgbl-wizard .lbl + *, .tgbl-wizard .eyebrow + * { margin-top: 0; }
+
+    /* A labelled field: <p class="tgbl-field"><label>Name<br/><input/></label></p> */
+    .tgbl-wizard .tgbl-field { margin-top: 16px; }
+    .tgbl-wizard .tgbl-field label { font-weight: 600; font-size: 13px; }
+    .tgbl-wizard .tgbl-field input, .tgbl-wizard .tgbl-field select { margin-top: 6px; }
+    .tgbl-wizard .tgbl-field__hint { display: block; margin-top: 6px; }
+
+    /* Consent question pairs (framework steps.php) */
+    .tgbl-wizard .tgbl-answer { margin-top: 24px; }
+    .tgbl-wizard .tgbl-answer__q { font-size: 15px; font-weight: 600; margin: 0 0 4px; }
+    .tgbl-wizard .tgbl-answer__d { font-size: 13px; color: var(--tui-color-fg-muted);
+      margin: 0 0 12px; }
+    .tgbl-wizard .tgbl-factkey { padding: 3px 16px 3px 0; font-size: 11px;
+      margin: 0; letter-spacing: .05em; }
+    .tgbl-wizard .whisper { font-size: 13px; color: var(--tui-color-fg-muted); }
+    .tgbl-wizard .code { font-family: var(--tgbl-font-data); font-size: 13px; }
+    .tgbl-wizard label { font-size: 14px; }
+    .tgbl-wizard strong, .tgbl-wizard b { font-weight: 600; }
+    .tgbl-wizard a { color: var(--tui-theme-primary-base); }
+    /* WP admin underlines anchors; a link-as-button must not wear it. */
+    .tgbl-wizard a.tui-button, .tgbl-wizard a.tui-button:hover { text-decoration: none; }
+
+    /* Fields fill the measure — a 300px input inside a 880px card is the
+       misalignment the design never has. */
+    .tgbl-wizard input[type=text], .tgbl-wizard input[type=password],
+    .tgbl-wizard input[type=email], .tgbl-wizard input[type=url],
+    .tgbl-wizard select, .tgbl-wizard textarea { width: 100%; max-width: 100%;
+      font-family: inherit; font-size: 14px; }
+    .tgbl-wizard .tui-field, .tgbl-wizard .tui-input-wrap { width: 100%; }
+
+    /* Steps emit .tgbl-dbl between the heading block and the controls.
+       The design separates those with air, not a rule, so this is now a
+       spacer — the double hairline was a leftover from the DDD artifacts. */
+    .tgbl-dbl { border: 0; height: 0; margin: 12px 0 0; }
+
+    /* Footer sits inside the modal, above the fold of its own card. */
+    .tgbl-wizard__footer { display: flex; align-items: center; gap: 14px;
+      padding-top: 24px; border-top: 1px solid var(--tui-color-divider); }
 
     /* the mark (top bar brand element) */
     .tgbl-mark { --u:7px; display:inline-grid; gap:1px; flex:none;
@@ -463,34 +631,94 @@ function render_wizard($plugin) {
     .tgbl-mark i[data-now] { background:var(--tui-theme-primary-base); }
     .tgbl-mark i[data-done] { background:#FD9597; }
 
+    /* Option cards — the design's card is roomier than TUI's default. */
+    .tgbl-wizard .tui-option-card { --tui-option-card-padding: 18px;
+      --tui-option-card-radius: 10px; }
+    .tgbl-wizard .tui-option-card__title { font-size: 15px; }
+    .tgbl-wizard .tui-option-card__description,
+    .tgbl-wizard .tui-option-card__bullet { font-size: 13px; font-weight: 400; }
+    .tgbl-wizard .tui-option-card-group { --tui-option-card-group-gap: 14px; }
+
+    /* Build step — the design's progress panel, log and preview.
+       These live here rather than inline in the step so the step markup
+       carries no colours or measures of its own. */
+    .tgbl-build__panel { border: 1px solid var(--tui-color-divider); border-radius: 10px;
+      background: var(--tui-color-bg-surface); padding: 18px 20px; }
+    .tgbl-build__head { display: flex; align-items: baseline; gap: 12px; }
+    .tgbl-build__title { font-size: 14px; font-weight: 600; }
+    .tgbl-build__pct { margin-left: auto; font-size: 13px; font-weight: 600;
+      color: var(--tui-theme-primary-base); font-variant-numeric: tabular-nums; }
+    .tgbl-build__track { margin-top: 12px; height: 8px; border-radius: 999px;
+      background: var(--tui-color-fill-subtle); overflow: hidden; }
+    .tgbl-build__fill { display: block; height: 100%; width: 0%; border-radius: inherit;
+      background: var(--tui-theme-primary-base); transition: width .4s ease; }
+    .tgbl-build__count { margin-top: 10px; font-size: 13px; color: var(--tui-color-fg-muted);
+      font-variant-numeric: tabular-nums; }
+    .tgbl-build__log { list-style: none; margin: 0; padding: 14px 16px; border-radius: 10px;
+      background: #1d2327; color: #c3c4c7; font-family: var(--tgbl-font-data);
+      font-size: 12.5px; line-height: 1.9; max-height: 190px; overflow-y: auto; }
+    .tgbl-build__log li { margin: 0; }
+    .tgbl-build__sample { border: 1px solid var(--tui-color-divider); border-radius: 10px;
+      padding: 16px 20px; }
+    .tgbl-build__sample .lbl { margin-top: 0; }
+
+    /* Done step — the design's centred finish: a mark, the claim, the two
+       ways onward. Anything conditional (staging paused, global search)
+       stays left-aligned below, because a notice is not a celebration. */
+    .tgbl-done { text-align: center; padding: 8px 0 4px; }
+    .tgbl-done__mark { display: inline-flex; align-items: center; justify-content: center;
+      width: 60px; height: 60px; border-radius: 50%; margin-bottom: 20px;
+      background: var(--tui-theme-success-subtle); color: var(--tui-theme-success-stronger); }
+    .tgbl-done .step-intro { margin-left: auto; margin-right: auto; }
+    .tgbl-done__actions { display: flex; flex-direction: column; align-items: center;
+      gap: 10px; margin-top: 24px; }
+    .tgbl-done__actions .tui-button { min-width: 280px; justify-content: center; }
+
+    .tgbl-wizard .tgbl-notice__p { margin: 0 0 10px; }
+    /* No margin reset here — that would out-specify the body's flow rhythm
+       and jam the list under its heading. */
+    .tgbl-wizard .tgbl-list { list-style: disc; padding-left: 20px; font-size: 14px;
+      line-height: 1.7; margin-bottom: 0; }
+    .tgbl-wizard .tgbl-list li + li { margin-top: 4px; }
+
     /* the aside slot — content + facts panel, unchanged contract */
-    .tgbl-cols { display:flex; gap:30px; align-items:flex-start; }
+    .tgbl-cols { display:flex; gap:32px; align-items:flex-start; }
     .tgbl-cols .main { flex:1 1 auto; min-width:0; }
-    .tgbl-aside { flex:0 0 250px; border-left:1px solid var(--tui-color-border); padding-left:20px; }
-    .tgbl-aside dl { display:grid; grid-template-columns:1fr auto; gap:5px 10px; font-size:12.5px; margin:0; }
-    .tgbl-aside dt { font-family:var(--tgbl-font-label); font-size:9.5px; font-weight:600;
-      letter-spacing:.14em; text-transform:uppercase; color:var(--tui-color-fg-muted); }
-    .tgbl-aside dd { margin:0; text-align:right; font-family:var(--tgbl-font-data); font-size:11.5px; }
+    .tgbl-aside { flex:0 0 240px; border-left:1px solid var(--tui-color-divider); padding-left:24px; }
+    .tgbl-aside dl { display:grid; grid-template-columns:1fr auto; gap:6px 12px; font-size:13px; margin:0; }
+    .tgbl-aside dt { font-size:12px; font-weight:600; color:var(--tui-color-fg-muted); }
+    .tgbl-aside dd { margin:0; text-align:right; font-variant-numeric: tabular-nums;
+      font-weight:600; font-size:13px; }
 
     /* the schematic — hairlines and boxes, no illustration */
-    .tgbl-schem { display:flex; align-items:center; margin:14px 0 4px; }
-    .tgbl-schem .snode { border:1px solid var(--tui-color-border); border-radius:3px;
-      background:var(--tui-color-bg-muted); padding:8px 12px; min-width:104px; text-align:center; font-size:12px; }
-    .tgbl-schem .snode b { display:block; font-size:12.5px; }
-    .tgbl-schem .snode .sk { font-family:var(--tgbl-font-label); font-size:9px; font-weight:600;
-      letter-spacing:.1em; text-transform:uppercase; color:var(--tui-color-fg-muted); }
+    .tgbl-schem { display:flex; align-items:center; margin:8px 0 4px; }
+    .tgbl-schem .snode { border:1px solid var(--tui-color-border); border-radius:8px;
+      background:var(--tui-color-bg-surface); padding:10px 14px; min-width:110px;
+      text-align:center; font-size:13px; }
+    .tgbl-schem .snode b { display:block; font-size:13px; font-weight:600; }
+    .tgbl-schem .snode .sk { font-size:11px; font-weight:600; color:var(--tui-color-fg-muted); }
     .tgbl-schem .snode[data-on] { border-color:var(--tui-theme-primary-base);
-      box-shadow:inset 0 0 0 1px var(--tui-theme-primary-base); background:var(--tui-color-bg-surface); }
+      box-shadow:inset 0 0 0 1px var(--tui-theme-primary-base); background:var(--tui-color-bg); }
     .tgbl-schem .snode[data-ghost] { border-style:dashed; opacity:.55; }
     .tgbl-schem .swire { flex:1 1 0; min-width:26px; height:1.5px; background:#9E9CF7; position:relative; }
     .tgbl-schem .swire em { position:absolute; top:-16px; left:50%; transform:translateX(-50%);
-      font-family:var(--tgbl-font-label); font-style:normal; font-size:9px; font-weight:600;
-      letter-spacing:.1em; text-transform:uppercase; color:var(--tui-color-fg-muted); white-space:nowrap; }
+      font-style:normal; font-size:11px; font-weight:600;
+      color:var(--tui-color-fg-muted); white-space:nowrap; }
 
     .tgbl-skip { color: var(--tui-color-fg-muted); background: none; border: 0;
-      border-bottom: 1px dashed var(--tui-color-border); cursor: pointer; padding: 0 0 1px;
-      font-size: 12.5px; font-family: var(--tgbl-font-body); }
-    .tgbl-skip:hover { color: var(--tui-color-fg); border-bottom-color: var(--tui-color-fg-muted); }
+      cursor: pointer; padding: 0; font-size: 13px; font-family: inherit;
+      text-decoration: underline; text-underline-offset: 3px;
+      text-decoration-color: var(--tui-color-border); }
+    .tgbl-skip:hover { color: var(--tui-color-fg); text-decoration-color: currentColor; }
+
+    @media (max-width: 782px) {
+      .tgbl-wizard { --tgbl-pad: 24px; }
+      .tgbl-wizard__well { padding: 20px 14px 40px; }
+      .tgbl-wizard h2 { font-size: 24px; }
+      .tgbl-cols { flex-direction: column; }
+      .tgbl-aside { flex: 1 1 auto; border-left: 0; border-top: 1px solid var(--tui-color-divider);
+        padding-left: 0; padding-top: 16px; width: 100%; }
+    }
   </style>
   <div class="tui-interface tgbl-wizard">
     <header class="tgbl-wizard__topbar">
@@ -500,38 +728,37 @@ function render_wizard($plugin) {
          href="<?php echo esc_url(admin_url('admin.php?page=tangible-home')); ?>">Exit setup</a>
     </header>
 
-    <div class="tgbl-wizard__stepper-band">
-      <?php render_stepper($plan['rail'], $plan['current']); ?>
-    </div>
-
-    <?php if ($skip_sentences) : ?>
-      <div class="tgbl-wizard__skipstrip"><?php echo implode(' ', $skip_sentences); ?>
-        <a href="https://tangible.one/account" target="_blank" rel="noopener">Manage in your account</a>.</div>
-    <?php endif; ?>
-
     <?php if ($all_done) : ?>
       <main class="tgbl-wizard__well">
-        <div class="tgbl-wizard__content">
-          <div class="tgbl-wizard__card">
-            <p class="eyebrow" style="margin:0 0 6px">setup · complete</p>
+        <div class="tgbl-wizard__modal">
+          <?php render_stepper($plan['rail'], $plan['current']); ?>
+          <div class="tgbl-wizard__body">
             <h2>Nothing left to ask.</h2>
             <p class="step-intro">Everything is either configured or already on file.</p>
-            <p style="margin-top:18px">
-              <a class="tui-button is-theme-primary" href="<?php echo esc_url(admin_url('admin.php?page=tangible-home')); ?>">Go to Tangible Home</a>
-            </p>
           </div>
+          <footer class="tgbl-wizard__footer">
+            <span style="flex:1"></span>
+            <a class="tui-button is-theme-primary"
+               href="<?php echo esc_url(admin_url('admin.php?page=tangible-home')); ?>">Go to Tangible Home</a>
+          </footer>
         </div>
       </main>
     <?php else : ?>
-      <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"
-            style="display:flex; flex-direction:column; flex:1; min-height:0">
+      <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
         <?php wp_nonce_field('tangible_onboarding_step'); ?>
         <input type="hidden" name="action" value="tangible_onboarding_step" />
         <input type="hidden" name="plugin" value="<?php echo esc_attr($name); ?>" />
         <input type="hidden" name="step" value="<?php echo esc_attr($step['id']); ?>" />
 
         <main class="tgbl-wizard__well">
-          <div class="tgbl-wizard__content">
+          <div class="tgbl-wizard__modal">
+            <?php render_stepper($plan['rail'], $plan['current']); ?>
+
+            <?php if ($skip_sentences) : ?>
+              <p class="tgbl-wizard__skipstrip"><?php echo implode(' ', $skip_sentences); ?>
+                <a href="https://tangible.one/account" target="_blank" rel="noopener">Manage in your account</a>.</p>
+            <?php endif; ?>
+
             <?php $error = get_transient(step_error_key($name));
             if ($error) { delete_transient(step_error_key($name)); } ?>
             <?php if ($error) : ?>
@@ -540,12 +767,7 @@ function render_wizard($plugin) {
               </div>
             <?php endif; ?>
 
-            <p class="eyebrow" style="margin:0">
-              step <?php echo (int) $position; ?> of <?php echo (int) $total; ?> ·
-              <?php echo esc_html($step['label'] ?? str_replace('-', ' ', $step['id'])); ?>
-            </p>
-
-            <div class="tgbl-wizard__card">
+            <div class="tgbl-wizard__body">
               <?php
               $render = function () use ($step, $plugin, $facts) {
                 if (is_callable($step['render'])) call_user_func($step['render'], $plugin, $facts, $step);
@@ -558,18 +780,18 @@ function render_wizard($plugin) {
                 </div>
               <?php else : $render(); endif; ?>
             </div>
+
+            <footer class="tgbl-wizard__footer">
+              <span class="whisper">Nothing is saved until you continue.</span>
+              <span style="flex:1"></span>
+              <?php if ($step['skippable']) : ?>
+                <button class="tgbl-skip" type="submit" name="do" value="skip">Skip this step</button>
+              <?php endif; ?>
+              <button class="tui-button is-theme-primary" type="submit" name="do" value="continue"><?php
+                echo esc_html($step['submit_label'] ?? 'Continue'); ?></button>
+            </footer>
           </div>
         </main>
-
-        <footer class="tgbl-wizard__footer">
-          <span class="whisper">Nothing is saved until you continue.</span>
-          <span style="flex:1"></span>
-          <?php if ($step['skippable']) : ?>
-            <button class="tgbl-skip" type="submit" name="do" value="skip">Skip this step</button>
-          <?php endif; ?>
-          <button class="tui-button is-theme-primary" type="submit" name="do" value="continue"><?php
-            echo esc_html($step['submit_label'] ?? 'Continue'); ?></button>
-        </footer>
       </form>
     <?php endif; ?>
   </div>
