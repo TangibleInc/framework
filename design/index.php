@@ -50,6 +50,15 @@ function font_faces_css() {
   ";
 }
 
+/**
+ * The Tangible mark — the six-tile logo in the brand colours.
+ *
+ * The default lockup for any surface that has no plugin logo of its own.
+ */
+function logo_url() {
+  return set_url_scheme(trailingslashit(framework\module_url(__FILE__)) . 'tangible-logo.svg');
+}
+
 /** The three voices, as tokens the surfaces share. */
 function font_tokens_css() {
   return "

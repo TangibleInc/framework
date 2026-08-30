@@ -286,17 +286,6 @@ add_action('admin_post_tangible_onboarding_step', function () {
 // own DOM (classes and all), so the preact hydration layer can land on it
 // later without a redesign.
 
-/** The six-tile mark, filled to $filled; current tile in the host accent. */
-function render_mark($filled, $current_at = -1, $size = 'md', $done = false) {
-  $u = $size === 'lg' ? '9px' : ($size === 'sm' ? '5px' : '7px');
-  echo '<span class="tgbl-mark" style="--u:' . $u . '" aria-hidden="true">';
-  for ($i = 0; $i < 5; $i++) {
-    $attr = $i === $current_at ? ' data-now' : ($i < $filled ? ' data-on' : '');
-    echo "<i$attr></i>";
-  }
-  echo '<i' . ($done ? ' data-done' : '') . '></i></span>';
-}
-
 /**
  * The wizard's step strip — Cristian's Plugin Wizard geometry: a numbered
  * disc per step, a checkmark once done, and one progress bar under the row.
@@ -394,6 +383,33 @@ function render_option_card($args) {
 }
 
 /**
+ * The top bar's lockup.
+ *
+ * A plugin that ships its own logo wears it — SearchSync's is a full lockup,
+ * mark and wordmark together, so it needs no text beside it. Everything else
+ * gets the real Tangible mark (the six brand-coloured tiles) and its name in
+ * words. The six-tile progress mark this used to draw is retired: the stepper
+ * below already says where you are, and a logo that changes as you advance is
+ * a logo doing someone else's job.
+ */
+function render_lockup($plugin) {
+  $logo  = $plugin->logo ?? '';
+  $title = trim(str_ireplace(['tangible ', ' plugin'], ['', ''], $plugin->title ?? $plugin->name));
+  if ($logo) {
+    ?>
+    <img class="tgbl-wizard__logo is-plugin" src="<?php echo esc_url($logo); ?>"
+         alt="<?php echo esc_attr($plugin->title ?? $plugin->name); ?> setup" />
+    <?php
+    return;
+  }
+  ?>
+  <img class="tgbl-wizard__logo" src="<?php echo esc_url(\tangible\design\logo_url()); ?>"
+       alt="" aria-hidden="true" />
+  <span class="tgbl-wizard__lockup">Tangible <span><?php echo esc_html($title); ?></span></span>
+  <?php
+}
+
+/**
  * A toggle row — "index this, or don't".
  *
  * The design (Cristian's Index frame) puts a switch on the right of a titled
@@ -476,9 +492,6 @@ function render_wizard($plugin) {
   $facts = build_facts($name);
   $plan = onboarding\resolve_plan($name, $facts);
   $step = $plan['steps'][0] ?? null;
-  // The lockup strips the vendor prefix — the top bar already wears the mark.
-  $short_title = esc_html(trim(str_ireplace(['tangible ', ' plugin'], ['', ''], $plugin->title ?? $name)));
-
   $total = count($plan['rail']);
   $position = 0; $done = 0;
   foreach ($plan['rail'] as $idx => $r) {
@@ -609,6 +622,8 @@ function render_wizard($plugin) {
     .tgbl-wizard__topbar { display:flex; align-items:center; gap:10px;
       padding: 14px 28px; background: var(--tui-color-bg);
       border-bottom: 1px solid var(--tui-color-divider); }
+    .tgbl-wizard__logo { display: block; height: 22px; width: auto; flex: none; }
+    .tgbl-wizard__logo.is-plugin { height: 26px; }
     .tgbl-wizard__lockup { font-size: var(--tgbl-label); font-weight: 600;
       letter-spacing: .06em; text-transform: uppercase; }
     .tgbl-wizard__lockup span { color: var(--tui-color-fg-muted); font-weight: 600; }
@@ -720,17 +735,6 @@ function render_wizard($plugin) {
     /* Footer sits inside the modal, above the fold of its own card. */
     .tgbl-wizard__footer { display: flex; align-items: center; gap: 14px;
       padding-top: 24px; border-top: 1px solid var(--tui-color-divider); }
-
-    /* the mark (top bar brand element) */
-    .tgbl-mark { --u:7px; display:inline-grid; gap:1px; flex:none;
-      grid-template-columns:repeat(3,var(--u)); grid-template-rows:repeat(3,var(--u)); }
-    .tgbl-mark i { display:block; border-radius:1px; background:#dcdcde; }
-    .tgbl-mark i:nth-child(1){grid-area:1/1}.tgbl-mark i:nth-child(2){grid-area:1/2}
-    .tgbl-mark i:nth-child(3){grid-area:1/3}.tgbl-mark i:nth-child(4){grid-area:2/1}
-    .tgbl-mark i:nth-child(5){grid-area:2/3}.tgbl-mark i:nth-child(6){grid-area:3/2}
-    .tgbl-mark i[data-on] { background:#9E9CF7; }
-    .tgbl-mark i[data-now] { background:var(--tui-theme-primary-base); }
-    .tgbl-mark i[data-done] { background:#FD9597; }
 
     /* Option cards — the design's card is roomier than TUI's default. */
     .tgbl-wizard .tui-option-card { --tui-option-card-padding: 14px 16px;
@@ -933,8 +937,7 @@ function render_wizard($plugin) {
   </style>
   <div class="tui-interface tgbl-wizard">
     <header class="tgbl-wizard__topbar">
-      <?php render_mark($done, $position > 0 ? $position - 1 : -1, 'md', $all_done); ?>
-      <span class="tgbl-wizard__lockup">Tangible <span><?php echo $short_title; ?></span></span>
+      <?php render_lockup($plugin); ?>
       <a class="tui-button is-size-sm is-style-ghost is-theme-secondary tgbl-wizard__exit"
          href="<?php echo esc_url(admin_url('admin.php?page=tangible-home')); ?>">Exit setup</a>
     </header>
