@@ -528,9 +528,11 @@ function render_wizard($plugin) {
        a gap would stack on top of those margins and pull the heading block
        apart. Anything with its own inline margin still wins. */
     .tgbl-wizard__body { display: block; }
-    .tgbl-wizard__body > * + *,
-    .tgbl-wizard .tgbl-cols > .main > * + *,
-    .tgbl-wizard .tgbl-flow > * + * { margin-top: 20px; }
+    /* .step-intro is excluded: it belongs to the heading above it and keeps
+       its own tight 8px, in one-column and two-column steps alike. */
+    .tgbl-wizard__body > * + *:not(.step-intro),
+    .tgbl-wizard .tgbl-cols > .main > * + *:not(.step-intro),
+    .tgbl-wizard .tgbl-flow > * + *:not(.step-intro) { margin-top: 20px; }
     /* A trailing note after a card group is a caption for it, not a new
        block — but it still needs air, or it reads as card overflow. */
     .tgbl-wizard__body > .tui-option-card-group + .whisper,
