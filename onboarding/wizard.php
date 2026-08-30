@@ -658,10 +658,16 @@ function render_wizard($plugin) {
 
     /* Step strip ---------------------------------------------------------- */
     .tgbl-steps { display: flex; flex-direction: column; gap: 12px; }
-    /* Grid, not wrap: when the rail needs a second row the columns still line
-       up, instead of eight items on one line and two trailing on the next. */
-    .tgbl-steps__list { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-      gap: 10px 16px; margin: 0; padding: 0; list-style: none; }
+    /* Centred wrap, not an aligned grid: a short last row sits under the
+       middle of the one above it —
+
+           . . . . .
+            . . . .
+
+       which reads as one strip that ran out of width, where left-aligned
+       columns read as a table with a ragged corner. */
+    .tgbl-steps__list { display: flex; flex-wrap: wrap; justify-content: center;
+      gap: 10px 22px; margin: 0; padding: 0; list-style: none; }
     .tgbl-steps__step { display: flex; align-items: center; gap: 7px; margin: 0;
       font-size: var(--tgbl-body); line-height: 1.2; color: var(--tui-color-fg-muted); }
     .tgbl-steps__disc { flex: none; width: 21px; height: 21px; border-radius: 50%;
@@ -844,41 +850,52 @@ function render_wizard($plugin) {
     .tgbl-estimate svg { flex: none; align-self: center; }
     .tgbl-estimate b { font-variant-numeric: tabular-nums; }
 
-    /* Build step — the design's progress panel, log and preview.
-       These live here rather than inline in the step so the step markup
-       carries no colours or measures of its own. */
+    /* Build step — the design's two columns: what is happening on the left,
+       that it worked on the right. They are siblings in one grid rather than
+       a stack, because the whole point of the pairing is watching the index
+       fill while searching what is already in it. */
+    .tgbl-build { display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+      align-items: stretch; }
+    @media (max-width: 860px) { .tgbl-build { grid-template-columns: 1fr; } }
+
     .tgbl-build__panel { border: 1px solid var(--tui-color-divider); border-radius: 10px;
-      background: var(--tui-color-bg-surface); padding: 18px 20px; }
+      background: var(--tui-color-bg); padding: 18px 20px; min-width: 0; }
     .tgbl-build__head { display: flex; align-items: baseline; gap: 12px; }
-    .tgbl-build__title { font-size: var(--tgbl-title); font-weight: 600; }
+    .tgbl-build__title { font-size: var(--tgbl-title); font-weight: 600; margin: 0 0 12px;
+      line-height: 1.35; }
+    .tgbl-build__count { font-size: var(--tgbl-body); color: var(--tui-color-fg-muted);
+      font-variant-numeric: tabular-nums; }
     .tgbl-build__pct { margin-left: auto; font-size: var(--tgbl-meta); font-weight: 600;
       color: var(--tui-theme-primary-base); font-variant-numeric: tabular-nums; }
-    .tgbl-build__track { margin-top: 12px; height: 8px; border-radius: 999px;
+    .tgbl-build__track { margin-top: 10px; height: 8px; border-radius: 999px;
       background: var(--tui-color-fill-subtle); overflow: hidden; }
     .tgbl-build__fill { display: block; height: 100%; width: 0%; border-radius: inherit;
       background: var(--tui-theme-primary-base); transition: width .4s ease; }
-    .tgbl-build__count { margin-top: 10px; font-size: var(--tgbl-body); color: var(--tui-color-fg-muted);
-      font-variant-numeric: tabular-nums; }
-    .tgbl-build__log { list-style: none; margin: 0; padding: 14px 16px; border-radius: 10px;
-      background: #1d2327; color: #c3c4c7; font-family: var(--tgbl-font-data);
-      font-size: var(--tgbl-body); line-height: 1.85; max-height: 190px; overflow-y: auto; }
+    .tgbl-build__log { list-style: none; margin: 0; padding: 12px 14px; border-radius: 8px;
+      background: var(--tui-color-bg-muted); color: var(--tui-color-fg-secondary);
+      font-family: var(--tgbl-font-data); font-size: var(--tgbl-body); line-height: 1.9;
+      max-height: 168px; overflow-y: auto; }
     .tgbl-build__log li { margin: 0; }
-    .tgbl-build__sample { border: 1px solid var(--tui-color-divider); border-radius: 10px;
-      padding: 16px; background: var(--tui-color-bg-muted); }
-    .tgbl-build__caption { margin-top: 12px; text-align: center;
+    .tgbl-build__meta { margin-top: 10px; font-size: var(--tgbl-body);
       color: var(--tui-color-fg-muted); }
 
-    /* A search result, shaped like one: title and its kind on the same line. */
-    .tgbl-result { display: flex; align-items: baseline; gap: 12px;
-      padding: 14px 16px; border-radius: 8px; background: var(--tui-color-bg);
-      border: 1px solid var(--tui-theme-primary-base); }
-    .tgbl-result__title { flex: 1; min-width: 0; font-size: var(--tgbl-title);
-      font-weight: 600; line-height: 1.35; }
-    .tgbl-result__chip { flex: none; font-size: var(--tgbl-micro); font-weight: 700;
-      letter-spacing: .06em; text-transform: uppercase; padding: 3px 8px;
-      border-radius: 999px; background: var(--tui-theme-primary-subtlest);
-      color: var(--tui-theme-primary-stronger); }
-    .tgbl-result__chip[hidden] { display: none; }
+    .tgbl-search { margin: 0; }
+    .tgbl-wizard input.tgbl-search__input[type=search] { width: 100%; }
+
+    /* A search result: title and its kind on one line, the excerpt beneath. */
+    .tgbl-results { display: flex; flex-direction: column; gap: 14px; margin-top: 14px; }
+    .tgbl-results:empty { display: none; }
+    /* Inline flow, not a grid: the kind follows the title like a word does,
+       so a long title wraps and the chip trails it instead of being pinned to
+       a column of its own. */
+    .tgbl-result { display: block; }
+    .tgbl-result__title { font-size: var(--tgbl-title); font-weight: 600; line-height: 1.4; }
+    .tgbl-result__chip { display: inline-block; margin-left: 8px; vertical-align: 1px;
+      font-size: var(--tgbl-micro); font-weight: 700; letter-spacing: .04em;
+      padding: 2px 8px; border-radius: 999px; white-space: nowrap;
+      background: var(--tui-theme-primary-subtlest); color: var(--tui-theme-primary-stronger); }
+    .tgbl-result__excerpt { margin: 3px 0 0; font-size: var(--tgbl-body);
+      color: var(--tui-color-fg-muted); line-height: 1.5; }
 
     /* Done step — the design's centred finish: a mark, the claim, the two
        ways onward. Anything conditional (staging paused, global search)
