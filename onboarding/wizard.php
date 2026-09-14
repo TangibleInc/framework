@@ -329,12 +329,19 @@ function render_stepper($rail, $current_id) {
  * and steward archetypes; the group wrapper is render_option_group().
  *
  * $args: name, value, title, checked, type (radio|checkbox), description,
- *        badge, meta, variant (card|row), bullets (string[])
+ *        badge, meta, variant (card|row|plain), bullets (string[]),
+ *        content (callable — extra markup rendered inside the body, under
+ *        the description; the design nests a field under a chosen option)
+ *
+ * `plain` is the design's "Basic Option": a radio, a title and a one-line
+ * description with no box around it — used inside a white card that
+ * carries the section title (Configure, Your site).
  */
 function render_option_card($args) {
   $a = wp_parse_args($args, [
     'type' => 'radio', 'variant' => 'card', 'checked' => false,
     'description' => '', 'badge' => '', 'meta' => '', 'bullets' => [],
+    'content' => null,
   ]);
   $check_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10.687 16.567 18.14 3.99l1.72 1.02-8.547 14.423-7.382-5.111 1.138-1.644z" clip-rule="evenodd"/></svg>';
   // The control's shape follows the input type, not the card variant: a tick
@@ -344,6 +351,7 @@ function render_option_card($args) {
   $classes = 'tui-option-card'
     . ($a['type'] === 'radio' ? ' is-radio' : ' is-checkbox')
     . ($a['variant'] === 'row' ? ' is-row' : '')
+    . ($a['variant'] === 'plain' ? ' is-plain' : '')
     . ($a['checked'] ? ' is-selected' : '');
   ?>
   <label class="<?php echo esc_attr($classes); ?>" data-tgbl-option>
@@ -361,6 +369,9 @@ function render_option_card($args) {
       </span>
       <?php if ($a['description']) : ?>
         <span class="tui-option-card__description"><?php echo esc_html($a['description']); ?></span>
+      <?php endif; ?>
+      <?php if (is_callable($a['content'])) : ?>
+        <span class="tui-option-card__content"><?php call_user_func($a['content'], $a); ?></span>
       <?php endif; ?>
       <?php if ($a['variant'] === 'card' && $a['bullets']) : ?>
         <span class="tui-option-card__bullets">
@@ -780,6 +791,36 @@ function render_wizard($plugin) {
       .tgbl-wizard .tui-option-card-group[class*="is-cols-"] {
         grid-template-columns: repeat(2, 1fr); }
     }
+    /* Plain option (design "Basic Option"): no box, no tint — the card the
+       options sit in carries the surface (C-3). */
+    .tgbl-wizard .tui-option-card.is-plain { --tui-option-card-padding: 0;
+      --tui-option-card-bg: transparent; --tui-option-card-bg-selected: transparent;
+      --tui-option-card-border: transparent; --tui-option-card-border-selected: transparent;
+      --tui-option-card-gap: 12px; box-shadow: none; border-radius: 0; }
+    .tgbl-wizard .tui-option-card.is-plain.is-selected { box-shadow: none; }
+    .tgbl-wizard .tui-option-card.is-plain .tui-option-card__control { margin-top: 1px; }
+    .tgbl-wizard .tui-option-card.is-plain .tui-option-card__body { display: flex;
+      flex-direction: column; gap: 4px; min-width: 0; }
+    .tgbl-wizard .tui-option-card-group.is-stack .tui-option-card.is-plain + .tui-option-card.is-plain { margin-top: 4px; }
+    /* Nested content under an option — a field the choice reveals. Hidden
+       until the option is selected; the step's own script keeps it in step. */
+    .tgbl-wizard .tui-option-card__content { display: block; margin-top: 8px; }
+    .tgbl-wizard .tui-option-card__content[hidden] { display: none; }
+    .tgbl-wizard .tui-option-card__content input, .tgbl-wizard .tui-option-card__content select { margin: 0; font-weight: 400; color: var(--tui-color-fg); }
+
+    /* A white card that carries a section title and its controls (C-2). */
+    .tgbl-card { background: var(--tui-color-bg); border-radius: 8px; padding: 28px 32px 32px;
+      box-shadow: var(--tgbl-card-shadow); }
+    .tgbl-card > .lbl:first-child, .tgbl-card > .eyebrow:first-child { margin-top: 0; }
+    .tgbl-card > * + *:not(.step-intro) { margin-top: 16px; }
+
+    /* "Here is what we will set up" — a flat info panel with a title line (C-8). */
+    .tgbl-summary { padding: 20px 24px; border-radius: 6px;
+      background: #f0f6fc; border: 1px solid #c5d9ed; }
+    .tgbl-summary__title { display: block; font-size: var(--tgbl-title); font-weight: 500;
+      margin: 0 0 8px; color: var(--tui-color-fg); }
+    .tgbl-summary p { margin: 0; }
+
     .tgbl-wizard .tui-option-card__title { font-size: var(--tgbl-title); font-weight: 500; }
     .tgbl-wizard .tui-option-card__description,
     .tgbl-wizard .tui-option-card__bullet { font-size: var(--tgbl-small); font-weight: 400; }
