@@ -119,7 +119,10 @@ function attempt_consent_sync($plugin) {
 
   $response = wp_remote_post($plugin->activation_url, [
     'timeout'   => 15,
-    'sslverify' => false,   // matches the updater's own cloud_endpoint
+    // Same switch as the updater's licence calls: verified unless a local-dev
+    // opt-out says otherwise.
+    'sslverify' => function_exists('tangible\\updater\\should_verify_ssl')
+      ? \tangible\updater\should_verify_ssl($plugin) : true,
     'body'      => consent_sync_body($plugin, $key, $answers, $ops),
   ]);
   if (is_wp_error($response)) return;
