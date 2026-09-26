@@ -48,10 +48,22 @@ function plugin_has_license_key($name) {
   return $plugin ? !empty(\tangible\updater\get_license_key($plugin)) : false;
 }
 
+/**
+ * Only a plugin whose update server IS the Connect API host may carry the
+ * token — never the legacy updater host or a plugin's own updater_url.
+ * (Staging: point TANGIBLE_CLOUD_URL and TANGIBLE_CLOUD_API at the same host.)
+ */
+function plugin_talks_to_connect_api($name) {
+  $plugin = function_exists('tangible\\framework\\get_plugin') ? framework\get_plugin($name) : null;
+  if (!$plugin || empty($plugin->cloud_id) || empty($plugin->updater_url)) return false;
+  $host = strtolower((string) wp_parse_url($plugin->updater_url, PHP_URL_HOST));
+  return $host !== '' && $host === strtolower((string) wp_parse_url(api_base(), PHP_URL_HOST));
+}
+
 /** Add the token header to one plugin's metadata request options. */
 function with_token_header($options, $name) {
   $token = get_active_token();
-  if ($token === '' || plugin_has_license_key($name)) return $options;
+  if ($token === '' || plugin_has_license_key($name) || !plugin_talks_to_connect_api($name)) return $options;
   $options['headers'] = (array) ($options['headers'] ?? []);
   $options['headers'][HEADER] = $token;
   return $options;

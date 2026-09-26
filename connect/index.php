@@ -84,6 +84,15 @@ function get_site_id() {
   return $id;
 }
 
+/**
+ * The URL this site's grant is bound to: `site_url()`, where wp-admin lives
+ * (so the return address is always on the same host) and what the updater's
+ * get_metadata already sends as `url`. Every Connect request uses it.
+ */
+function site_address() {
+  return site_url();
+}
+
 /** RFC 7636 S256: base64url(sha256(verifier)), unpadded. */
 function pkce_challenge($verifier) {
   return rtrim(strtr(base64_encode(hash('sha256', $verifier, true)), '+/', '-_'), '=');

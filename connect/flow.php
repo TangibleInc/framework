@@ -45,7 +45,7 @@ function start_flow($user_id, $return_to, $plugin_name = '') {
   ], FLOW_TTL);
 
   return add_query_arg(array_map('rawurlencode', [
-    'site_url'              => home_url(),
+    'site_url'              => site_address(),
     'install_id'            => get_site_id(),
     'state'                 => $state,
     'code_challenge'        => pkce_challenge($verifier),
@@ -62,7 +62,7 @@ function confirm($context_slug = '') {
   $token = get_token();
   if ($token === '') return 'revoked';
   $result = api_post('/api/v1/connect/confirm', array_filter([
-    'site_url' => home_url(),
+    'site_url' => site_address(),
     'slug'     => $context_slug,
   ]), $token);
   if (is_wp_error($result)) return 'pending';
@@ -84,17 +84,24 @@ function confirm($context_slug = '') {
   return 'pending';
 }
 
+const REFRESH_EVENT = 'tangible_connect_refresh_updates';
+
+add_action(REFRESH_EVENT, function () {
+  if (!class_exists('tangible\\updater') || !isset(\tangible\updater::$instance->update_checkers)) return;
+  foreach ((array) \tangible\updater::$instance->update_checkers as $checker) {
+    if (is_object($checker) && method_exists($checker, 'checkForUpdates')) $checker->checkForUpdates();
+  }
+});
+
 /** Everything that should happen once a site is connected. */
 function after_connected($plugin_name) {
   if ($plugin_name !== '' && function_exists('tangible\\onboarding\\mark')) {
     \tangible\onboarding\mark($plugin_name, 'connect', 'done');
   }
-  // The update check is cached ~12h; ask now so the onboarding block arrives.
-  if (class_exists('tangible\\updater') && isset(\tangible\updater::$instance->update_checkers)) {
-    foreach ((array) \tangible\updater::$instance->update_checkers as $checker) {
-      if (is_object($checker) && method_exists($checker, 'checkForUpdates')) $checker->checkForUpdates();
-    }
-  }
+  // The update check is cached ~12h; refresh soon so the onboarding block
+  // arrives — in cron, not in this request (which is already waiting on the
+  // platform's callback into this site).
+  if (!wp_next_scheduled(REFRESH_EVENT)) wp_schedule_single_event(time() + 5, REFRESH_EVENT);
   do_action('tangible_connect_connected');
 }
 
@@ -121,7 +128,7 @@ function handle_return($user_id, $query) {
   $result = api_post('/api/v1/connect/exchange', array_filter([
     'code'          => $code,
     'code_verifier' => $flow['verifier'],
-    'site_url'      => home_url(),
+    'site_url'      => site_address(),
     'install_id'    => get_site_id(),
     'redirect_uri'  => $flow['redirect_uri'],
     'slug'          => $flow['plugin'] ?? '',
@@ -137,7 +144,7 @@ function handle_return($user_id, $query) {
   save_state([
     'token'              => $token,
     'status'             => 'pending',
-    'site_url'           => home_url(),
+    'site_url'           => site_address(),
     'account_name'       => sanitize_text_field($body['account']['name'] ?? ''),
     'owner_email_masked' => sanitize_text_field($body['account']['owner_email_masked'] ?? ''),
     'connected_at'       => time(),
@@ -153,7 +160,7 @@ function handle_return($user_id, $query) {
 function disconnect() {
   $token = get_token();
   if ($token !== '') {
-    api_post('/api/v1/connect/disconnect', [ 'site_url' => home_url() ], $token);
+    api_post('/api/v1/connect/disconnect', [ 'site_url' => site_address() ], $token);
   }
   clear();
 }
@@ -203,8 +210,11 @@ add_action('admin_post_tangible_connect_disconnect', function () {
   exit;
 });
 
-// The wizard's Connect step leaves wp-admin through wp_safe_redirect.
+// The wizard's Connect step leaves wp-admin through the shell's
+// wp_safe_redirect. Allow tangible.one for that one request only — never
+// site-wide (wp-login.php?redirect_to= and friends stay closed).
 add_filter('allowed_redirect_hosts', function ($hosts) {
+  if (!doing_action('admin_post_tangible_onboarding_step')) return $hosts;
   $host = wp_parse_url(app_base(), PHP_URL_HOST);
   if ($host) $hosts[] = $host;
   return $hosts;

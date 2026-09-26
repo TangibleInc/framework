@@ -71,10 +71,10 @@ class Connect_TestCase extends \WP_UnitTestCase {
   function test_start_sends_a_top_level_authorize_url_bound_to_this_site_and_user() {
     [$url, $q] = $this->start();
     $this->assertStringStartsWith(connect\app_base() . '/connect/authorize?', $url);
-    $this->assertSame(home_url(), $q['site_url']);
+    $this->assertSame(site_url(), $q['site_url']);
     $this->assertSame('S256', $q['code_challenge_method']);
-    $this->assertSame(wp_parse_url(home_url(), PHP_URL_HOST), wp_parse_url($q['redirect_uri'], PHP_URL_HOST));
-    $this->assertStringContainsString('/wp-admin/', $q['redirect_uri']);
+    $this->assertSame(wp_parse_url(site_url(), PHP_URL_HOST), wp_parse_url($q['redirect_uri'], PHP_URL_HOST));
+    $this->assertStringStartsWith(site_url('/wp-admin/admin-post.php'), $q['redirect_uri']);
     // The verifier never leaves the site; only its challenge does.
     $flow = get_transient(connect\flow_key($this->admin));
     $this->assertSame(connect\pkce_challenge($flow['verifier']), $q['code_challenge']);
@@ -152,7 +152,11 @@ class Connect_TestCase extends \WP_UnitTestCase {
     $this->assertArrayHasKey('/tangible/v1/connect/verify', rest_get_server()->get_routes());
   }
 
-  function test_update_checks_carry_the_header_only_when_active_and_keyless() {
+  function test_update_checks_carry_the_header_only_when_active_keyless_and_to_the_api_host() {
+    $plugin = \tangible\framework\register_plugin([ 'name' => 'freeplug', 'title' => 'F', 'cloud_id' => 'freeplug', 'setting_prefix' => 'freeplug' ]);
+    $plugin->updater_url = connect\api_base() . '/api/edd';
+    $legacy = \tangible\framework\register_plugin([ 'name' => 'legacyplug', 'title' => 'L', 'setting_prefix' => 'legacyplug' ]);
+    $legacy->updater_url = 'https://updater.tangible.one';
     $this->assertArrayNotHasKey('headers', connect\with_token_header([], 'freeplug'));
     connect\save_state([ 'token' => self::TOKEN, 'status' => 'pending' ]);
     $this->assertArrayNotHasKey(connect\HEADER, connect\with_token_header([ 'headers' => [] ], 'freeplug')['headers']);
@@ -160,6 +164,8 @@ class Connect_TestCase extends \WP_UnitTestCase {
     $opts = connect\with_token_header([ 'headers' => [ 'Accept' => 'application/json' ] ], 'freeplug');
     $this->assertSame(self::TOKEN, $opts['headers'][connect\HEADER]);
     $this->assertSame('application/json', $opts['headers']['Accept']);
+    // Never to another update server.
+    $this->assertArrayNotHasKey('headers', connect\with_token_header([], 'legacyplug'));
   }
 
   function test_metadata_results_cache_the_block_and_a_revoke_drops_the_token() {
@@ -235,8 +241,8 @@ class Connect_Step_TestCase extends \WP_UnitTestCase {
     $this->assertNull(onboarding\handle_step_submission('freeconnect', [ 'step' => 'connect', 'do' => 'continue' ]));
     $this->assertStringStartsWith(connect\app_base() . '/connect/authorize?', onboarding\pending_redirect());
     $this->assertContains('connect', $this->ids());
-    // And wp_safe_redirect may leave for the consent screen.
-    $this->assertSame(onboarding\pending_redirect(), wp_validate_redirect(onboarding\pending_redirect(), 'nope'));
+    // tangible.one is an allowed redirect host only inside the step submission.
+    $this->assertSame('nope', wp_validate_redirect(onboarding\pending_redirect(), 'nope'));
   }
 
   function test_connected_consent_sync_sends_the_token_header_and_no_key() {

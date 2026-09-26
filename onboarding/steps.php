@@ -117,8 +117,10 @@ function attempt_consent_sync($plugin) {
     'body'      => consent_sync_body($plugin, $key, $answers, $ops),
   ];
   if ($site_token !== '') {
-    // The token rides in a header, over VERIFIED TLS — never sslverify=false.
+    // The token rides in a header, over VERIFIED TLS — never sslverify=false,
+    // and names the URL the connection is bound to.
     unset($args['sslverify']);
+    $args['body']['url'] = \tangible\connect\site_address();
     $args['headers'] = [ \tangible\connect\HEADER => $site_token ];
   }
   $response = wp_remote_post($plugin->activation_url, $args);
