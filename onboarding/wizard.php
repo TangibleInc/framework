@@ -215,7 +215,12 @@ function register_wizard($plugin) {
   // reinstalling the plugin counts as returning, not new; anything needed
   // after that is the notice's job.
   add_action('admin_init', function () use ($plugin, $name, $redirect_flag) {
-    if (!get_option($redirect_flag)) return;
+    // Fallback for an activation the listener could not see: when an older
+    // framework copy won the load in the activation request, nothing recorded
+    // it. WordPress lands a single activation on plugins.php?activate=true;
+    // a wizard never onboarded here takes that as its first run.
+    $landed = ($GLOBALS['pagenow'] ?? '') === 'plugins.php' && ($_GET['activate'] ?? '') === 'true';
+    if (!get_option($redirect_flag) && !($landed && !was_onboarded($name))) return;
     delete_option($redirect_flag);
     if (wp_doing_ajax() || !current_user_can('manage_options')) return;
     if (isset($_GET['activate-multi'])) return;   // bulk activation is not an invitation
