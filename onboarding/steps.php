@@ -47,9 +47,12 @@ function get_consent_answer($key) {
   return $outbox[$key]['answer'] ?? null;
 }
 
-function record_consent_answer($key, $answer, $consent_text) {
+function record_consent_answer($key, $answer, $consent_text, $email = '') {
   $outbox = get_option(CONSENT_OUTBOX, []);
   $outbox[$key] = [
+    // Free (anonymous) marketing only: the address typed in the wizard. It
+    // goes to the platform's double opt-in, never into an interaction.
+    'email'        => $email,
     'answer'       => $answer,           // 'granted' | 'declined'
     'consent_text' => $consent_text,     // the exact wording shown — provable later
     'at'           => time(),
@@ -89,23 +92,31 @@ add_filter('tangible_onboarding_facts', function ($facts) {
 function attempt_consent_sync($plugin) {
   if (empty($plugin->activation_url) || !function_exists('tangible\\updater\\get_license_key')) return;
   $key = \tangible\updater\get_license_key($plugin);
-  // No key, but the site is connected (Tangible Connect): deliver with the
-  // site token instead — account-level, as keyed. A key always wins.
+  // Who is delivering, in order of authority: a licence key (paid); else the
+  // site's Connect token (connected free plugin, account-level as keyed); else
+  // nothing but a site and a plugin name (anonymous free plugin, spec §1). A
+  // paid plugin without its key waits for it.
   $site_token = empty($key) && function_exists('tangible\\connect\\get_active_token')
     ? \tangible\connect\get_active_token() : '';
-  if (empty($key) && $site_token === '') return;
+  if (empty($key) && $site_token === '' && !is_free_distribution($plugin)) return;
 
   $outbox = get_option(CONSENT_OUTBOX, []);
   $answers = [];
   $ops = [];
   foreach ($outbox as $consent_key => $entry) {
     if (empty($entry['synced'])) {
-      $answers[] = [
+      $answer = [
         'key'         => $consent_key,
         'answer'      => $entry['answer'],
         'consentText' => $entry['consent_text'],
         'at'          => (int) (($entry['at'] ?? 0) * 1000),   // seconds → ms, the platform clock unit
       ];
+      // Only an anonymous delivery carries the typed address; a connected one
+      // uses the account's verified email.
+      if (empty($key) && $site_token === '' && $consent_key === 'marketing' && !empty($entry['email'])) {
+        $answer['email'] = $entry['email'];
+      }
+      $answers[] = $answer;
       $ops[] = $entry['op'] ?? ($consent_key . ':' . ($entry['at'] ?? 0));
     }
   }
@@ -113,7 +124,10 @@ function attempt_consent_sync($plugin) {
 
   $args = [
     'timeout'   => 15,
-    'sslverify' => false,   // matches the updater's own cloud_endpoint
+    // Same switch as the updater's licence calls: verified unless a local-dev
+    // opt-out says otherwise.
+    'sslverify' => function_exists('tangible\\updater\\should_verify_ssl')
+      ? \tangible\updater\should_verify_ssl($plugin) : true,
     'body'      => consent_sync_body($plugin, $key, $answers, $ops),
   ];
   if ($site_token !== '') {
@@ -152,7 +166,7 @@ function attempt_consent_sync($plugin) {
 function consent_sync_body($plugin, $key, $answers, $ops) {
   $body = [
     'edd_action' => 'tangible_sync_consent',
-    'license'    => $key,
+    'license'    => (string) $key,
     'url'        => home_url(),
     'answers'    => wp_json_encode($answers),
     'slug'       => $plugin->name,
@@ -399,7 +413,8 @@ add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name =
         'active plugins'  => number_format_i18n(count((array) get_option('active_plugins', []))),
         'locale'          => get_locale(),
       ];
-      $paid = !empty($plugin->cloud_id);
+      $free = is_free_distribution($plugin);
+      $paid = !empty($plugin->cloud_id) && !$free;
       ?>
       <h2>Two optional things</h2>
       <p class="step-intro"><strong>No</strong> is a complete answer to both — the plugin works
@@ -431,6 +446,19 @@ add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name =
         render_answer_pair('marketing',
           'Release notes by email?',
           'What shipped and what it means for your site. No drip campaigns, unsubscribe any time.');
+        if ($free) {
+          // No account to take an address from: ask for one. We email a
+          // confirmation link before anything else (double opt-in).
+          $current_user = wp_get_current_user();
+          ?>
+          <p class="tgbl-email-row">
+            <label for="tgbl-marketing-email" class="lbl">Send them to</label><br />
+            <input type="email" id="tgbl-marketing-email" name="marketing_email" class="regular-text"
+                   value="<?php echo esc_attr($current_user->user_email ?? ''); ?>" />
+            <span class="whisper">We'll email a link to confirm first.</span>
+          </p>
+          <?php
+        }
       } ?>
 
       <script>
@@ -462,8 +490,15 @@ add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name =
       }
       // Record only once every asked question has an answer — half-consent
       // recorded is worse than none.
+      $email = '';
+      if (($answers['marketing'][0] ?? '') === 'granted' && is_free_distribution($plugin)) {
+        $email = sanitize_email($_POST['marketing_email'] ?? '');
+        if (!is_email($email)) {
+          return new \WP_Error('tangible_onboarding', 'Enter an email address for the release notes, or answer No.');
+        }
+      }
       foreach ($answers as $key => [$answer, $text]) {
-        record_consent_answer($key, $answer, $text);
+        record_consent_answer($key, $answer, $text, $key === 'marketing' ? $email : '');
       }
       // Deliver immediately when a key exists; otherwise the outbox waits for
       // the next trigger (setup-page load, licence activation).
