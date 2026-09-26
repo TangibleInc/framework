@@ -216,6 +216,13 @@ function set_steward($value) {
  * update check). Before the first answer is cached there is nothing to go on,
  * and the licence step's own machinery predicate decides alone.
  */
+/** Free and not connected: the server knows only a URL and a plugin name. */
+function is_anonymous($plugin) {
+  $connected = function_exists('tangible\\connect\\get_active_token')
+    && \tangible\connect\get_active_token() !== '';
+  return is_free_distribution($plugin) && !$connected;
+}
+
 function is_free_distribution($plugin) {
   return $plugin && function_exists('tangible\\updater\\is_free_distribution')
     && \tangible\updater\is_free_distribution($plugin);
@@ -446,7 +453,7 @@ add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name =
         render_answer_pair('marketing',
           'Release notes by email?',
           'What shipped and what it means for your site. No drip campaigns, unsubscribe any time.');
-        if ($free) {
+        if (is_anonymous($plugin)) {
           // No account to take an address from: ask for one. We email a
           // confirmation link before anything else (double opt-in).
           $current_user = wp_get_current_user();
@@ -491,7 +498,7 @@ add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name =
       // Record only once every asked question has an answer — half-consent
       // recorded is worse than none.
       $email = '';
-      if (($answers['marketing'][0] ?? '') === 'granted' && is_free_distribution($plugin)) {
+      if (($answers['marketing'][0] ?? '') === 'granted' && is_anonymous($plugin)) {
         $email = sanitize_email($_POST['marketing_email'] ?? '');
         if (!is_email($email)) {
           return new \WP_Error('tangible_onboarding', 'Enter an email address for the release notes, or answer No.');
