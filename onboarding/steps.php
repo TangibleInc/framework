@@ -89,7 +89,11 @@ add_filter('tangible_onboarding_facts', function ($facts) {
 function attempt_consent_sync($plugin) {
   if (empty($plugin->activation_url) || !function_exists('tangible\\updater\\get_license_key')) return;
   $key = \tangible\updater\get_license_key($plugin);
-  if (empty($key)) return;
+  // No key, but the site is connected (Tangible Connect): deliver with the
+  // site token instead — account-level, as keyed. A key always wins.
+  $site_token = empty($key) && function_exists('tangible\\connect\\get_active_token')
+    ? \tangible\connect\get_active_token() : '';
+  if (empty($key) && $site_token === '') return;
 
   $outbox = get_option(CONSENT_OUTBOX, []);
   $answers = [];
@@ -107,12 +111,23 @@ function attempt_consent_sync($plugin) {
   }
   if (!$answers) return;
 
-  $response = wp_remote_post($plugin->activation_url, [
+  $args = [
     'timeout'   => 15,
     'sslverify' => false,   // matches the updater's own cloud_endpoint
     'body'      => consent_sync_body($plugin, $key, $answers, $ops),
-  ]);
+  ];
+  if ($site_token !== '') {
+    // The token rides in a header, over VERIFIED TLS — never sslverify=false.
+    unset($args['sslverify']);
+    $args['headers'] = [ \tangible\connect\HEADER => $site_token ];
+  }
+  $response = wp_remote_post($plugin->activation_url, $args);
   if (is_wp_error($response)) return;
+  if ($site_token !== '' && wp_remote_retrieve_response_code($response) === 401) {
+    // Revoked on tangible.one: fall back to Anonymous; answers stay unsynced.
+    \tangible\connect\clear();
+    return;
+  }
   $body = json_decode(wp_remote_retrieve_body($response));
   if (empty($body->success)) return;
 

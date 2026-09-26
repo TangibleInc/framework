@@ -222,6 +222,10 @@ function render_page() {
             <?php if (empty($rows)) : ?><tr><td>No Tangible plugins registered.</td></tr><?php endif; ?>
           </table>
         </div>
+        <?php
+        // Cards contributed by other modules (connect/: the tangible.one account).
+        do_action('tangible_hub_main_cards');
+        ?>
       </div>
 
       <?php if (!$client) : ?>
