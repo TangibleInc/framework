@@ -104,6 +104,8 @@ class Core_Steps_TestCase extends \WP_UnitTestCase {
       // never activate — see test_licence_is_absent_without_an_activation_url.
       'cloud_id' => 'coretest',
       'activation_url' => 'https://cloud.tangible.one/api/edd',
+      // The consent handler reads the key through the plugin's settings.
+      'setting_prefix' => 'coretest',
     ]);
     onboarding\register_wizard($this->plugin);
   }
@@ -202,7 +204,7 @@ class Core_Steps_TestCase extends \WP_UnitTestCase {
   function test_a_handler_wp_error_keeps_the_step_open_and_stores_the_reason() {
     // The shell's steward step (weight 40) must not outrank the fixture's
     // creds step (50): answer it up front.
-    onboarding\set_steward('', 'team');
+    onboarding\set_steward('team');
     add_filter('tangible_onboarding_facts', function ($f) {
       $f->licence_active = true;
       $f->ask = [ 'telemetry_extended' => 'skip', 'marketing' => 'skip' ];
@@ -291,6 +293,9 @@ class Consent_Sync_TestCase extends \WP_UnitTestCase {
     $answers = json_decode($body['answers'], true);
     $this->assertSame('telemetry_extended', $answers[0]['key']);
     $this->assertSame('wording v1', $answers[0]['consentText']);
+    // Site/plugin context and one stable id per batch (tangible-one #236).
+    $this->assertSame('synctest', $body['slug']);
+    $this->assertStringStartsWith('wizard-batch:', $body['source_operation_id']);
 
     $outbox = get_option(onboarding\CONSENT_OUTBOX);
     $this->assertTrue($outbox['telemetry_extended']['synced']);
@@ -298,6 +303,15 @@ class Consent_Sync_TestCase extends \WP_UnitTestCase {
     // Nothing left to deliver: the next attempt does not even POST.
     onboarding\attempt_consent_sync($this->plugin);
     $this->assertCount(1, $this->requests);
+  }
+
+  function test_a_retried_batch_carries_the_same_operation_id() {
+    $this->fake_server(new \WP_Error('http', 'unreachable'));
+    onboarding\attempt_consent_sync($this->plugin);
+    onboarding\attempt_consent_sync($this->plugin);
+    $this->assertCount(2, $this->requests);
+    $this->assertSame($this->requests[0]['body']['source_operation_id'],
+      $this->requests[1]['body']['source_operation_id']);
   }
 
   function test_a_failed_delivery_leaves_the_answer_for_the_next_trigger() {
@@ -323,7 +337,7 @@ class Consent_Sync_TestCase extends \WP_UnitTestCase {
 }
 
 /**
- * The steward map — local, per-account.
+ * The steward answer — one site option, no account keying (2026-09-25).
  */
 class Steward_TestCase extends \WP_UnitTestCase {
 
@@ -335,7 +349,7 @@ class Steward_TestCase extends \WP_UnitTestCase {
 
   function tearDown(): void {
     delete_option(onboarding\STEWARD_OPTION);
-    delete_option('tangible_onboarding_facts_cache__stewtest');
+    delete_option('tangible_onboarding_state__site');
     remove_all_filters('tangible_onboarding_facts');
     parent::tearDown();
   }
@@ -351,34 +365,96 @@ class Steward_TestCase extends \WP_UnitTestCase {
     return $plan;
   }
 
-  function test_a_second_account_on_the_same_site_is_asked_again() {
+  function test_one_answer_covers_the_site_whatever_the_account() {
     $this->assertContains('steward', array_column($this->plan('acct_A')['steps'], 'id'));
-    onboarding\set_steward('acct_A', 'client');
-    // acct_A answered; the same site under acct_B is a NEW question…
+    onboarding\set_steward('client');
     $this->assertNotContains('steward', array_column($this->plan('acct_A')['steps'], 'id'));
-    $this->assertContains('steward', array_column($this->plan('acct_B')['steps'], 'id'));
-    // …and each answer is its own record.
-    onboarding\set_steward('acct_B', 'team');
-    $this->assertSame('client', onboarding\get_steward('acct_A'));
-    $this->assertSame('team', onboarding\get_steward('acct_B'));
+    $this->assertNotContains('steward', array_column($this->plan('acct_B')['steps'], 'id'));
+    $this->assertSame('client', onboarding\get_steward());
   }
 
-  function test_the_legacy_bare_string_reads_as_the_anonymous_answer() {
+  function test_older_shapes_still_read() {
     update_option(onboarding\STEWARD_OPTION, 'team');
-    $this->assertSame('team', onboarding\get_steward(''));
-    // The anonymous answer covers accounts too — whoever set up the first
-    // plugin answered for the site as they knew it.
-    $this->assertSame('team', onboarding\get_steward('acct_A'));
-    // Writing upgrades the shape without losing the legacy answer.
-    onboarding\set_steward('acct_A', 'client');
-    $this->assertSame('team', onboarding\get_steward(''));
-    $this->assertSame('client', onboarding\get_steward('acct_A'));
+    $this->assertSame('team', onboarding\get_steward());
+    // The 2026-08-28 per-account map: client only when every answer says so.
+    update_option(onboarding\STEWARD_OPTION, [ 'acct_A' => 'client', '' => 'client' ]);
+    $this->assertSame('client', onboarding\get_steward());
+    update_option(onboarding\STEWARD_OPTION, [ 'acct_A' => 'client', 'acct_B' => 'team' ]);
+    $this->assertSame('team', onboarding\get_steward());
   }
 
-  function test_hub_client_managed_requires_every_answer_to_say_client() {
-    onboarding\set_steward('acct_A', 'client');
+  function test_hub_client_managed_follows_the_site_answer() {
+    onboarding\set_steward('client');
     $this->assertTrue(\tangible\hub\is_client_managed_site());
-    onboarding\set_steward('acct_B', 'team');
+    onboarding\set_steward('team');
     $this->assertFalse(\tangible\hub\is_client_managed_site());
+  }
+}
+
+/**
+ * Appearance rules, Done, Back (plugin-onboarder spec §3, §5).
+ */
+class Shell_Rules_TestCase extends \WP_UnitTestCase {
+
+  function setUp(): void {
+    parent::setUp();
+    $plugin = \tangible\framework\register_plugin([ 'name' => 'ruletest', 'title' => 'Rule Test' ]);
+    onboarding\register_wizard($plugin);
+    add_filter('tangible_onboarding_facts', function ($f) {
+      $f->ask = [ 'telemetry_extended' => 'skip', 'marketing' => 'skip' ];
+      return $f;
+    });
+  }
+
+  function tearDown(): void {
+    foreach ([onboarding\STEWARD_OPTION, onboarding\ONBOARDED_OPTION,
+              'tangible_onboarding_state__site', 'tangible_onboarding_state__ruletest'] as $o) delete_option($o);
+    remove_all_filters('tangible_onboarding_facts');
+    remove_all_filters('tangible_onboarding_steps_extra');
+    parent::tearDown();
+  }
+
+  private function plan() {
+    return onboarding\resolve_plan('ruletest', onboarding\build_facts('ruletest'));
+  }
+
+  function test_done_is_last_and_never_counts_as_a_question() {
+    onboarding\set_steward('team');
+    $plan = $this->plan();
+    $this->assertSame(['done'], array_column($plan['steps'], 'id'));
+    $this->assertSame([], onboarding\pending_questions($plan));
+    $this->assertSame(0, onboarding\steps_left('ruletest'));
+  }
+
+  function test_done_redirects_to_its_primary_action() {
+    onboarding\set_steward('team');
+    add_filter('tangible_onboarding_done', function ($done) {
+      $done['primary'] = [ 'label' => 'Open it', 'url' => 'https://example.test/open' ];
+      return $done;
+    });
+    $recorded = onboarding\handle_step_submission('ruletest', [ 'step' => 'done', 'do' => 'continue' ]);
+    remove_all_filters('tangible_onboarding_done');
+    $this->assertSame('done', $recorded);
+    $this->assertSame('https://example.test/open', onboarding\pending_redirect());
+  }
+
+  function test_the_onboarded_marker_is_set_once() {
+    $this->assertFalse(onboarding\was_onboarded('ruletest'));
+    onboarding\mark_onboarded('ruletest');
+    $first = get_option(onboarding\ONBOARDED_OPTION)['ruletest'];
+    onboarding\mark_onboarded('ruletest');
+    $this->assertTrue(onboarding\was_onboarded('ruletest'));
+    $this->assertSame($first, get_option(onboarding\ONBOARDED_OPTION)['ruletest']);
+  }
+
+  function test_back_reopens_the_steward_question() {
+    $_POST = [ 'steward' => 'client' ];
+    $this->assertSame('steward', onboarding\handle_step_submission('ruletest', [ 'step' => 'steward', 'do' => 'continue' ]));
+    $_POST = [];
+    $this->assertSame('done', $this->plan()['current']);
+
+    $this->assertSame('steward', onboarding\handle_step_submission('ruletest', [ 'step' => 'done', 'do' => 'back' ]));
+    $this->assertNull(onboarding\get_steward());
+    $this->assertSame('steward', $this->plan()['current']);
   }
 }

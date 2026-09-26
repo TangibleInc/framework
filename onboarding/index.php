@@ -264,5 +264,23 @@ function mark($plugin_name, $step_id, $status) {
   update_option($key, $state, false);
 }
 
+/** Whether a step has a local record (done or skipped). */
+function is_recorded($plugin_name, $step) {
+  if ($step['scope'] === 'account') return false;
+  $state = get_option(get_state_key($plugin_name, $step['scope']), []);
+  return isset($state[ get_record_key($step) ]);
+}
+
+/** Remove a step's local record, so the plan offers it again (Back). */
+function unmark($plugin_name, $step_id) {
+  $found = null;
+  foreach (get_steps($plugin_name, (object) []) as $s) if ($s['id'] === $step_id) { $found = $s; break; }
+  if (!$found || $found['scope'] === 'account') return;
+  $key = get_state_key($plugin_name, $found['scope']);
+  $state = get_option($key, []);
+  unset($state[ get_record_key($found) ]);
+  update_option($key, $state, false);
+}
+
 require_once __DIR__ . '/wizard.php';
 require_once __DIR__ . '/steps.php';

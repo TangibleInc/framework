@@ -54,6 +54,9 @@ function record_consent_answer($key, $answer, $consent_text) {
     'consent_text' => $consent_text,     // the exact wording shown — provable later
     'at'           => time(),
     'synced'       => false,
+    // Identity of THIS answer, so a redelivery of the same unsynced batch
+    // carries the same source_operation_id and the server records it once.
+    'op'           => wp_generate_uuid4(),
   ];
   update_option(CONSENT_OUTBOX, $outbox, false);
   do_action('tangible_consent_recorded', $key, $answer);
@@ -90,6 +93,7 @@ function attempt_consent_sync($plugin) {
 
   $outbox = get_option(CONSENT_OUTBOX, []);
   $answers = [];
+  $ops = [];
   foreach ($outbox as $consent_key => $entry) {
     if (empty($entry['synced'])) {
       $answers[] = [
@@ -98,6 +102,7 @@ function attempt_consent_sync($plugin) {
         'consentText' => $entry['consent_text'],
         'at'          => (int) (($entry['at'] ?? 0) * 1000),   // seconds → ms, the platform clock unit
       ];
+      $ops[] = $entry['op'] ?? ($consent_key . ':' . ($entry['at'] ?? 0));
     }
   }
   if (!$answers) return;
@@ -105,12 +110,7 @@ function attempt_consent_sync($plugin) {
   $response = wp_remote_post($plugin->activation_url, [
     'timeout'   => 15,
     'sslverify' => false,   // matches the updater's own cloud_endpoint
-    'body'      => [
-      'edd_action' => 'tangible_sync_consent',
-      'license'    => $key,
-      'url'        => home_url(),
-      'answers'    => wp_json_encode($answers),
-    ],
+    'body'      => consent_sync_body($plugin, $key, $answers, $ops),
   ]);
   if (is_wp_error($response)) return;
   $body = json_decode(wp_remote_retrieve_body($response));
@@ -126,37 +126,68 @@ function attempt_consent_sync($plugin) {
 }
 
 /**
- * The steward answer — "who will look after this site?" — lives LOCALLY, as a
- * per-account map (decided 2026-08-28: mirroring account×site pairs on
- * tangible.one is a lot of work for little benefit, and the question is
- * deliberately asked once per site anyway).
+ * The request body for one consent delivery. Besides the answers, it carries
+ * the site/plugin context the platform records with each consent interaction
+ * (tangible-one PR #236), and one source_operation_id for the batch: derived
+ * from the answers' own ids, so a retry of the same unsynced batch repeats
+ * it and the server records the delivery once.
+ */
+function consent_sync_body($plugin, $key, $answers, $ops) {
+  $body = [
+    'edd_action' => 'tangible_sync_consent',
+    'license'    => $key,
+    'url'        => home_url(),
+    'answers'    => wp_json_encode($answers),
+    'slug'       => $plugin->name,
+    'source_operation_id' => 'wizard-batch:' . md5(implode('|', $ops)),
+  ];
+  if (!empty($plugin->version)) $body['version'] = (string) $plugin->version;
+  if (function_exists('tangible\\updater\\get_install_id')) {
+    $install_id = \tangible\updater\get_install_id($plugin);
+    if (!empty($install_id)) $body['install_id'] = $install_id;
+  }
+  return $body;
+}
+
+/**
+ * The steward answer — "who will look after this site?" — is ONE site option,
+ * shared by every Tangible plugin on the site (decided 2026-09-25): never on
+ * tangible.one, and not keyed by account or licence, even when several
+ * licences are used on one site. If the options are wiped, asking again is
+ * fine.
  *
- * Keyed by the opaque accountId from the onboarding block, because one site
- * can host plugins licensed under two different accounts — rare, but it costs
- * one array key to be correct about. '' is the key when no account is known
- * yet (pre-activation, free builds). Legacy shape (a bare string from the
- * first cut) reads as the ''-keyed answer.
+ * Reads the older shapes: a per-account map (2026-08-28 cut) collapses to
+ * "client" only when every recorded answer says so — one self-managed answer
+ * keeps the site personal, the same rule the hub already applied.
  */
 const STEWARD_OPTION = 'tangible_site_steward';
 
-function get_steward_map() {
-  $value = get_option(STEWARD_OPTION, []);
-  if (is_string($value) && $value !== '') return [ '' => $value ];   // legacy
-  return is_array($value) ? $value : [];
+function get_steward() {
+  $value = get_option(STEWARD_OPTION, null);
+  if (is_string($value)) return in_array($value, ['team', 'client'], true) ? $value : null;
+  if (is_array($value) && $value) {
+    $answers = array_values(array_filter($value, function ($v) {
+      return in_array($v, ['team', 'client'], true);
+    }));
+    if (!$answers) return null;
+    return count(array_unique($answers)) === 1 && $answers[0] === 'client' ? 'client' : 'team';
+  }
+  return null;
 }
 
-function get_steward($account_id = '') {
-  $map = get_steward_map();
-  // An account-specific answer wins; the anonymous answer covers the rest —
-  // whoever set up the first plugin answered for the site as they knew it.
-  return $map[$account_id] ?? $map[''] ?? null;
-}
-
-function set_steward($account_id, $value) {
+function set_steward($value) {
   if (!in_array($value, ['team', 'client'], true)) return;
-  $map = get_steward_map();
-  $map[$account_id] = $value;
-  update_option(STEWARD_OPTION, $map, false);
+  update_option(STEWARD_OPTION, $value, false);
+}
+
+/**
+ * Free (distribution decided by the server, cached by the updater from its
+ * update check). Before the first answer is cached there is nothing to go on,
+ * and the licence step's own machinery predicate decides alone.
+ */
+function is_free_distribution($plugin) {
+  return $plugin && function_exists('tangible\\updater\\is_free_distribution')
+    && \tangible\updater\is_free_distribution($plugin);
 }
 
 const TELEMETRY_CONSENT_TEXT =
@@ -223,7 +254,8 @@ add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name =
   // per-plugin one, which is the question that actually matters here. Same
   // predicate attempt_consent_sync() uses above, for the same reason.
   if (!empty($plugin->cloud_id) && !empty($plugin->activation_url)
-      && function_exists('tangible\\updater\\get_license_key')) {
+      && function_exists('tangible\\updater\\get_license_key')
+      && !is_free_distribution($plugin)) {
     $steps[] = [
       'id'     => 'licence',
       'label'  => 'licence',
@@ -312,6 +344,9 @@ add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name =
           update_option('tangible_onboarding_facts_cache__' . $plugin->name,
             [ 'at' => time(), 'data' => is_array($data) ? $data : [] ], false);
         }
+        // Answers given before the key existed (consent asked first, or a
+        // free build that became licensed) can be delivered now.
+        attempt_consent_sync($plugin);
         return true;
       },
     ];
@@ -421,21 +456,20 @@ add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name =
   ];
 
   // ── Steward: site question, shell-owned — every Tangible plugin asks it
-  //    identically, once per (site, account) ────────────────────────────────
-  $account_id = is_object($facts) ? ($facts->account_id ?? '') : '';
+  //    identically, once per site ────────────────────────────────────────────
   $account_name = is_object($facts) ? ($facts->account_name ?? '') : '';
   $steps[] = [
     'id'     => 'steward',
     'label'  => 'this site',
     'weight' => 40,
-    // 'account' scope = the resolver records nothing; the step's own local
-    // map is the whole state, so a NEW account on the same site re-asks.
-    'scope'  => 'account',
+    // The site option IS the state: 'site' scope keeps the resolver's record
+    // shared too, so a second plugin on the site sees it answered.
+    'scope'  => 'site',
     'skippable' => false,
-    'needed' => function () use ($account_id) { return get_steward($account_id) === null; },
+    'needed' => function () { return get_steward() === null; },
     'skip_note' => 'answered',
-    'render' => function () use ($account_id, $account_name) {
-      $current = get_steward($account_id);
+    'render' => function () use ($account_name) {
+      $current = get_steward();
       $who = $account_name !== '' ? $account_name : 'your team';
       ?>
       <h2>Who will look after this site?</h2>
@@ -460,13 +494,74 @@ add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name =
       ?>
       <?php
     },
-    'handle' => function () use ($account_id) {
+    'handle' => function () {
       $v = $_POST['steward'] ?? '';
       if (!in_array($v, ['team', 'client'], true)) return false;
-      set_steward($account_id, $v);
+      set_steward($v);
       return true;
     },
+    // Back reopens the question: the option is the answer, so clear it.
+    'on_back' => function () { delete_option(STEWARD_OPTION); },
   ];
 
   return $steps;
 }, 5, 3);
+
+/**
+ * Done — the last screen, a core step for every wizard (spec §3). Registered
+ * late so a plugin that ships its own `done` step keeps it (SearchSync does).
+ *
+ * A plugin shapes it through `tangible_onboarding_done`:
+ *
+ *   add_filter('tangible_onboarding_done', function ($done, $plugin) {
+ *     if ($plugin->name !== 'my-plugin') return $done;
+ *     $done['summary'] = 'Ready — no merges run yet.';
+ *     $done['primary'] = [ 'label' => 'Open Merge User Accounts', 'url' => admin_url('tools.php?page=…') ];
+ *     $done['links'][] = [ 'label' => 'How merges work', 'url' => 'https://…', 'kind' => 'Article' ];
+ *     return $done;
+ *   }, 10, 2);
+ */
+add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name = '') {
+  if (empty(registered_wizards()[$plugin_name])) return $steps;
+  foreach ($steps as $s) if (($s['id'] ?? null) === 'done') return $steps;
+
+  $plugin = function_exists('tangible\\framework\\get_plugin')
+    ? framework\get_plugin($plugin_name) : null;
+  $title = $plugin->title ?? $plugin_name;
+  $done = apply_filters('tangible_onboarding_done', [
+    'summary' => $title . ' is set up.',
+    'primary' => [ 'label' => 'Go to Tangible Home', 'url' => admin_url('admin.php?page=tangible-home') ],
+    'links'   => [],
+  ], $plugin);
+
+  $steps[] = [
+    'id'     => 'done',
+    'label'  => 'done',
+    'weight' => 1000,
+    // Terminal: never a reason on its own to redirect, notify, or count as
+    // "steps left" — it only closes a wizard that asked something.
+    'terminal' => true,
+    'scope'  => 'plugin',
+    'skippable' => false,
+    'submit_label' => $done['primary']['label'] ?? 'Finish',
+    'redirect_to'  => $done['primary']['url'] ?? admin_url('admin.php?page=tangible-home'),
+    'render' => function () use ($done, $title) {
+      ?>
+      <h2><?php echo esc_html($title); ?> is ready</h2>
+      <p class="step-intro"><?php echo esc_html($done['summary'] ?? ''); ?></p>
+      <?php if (!empty($done['links'])) : ?>
+        <div class="tgbl-dbl"></div>
+        <p class="lbl">What people usually do next</p>
+        <ul class="tgbl-next">
+          <?php foreach ($done['links'] as $link) : ?>
+            <li><a href="<?php echo esc_url($link['url'] ?? '#'); ?>" target="_blank" rel="noopener"><?php
+              echo esc_html($link['label'] ?? ''); ?></a><?php
+              if (!empty($link['kind'])) echo ' <span class="whisper">' . esc_html($link['kind']) . '</span>'; ?></li>
+          <?php endforeach; ?>
+        </ul>
+      <?php endif;
+    },
+    'handle' => '__return_true',
+  ];
+  return $steps;
+}, 100, 3);

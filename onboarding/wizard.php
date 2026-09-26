@@ -100,6 +100,72 @@ function registered_wizards($add = null) {
   return $wizards;
 }
 
+/** Agency provisioning and the like: no redirect, no notice. */
+function is_disabled() {
+  return defined('TANGIBLE_ONBOARDING_DISABLE') && TANGIBLE_ONBOARDING_DISABLE;
+}
+
+/**
+ * Plugins that have been onboarded on this site. Framework-owned and shared,
+ * so it outlives any single plugin's uninstall. A cloned site copies it, which
+ * is the point: the clone was already set up.
+ */
+const ONBOARDED_OPTION = 'tangible_onboarding_onboarded';
+
+function was_onboarded($plugin_name) {
+  $map = get_option(ONBOARDED_OPTION, []);
+  return is_array($map) && !empty($map[$plugin_name]);
+}
+
+function mark_onboarded($plugin_name) {
+  $map = get_option(ONBOARDED_OPTION, []);
+  if (!is_array($map)) $map = [];
+  if (!empty($map[$plugin_name])) return;
+  $map[$plugin_name] = time();
+  update_option(ONBOARDED_OPTION, $map, false);
+}
+
+/** The plan's steps that ask something — terminal steps (Done) excluded. */
+function pending_questions($plan) {
+  return array_values(array_filter($plan['steps'], function ($s) { return empty($s['terminal']); }));
+}
+
+/** How many steps are still needed — for the Hub's "Resume setup". */
+function steps_left($plugin_name) {
+  return count(pending_questions(onboarding\resolve_plan($plugin_name, build_facts($plugin_name))));
+}
+
+/**
+ * Where "Back" goes: the most recently answered step before the current one
+ * that would actually reopen. A step whose needed() stays false once its
+ * record is gone (a licence that is active, a consent already on file) would
+ * just be skipped again, so it is not a target unless it declares `on_back`
+ * to clear its own state. Account-scoped steps record nothing locally and
+ * have nothing to undo.
+ */
+function back_target($plugin_name, $facts, $plan) {
+  $by_id = [];
+  foreach (onboarding\get_steps($plugin_name, $facts) as $s) $by_id[ $s['id'] ] = $s;
+  $target = null;
+  foreach ($plan['rail'] as $r) {
+    if ($r['id'] === $plan['current']) break;
+    $step = $by_id[ $r['id'] ] ?? null;
+    if (!$step || $step['scope'] === 'account') continue;
+    if (!onboarding\is_recorded($plugin_name, $step)) continue;
+    $reopens = is_callable($step['on_back'] ?? null)
+      || !is_callable($step['needed']) || call_user_func($step['needed'], $facts);
+    if ($reopens) $target = $step;
+  }
+  return $target;
+}
+
+/** One redirect a step asks for after it completes (Done's primary action). */
+function pending_redirect($url = null) {
+  static $pending = null;
+  if ($url !== null) $pending = $url;
+  return $pending;
+}
+
 function register_wizard($plugin) {
   $name = $plugin->name;
   registered_wizards($name);
@@ -109,21 +175,40 @@ function register_wizard($plugin) {
   // redirect) because activation runs in a request whose response the user
   // never sees; the next admin load performs the redirect.
   if (!empty($plugin->file_path)) {
-    register_activation_hook($plugin->file_path, function () use ($redirect_flag) {
+    register_activation_hook($plugin->file_path, function ($network_wide = false) use ($redirect_flag) {
+      // WP-CLI and network activation have no admin on the other end, and a
+      // flag left behind would redirect whoever loads wp-admin next.
+      if ($network_wide || (defined('WP_CLI') && WP_CLI) || is_disabled()) return;
       update_option($redirect_flag, 1, false);
     });
   }
 
+  // The redirect happens at most once per plugin per site, ever (spec §5).
+  // The marker lives in a framework-owned site option, so deleting and
+  // reinstalling the plugin counts as returning, not new; anything needed
+  // after that is the notice's job.
   add_action('admin_init', function () use ($plugin, $name, $redirect_flag) {
     if (!get_option($redirect_flag)) return;
     delete_option($redirect_flag);
     if (wp_doing_ajax() || !current_user_can('manage_options')) return;
     if (isset($_GET['activate-multi'])) return;   // bulk activation is not an invitation
+    if (is_network_admin() || is_disabled() || was_onboarded($name)) return;
     $plan = onboarding\resolve_plan($name, build_facts($name));
-    if (empty($plan['steps'])) return;             // nothing to ask — stay out of the way
+    if (!pending_questions($plan)) return;         // nothing to ask — stay out of the way
+    mark_onboarded($name);
     wp_safe_redirect(get_setup_url($plugin));
     exit;
   });
+
+  // Always reachable: a "Setup" link on the plugin's row, whether or not
+  // anything is pending — dismissing the notice must not strand the wizard.
+  if (!empty($plugin->file_path)) {
+    add_filter('plugin_action_links_' . plugin_basename($plugin->file_path), function ($links) use ($plugin) {
+      if (!current_user_can('manage_options')) return $links;
+      array_unshift($links, '<a href="' . esc_url(get_setup_url($plugin)) . '">Setup</a>');
+      return $links;
+    });
+  }
 
   // The hidden setup page. Parent null = reachable by URL, absent from menus.
   add_action('admin_menu', function () use ($plugin) {
@@ -156,7 +241,7 @@ function register_wizard($plugin) {
   add_filter('tangible_updater_activation_url', function ($url, $for_plugin) use ($plugin, $name) {
     if (($for_plugin->name ?? null) !== $name) return $url;
     $plan = onboarding\resolve_plan($name, build_facts($name));
-    return empty($plan['steps']) ? $url : get_setup_url($plugin);
+    return !pending_questions($plan) ? $url : get_setup_url($plugin);
   }, 10, 2);
 
   // Resumable re-entry: the playbook's one universal finding. Dismissible,
@@ -171,16 +256,17 @@ function register_wizard($plugin) {
   });
 
   add_action('admin_init', function () use ($plugin, $name) {
-    if (!current_user_can('manage_options')) return;
+    if (!current_user_can('manage_options') || is_disabled()) return;
     if (($_GET['page'] ?? '') === get_setup_slug($plugin)) return;
     $notice_key = $name . '-setup-pending';
     if (framework\is_admin_notice_dismissed($notice_key)) return;
     $plan = onboarding\resolve_plan($name, build_facts($name));
-    if (empty($plan['steps'])) return;
-    framework\register_admin_notice(function () use ($plugin, $plan, $notice_key) {
+    $questions = pending_questions($plan);
+    if (!$questions) return;
+    framework\register_admin_notice(function () use ($plugin, $questions, $notice_key) {
       $title = esc_html($plugin->title ?? $plugin->name);
       $url = esc_url(get_setup_url($plugin));
-      $n = count($plan['steps']);
+      $n = count($questions);
       echo "<div class=\"notice notice-info is-dismissible\" data-tangible-admin-notice=\"$notice_key\">"
          . "<p><strong>$title</strong> — setup has $n step" . ($n === 1 ? '' : 's') . " left. "
          . "<a href=\"$url\">Continue setup</a></p></div>";
@@ -198,7 +284,7 @@ function register_wizard($plugin) {
 function handle_step_submission($plugin_name, $post) {
   $step_id = sanitize_text_field($post['step'] ?? '');
   $do = $post['do'] ?? '';
-  if ($step_id === '' || !in_array($do, ['continue', 'skip'], true)) return null;
+  if ($step_id === '' || !in_array($do, ['continue', 'skip', 'back'], true)) return null;
 
   $facts = build_facts($plugin_name);
   $plan = onboarding\resolve_plan($plugin_name, $facts);
@@ -209,6 +295,18 @@ function handle_step_submission($plugin_name, $post) {
 
   $step = null;
   foreach ($plan['steps'] as $s) if ($s['id'] === $step_id) { $step = $s; break; }
+
+  if ($do === 'back') {
+    $target = back_target($plugin_name, $facts, $plan);
+    if (!$target) return null;
+    if (is_callable($target['on_back'] ?? null)) {
+      $plugin = function_exists('tangible\\framework\\get_plugin')
+        ? framework\get_plugin($plugin_name) : null;
+      call_user_func($target['on_back'], $plugin, $target);
+    }
+    onboarding\unmark($plugin_name, $target['id']);
+    return $target['id'];
+  }
 
   if ($do === 'skip') {
     if (!$step['skippable']) return null;
@@ -242,6 +340,7 @@ function handle_step_submission($plugin_name, $post) {
     }
   }
   onboarding\mark($plugin_name, $step_id, 'done');
+  if (!empty($step['redirect_to'])) pending_redirect((string) $step['redirect_to']);
   return $step_id;
 }
 
@@ -256,7 +355,7 @@ add_action('admin_post_tangible_onboarding_step', function () {
   $plugin_name = sanitize_text_field($_POST['plugin'] ?? '');
   handle_step_submission($plugin_name, $_POST);
   $plugin = framework\get_plugin($plugin_name);
-  wp_safe_redirect($plugin ? get_setup_url($plugin) : admin_url());
+  wp_safe_redirect(pending_redirect() ?: ($plugin ? get_setup_url($plugin) : admin_url()));
   exit;
 });
 
@@ -496,8 +595,12 @@ function render_option_group($aria_label, $render_cards, $layout = 'stack', $sin
 
 function render_wizard($plugin) {
   $name = $plugin->name;
+  // Opening the wizard by hand counts: the activation redirect never fires
+  // for a plugin someone already set up this way.
+  mark_onboarded($name);
   $facts = build_facts($name);
   $plan = onboarding\resolve_plan($name, $facts);
+  $back = $plan['current'] ? back_target($name, $facts, $plan) : null;
   $step = $plan['steps'][0] ?? null;
   $total = count($plan['rail']);
   $position = 0; $done = 0;
@@ -1067,6 +1170,9 @@ function render_wizard($plugin) {
           </div>
         </main>
         <footer class="tgbl-wizard__footer">
+          <?php if ($back) : ?>
+            <button class="tgbl-skip tgbl-back" type="submit" name="do" value="back" formnovalidate>Back</button>
+          <?php endif; ?>
           <span style="flex:1"></span>
           <?php if ($step['skippable']) : ?>
             <button class="tgbl-skip" type="submit" name="do" value="skip">Skip this step</button>
