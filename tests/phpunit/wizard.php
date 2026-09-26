@@ -438,6 +438,16 @@ class Shell_Rules_TestCase extends \WP_UnitTestCase {
     $this->assertSame('https://example.test/open', onboarding\pending_redirect());
   }
 
+  function test_activation_is_noticed_by_basename_and_consumed_once() {
+    do_action('activated_plugin', 'ruletest/ruletest.php', false);
+    $this->assertTrue(onboarding\consume_activation('ruletest/ruletest.php'));
+    $this->assertFalse(onboarding\consume_activation('ruletest/ruletest.php'));
+    // Network activation leaves nothing behind.
+    do_action('activated_plugin', 'ruletest/ruletest.php', true);
+    $this->assertFalse(onboarding\consume_activation('ruletest/ruletest.php'));
+    delete_option(onboarding\ACTIVATED_OPTION);
+  }
+
   function test_the_onboarded_marker_is_set_once() {
     $this->assertFalse(onboarding\was_onboarded('ruletest'));
     onboarding\mark_onboarded('ruletest');

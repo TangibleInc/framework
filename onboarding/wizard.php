@@ -100,6 +100,33 @@ function registered_wizards($add = null) {
   return $wizards;
 }
 
+/**
+ * Framework-wide: remember which plugins were just activated, by basename.
+ * The framework is loaded during the activation request (the plugin requires
+ * it at file scope), so this listener is in place when WordPress fires the
+ * action. WP-CLI and network activation have no admin on the other end, and a
+ * flag left behind would redirect whoever loads wp-admin next.
+ */
+const ACTIVATED_OPTION = 'tangible_onboarding_activated';
+
+add_action('activated_plugin', function ($basename, $network_wide = false) {
+  if ($network_wide || (defined('WP_CLI') && WP_CLI) || is_disabled()) return;
+  $pending = get_option(ACTIVATED_OPTION, []);
+  if (!is_array($pending)) $pending = [];
+  $pending[$basename] = time();
+  update_option(ACTIVATED_OPTION, $pending, false);
+}, 10, 2);
+
+/** True once for a just-activated plugin (within the hour); clears the entry. */
+function consume_activation($basename) {
+  $pending = get_option(ACTIVATED_OPTION, []);
+  if (!is_array($pending) || empty($pending[$basename])) return false;
+  $at = (int) $pending[$basename];
+  unset($pending[$basename]);
+  update_option(ACTIVATED_OPTION, $pending, false);
+  return $at > time() - HOUR_IN_SECONDS;
+}
+
 /** Agency provisioning and the like: no redirect, no notice. */
 function is_disabled() {
   return defined('TANGIBLE_ONBOARDING_DISABLE') && TANGIBLE_ONBOARDING_DISABLE;
@@ -174,13 +201,13 @@ function register_wizard($plugin) {
   // Activation → one-shot redirect flag. The flag pattern (not a direct
   // redirect) because activation runs in a request whose response the user
   // never sees; the next admin load performs the redirect.
-  if (!empty($plugin->file_path)) {
-    register_activation_hook($plugin->file_path, function ($network_wide = false) use ($redirect_flag) {
-      // WP-CLI and network activation have no admin on the other end, and a
-      // flag left behind would redirect whoever loads wp-admin next.
-      if ($network_wide || (defined('WP_CLI') && WP_CLI) || is_disabled()) return;
-      update_option($redirect_flag, 1, false);
-    });
+  // Activation is noticed by the framework-wide `activated_plugin` listener
+  // below, not by register_activation_hook(): a plugin that calls
+  // register_wizard() inside its own plugins_loaded callback (the house
+  // pattern) never gets that hook registered during the activation request,
+  // because plugins_loaded already ran before WordPress included it.
+  if (!empty($plugin->file_path) && consume_activation(plugin_basename($plugin->file_path))) {
+    update_option($redirect_flag, 1, false);
   }
 
   // The redirect happens at most once per plugin per site, ever (spec §5).
