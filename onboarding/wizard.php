@@ -127,6 +127,29 @@ function consume_activation($basename) {
   return $at > time() - HOUR_IN_SECONDS;
 }
 
+/**
+ * Plugins that became active since the last admin load, by basename. The
+ * fallback above must know WHICH plugin was just activated — "any wizard not
+ * yet onboarded" sent a Merge activation to SearchSync's setup. A snapshot of
+ * active_plugins taken on every admin load, diffed once per request, answers
+ * that no matter which framework copy handled the activation request. The
+ * first run only takes the snapshot (otherwise everything looks new).
+ */
+const ACTIVE_SNAPSHOT_OPTION = 'tangible_onboarding_active_snapshot';
+
+function newly_active_plugins() {
+  static $newly = null;
+  if ($newly !== null) return $newly;
+  $active = (array) get_option('active_plugins', []);
+  $snapshot = get_option(ACTIVE_SNAPSHOT_OPTION, null);
+  $newly = is_array($snapshot) ? array_values(array_diff($active, $snapshot)) : [];
+  if ($snapshot !== $active) update_option(ACTIVE_SNAPSHOT_OPTION, $active, false);
+  return $newly;
+}
+
+// Keep the snapshot current on every admin load, not only when a wizard asks.
+add_action('admin_init', function () { newly_active_plugins(); }, 0);
+
 /** Agency provisioning and the like: no redirect, no notice. */
 function is_disabled() {
   return defined('TANGIBLE_ONBOARDING_DISABLE') && TANGIBLE_ONBOARDING_DISABLE;
@@ -219,7 +242,9 @@ function register_wizard($plugin) {
     // framework copy won the load in the activation request, nothing recorded
     // it. WordPress lands a single activation on plugins.php?activate=true;
     // a wizard never onboarded here takes that as its first run.
-    $landed = ($GLOBALS['pagenow'] ?? '') === 'plugins.php' && ($_GET['activate'] ?? '') === 'true';
+    $landed = ($GLOBALS['pagenow'] ?? '') === 'plugins.php' && ($_GET['activate'] ?? '') === 'true'
+      && !empty($plugin->file_path)
+      && in_array(plugin_basename($plugin->file_path), newly_active_plugins(), true);
     if (!get_option($redirect_flag) && !($landed && !was_onboarded($name))) return;
     delete_option($redirect_flag);
     if (wp_doing_ajax() || !current_user_can('manage_options')) return;
