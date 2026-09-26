@@ -12,7 +12,7 @@
  *   flow.php    Connect (start), the return handler (exchange + confirm),
  *               Disconnect
  *   hooks.php   the REST verify endpoint, the updater's get_metadata header,
- *               the Hub card
+ *               the notice copy the Hub shows (hub/page.php draws the band)
  *   step.php    the `connect` core onboarder step (free plugins only)
  *
  * Security notes

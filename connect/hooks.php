@@ -10,7 +10,8 @@
  *         keyless checks, and the connected `onboarding` block is cached from
  *         the response as the wizard's facts. A `connection: revoked` answer
  *         drops the token (fall back to Anonymous).
- *   Hub   a small "tangible.one account" card: Connect / Disconnect.
+ *   Hub   the round-trip notice copy; hub/page.php draws the band and the
+ *         site block and posts to flow.php's actions.
  */
 namespace tangible\connect;
 
@@ -114,29 +115,9 @@ add_action('tangible_connect_cleared', function () {
   }
 });
 
-// ── Hub card ──────────────────────────────────────────────────────────────
+// ── Hub pieces (the page itself is hub/page.php) ─────────────────────
 
-function render_connect_button($return_to, $label = 'Connect to tangible.one') {
-  ?>
-  <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="display:inline">
-    <input type="hidden" name="action" value="tangible_connect_start" />
-    <input type="hidden" name="return_to" value="<?php echo esc_attr($return_to); ?>" />
-    <?php wp_nonce_field('tangible_connect_start'); ?>
-    <button type="submit" class="button button-primary"><?php echo esc_html($label); ?></button>
-  </form>
-  <?php
-}
-
-function render_post_button($action, $label, $class = 'button') {
-  ?>
-  <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="display:inline">
-    <input type="hidden" name="action" value="<?php echo esc_attr($action); ?>" />
-    <?php wp_nonce_field($action); ?>
-    <button type="submit" class="<?php echo esc_attr($class); ?>"><?php echo esc_html($label); ?></button>
-  </form>
-  <?php
-}
-
+/** What the Hub says after a Connect round trip (the flow sets the key). */
 const NOTICE_COPY = [
   'connected'    => 'This site is connected to tangible.one.',
   'pending'      => 'Connected, but tangible.one could not verify this site yet. Check that the REST API is reachable, then try again.',
@@ -145,38 +126,3 @@ const NOTICE_COPY = [
   'revoked'      => 'The connection was revoked on tangible.one.',
   'disconnected' => 'This site is no longer connected.',
 ];
-
-function render_hub_card() {
-  if (!current_user_can('manage_options')) return;
-  $notice = get_transient(notice_key(get_current_user_id()));
-  if ($notice) delete_transient(notice_key(get_current_user_id()));
-  $state = get_state();
-  $status = get_token() === '' ? 'none' : ($state['status'] ?? 'pending');
-  ?>
-  <div class="tgbl-card">
-    <div class="tgbl-card-h"><span class="lbl">tangible.one account</span></div>
-    <div style="padding:14px 16px">
-      <?php if ($notice && isset(NOTICE_COPY[$notice])) : ?>
-        <p><strong><?php echo esc_html(NOTICE_COPY[$notice]); ?></strong></p>
-      <?php endif; ?>
-      <?php if ($status === 'active') : ?>
-        <p>Free Tangible plugins on this site are linked to
-          <strong><?php echo esc_html($state['account_name'] ?: 'your account'); ?></strong>
-          <?php if (!empty($state['owner_email_masked'])) echo '(' . esc_html($state['owner_email_masked']) . ')'; ?>.
-          Licensed plugins keep using their keys.</p>
-        <p><a href="<?php echo esc_url(app_base() . '/websites/connected'); ?>" target="_blank" rel="noopener">Manage on tangible.one</a>
-          &nbsp; <?php render_post_button('tangible_connect_disconnect', 'Disconnect'); ?></p>
-      <?php elseif ($status === 'pending') : ?>
-        <p>Waiting for tangible.one to verify this site.</p>
-        <p><?php render_post_button('tangible_connect_confirm', 'Check again', 'button button-primary'); ?>
-          &nbsp; <?php render_post_button('tangible_connect_disconnect', 'Cancel'); ?></p>
-      <?php else : ?>
-        <p>Connect this site once and every free Tangible plugin on it can use your tangible.one
-           account — no licence key, no asking again on each plugin.</p>
-        <p><?php render_connect_button(admin_url('admin.php?page=tangible-home')); ?></p>
-      <?php endif; ?>
-    </div>
-  </div>
-  <?php
-}
-add_action('tangible_hub_main_cards', __NAMESPACE__ . '\\render_hub_card');
