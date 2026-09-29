@@ -16,6 +16,12 @@ if (!function_exists('tangible\\updater\\is_free_distribution')) {
       return get_option((($plugin->setting_prefix ?? $plugin->name) ?? "") . "_distribution") === "free";
     }');
 }
+if (!function_exists('tangible\\updater\\is_distribution_known')) {
+  eval('namespace tangible\\updater;
+    function is_distribution_known($plugin) {
+      return in_array(get_option((($plugin->setting_prefix ?? $plugin->name) ?? "") . "_distribution"), ["free", "licensed"], true);
+    }');
+}
 
 /**
  * Tangible Connect, wp-admin side: start → return (exchange + confirm) →

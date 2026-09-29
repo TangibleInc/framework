@@ -138,17 +138,54 @@ function consume_activation($basename) {
 const ACTIVE_SNAPSHOT_OPTION = 'tangible_onboarding_active_snapshot';
 
 function newly_active_plugins() {
-  static $newly = null;
-  if ($newly !== null) return $newly;
+  return active_snapshot_diff()['newly'];
+}
+
+/** True when this request found no snapshot to diff against. */
+function had_no_active_snapshot() {
+  return active_snapshot_diff()['missing'];
+}
+
+function active_snapshot_diff() {
+  static $diff = null;
+  if ($diff !== null) return $diff;
   $active = (array) get_option('active_plugins', []);
   $snapshot = get_option(ACTIVE_SNAPSHOT_OPTION, null);
-  $newly = is_array($snapshot) ? array_values(array_diff($active, $snapshot)) : [];
+  $diff = [
+    'newly'   => is_array($snapshot) ? array_values(array_diff($active, $snapshot)) : [],
+    'missing' => !is_array($snapshot),
+  ];
   if ($snapshot !== $active) update_option(ACTIVE_SNAPSHOT_OPTION, $active, false);
-  return $newly;
+  return $diff;
 }
 
 // Keep the snapshot current on every admin load, not only when a wizard asks.
 add_action('admin_init', function () { newly_active_plugins(); }, 0);
+
+// A deactivation leaves the snapshot at once. Otherwise a plugin turned off
+// while no current framework copy loads stays in the snapshot, and turning it
+// back on never looks new. The deactivation request always has a current copy
+// loaded: the plugin being turned off is still active and brings it.
+add_action('deactivated_plugin', function ($basename, $network_wide = false) {
+  if ($network_wide) return;
+  $snapshot = get_option(ACTIVE_SNAPSHOT_OPTION, null);
+  if (!is_array($snapshot)) return;
+  $kept = array_values(array_diff($snapshot, [$basename]));
+  if ($kept !== $snapshot) update_option(ACTIVE_SNAPSHOT_OPTION, $kept, false);
+}, 10, 2);
+
+/**
+ * The one wizard a first-run landing can mean. With no snapshot there is no
+ * diff, so the only safe guess is elimination: exactly one registered wizard
+ * never onboarded here. Two or more is ambiguous (the Merge→SearchSync
+ * misroute), so nothing redirects and the notice points the way instead.
+ */
+function sole_unonboarded_wizard() {
+  $never = array_values(array_filter(array_keys(registered_wizards()), function ($name) {
+    return !was_onboarded($name);
+  }));
+  return count($never) === 1 ? $never[0] : null;
+}
 
 /** Agency provisioning and the like: no redirect, no notice. */
 function is_disabled() {
@@ -244,7 +281,8 @@ function register_wizard($plugin) {
     // a wizard never onboarded here takes that as its first run.
     $landed = ($GLOBALS['pagenow'] ?? '') === 'plugins.php' && ($_GET['activate'] ?? '') === 'true'
       && !empty($plugin->file_path)
-      && in_array(plugin_basename($plugin->file_path), newly_active_plugins(), true);
+      && (in_array(plugin_basename($plugin->file_path), newly_active_plugins(), true)
+        || (had_no_active_snapshot() && sole_unonboarded_wizard() === $name));
     if (!get_option($redirect_flag) && !($landed && !was_onboarded($name))) return;
     delete_option($redirect_flag);
     if (wp_doing_ajax() || !current_user_can('manage_options')) return;
@@ -301,9 +339,10 @@ function register_wizard($plugin) {
     return !pending_questions($plan) ? $url : get_setup_url($plugin);
   }, 10, 2);
 
-  // Resumable re-entry: the playbook's one universal finding. Dismissible,
-  // and it re-resolves each load, so finishing setup removes it without a
-  // dismissal ever being recorded.
+  // Resumable re-entry: the playbook's one universal finding. Dismissible
+  // (see notice_is_sticky for the one exception), and it re-resolves each
+  // load, so finishing setup removes it without a dismissal ever being
+  // recorded.
   // Outbox retry: any visit to the setup page redelivers unsynced consent
   // answers (server side is idempotent, so over-triggering costs nothing).
   add_action('admin_init', function () use ($plugin) {
@@ -316,19 +355,34 @@ function register_wizard($plugin) {
     if (!current_user_can('manage_options') || is_disabled()) return;
     if (($_GET['page'] ?? '') === get_setup_slug($plugin)) return;
     $notice_key = $name . '-setup-pending';
-    if (framework\is_admin_notice_dismissed($notice_key)) return;
-    $plan = onboarding\resolve_plan($name, build_facts($name));
+    $facts = build_facts($name);
+    $sticky = notice_is_sticky($plugin, $facts);
+    if (!$sticky && framework\is_admin_notice_dismissed($notice_key)) return;
+    $plan = onboarding\resolve_plan($name, $facts);
     $questions = pending_questions($plan);
     if (!$questions) return;
-    framework\register_admin_notice(function () use ($plugin, $questions, $notice_key) {
+    framework\register_admin_notice(function () use ($plugin, $questions, $notice_key, $sticky) {
       $title = esc_html($plugin->title ?? $plugin->name);
       $url = esc_url(get_setup_url($plugin));
       $n = count($questions);
-      echo "<div class=\"notice notice-info is-dismissible\" data-tangible-admin-notice=\"$notice_key\">"
+      $class = $sticky ? 'notice notice-warning' : 'notice notice-info is-dismissible';
+      echo "<div class=\"$class\" data-tangible-admin-notice=\"$notice_key\">"
          . "<p><strong>$title</strong> — setup has $n step" . ($n === 1 ? '' : 's') . " left. "
          . "<a href=\"$url\">Continue setup</a></p></div>";
     });
   });
+}
+
+/**
+ * The setup notice cannot be dismissed only while a paid plugin has no active
+ * licence on a live site: without it the plugin gets no updates, which is
+ * worth insisting on. Everything else is a nudge the reader may close for good.
+ * Dev sites are exempt, since they often run a paid plugin unlicensed.
+ */
+function notice_is_sticky($plugin, $facts) {
+  return is_licensed_distribution($plugin)
+    && empty($facts->licence_active)
+    && !is_dev_site();
 }
 
 /**

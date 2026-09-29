@@ -228,6 +228,33 @@ function is_free_distribution($plugin) {
     && \tangible\updater\is_free_distribution($plugin);
 }
 
+/**
+ * Paid: the server has answered and the answer was not free. Unknown is not
+ * paid, and neither is a plugin without the updater (a wordpress.org build).
+ */
+function is_licensed_distribution($plugin) {
+  return $plugin && function_exists('tangible\\updater\\is_distribution_known')
+    && \tangible\updater\is_distribution_known($plugin)
+    && !is_free_distribution($plugin);
+}
+
+/**
+ * A development site: WordPress's own environment type when set to local or
+ * development, else a host that only resolves on a developer's machine.
+ * WP_ENVIRONMENT_TYPE defaults to production, so the host check does most of
+ * the work in practice. Staging is not dev: a staging clone of a live site
+ * normally carries the licence.
+ */
+function is_dev_site() {
+  $dev = in_array(wp_get_environment_type(), ['local', 'development'], true);
+  if (!$dev) {
+    $host = strtolower((string) wp_parse_url(home_url(), PHP_URL_HOST));
+    $dev = in_array($host, ['localhost', '127.0.0.1', '[::1]'], true)
+      || (bool) preg_match('/\.(local|test|localhost|ddev\.site|lndo\.site)$/', $host);
+  }
+  return (bool) apply_filters('tangible_onboarding_is_dev_site', $dev);
+}
+
 const TELEMETRY_CONSENT_TEXT =
   'Share anonymous performance and usage data — execution times, which features are used, '
   . 'content counts, a role histogram. Never content, names, or visitor data. (extended telemetry v1)';

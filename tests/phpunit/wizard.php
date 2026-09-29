@@ -448,6 +448,48 @@ class Shell_Rules_TestCase extends \WP_UnitTestCase {
     delete_option(onboarding\ACTIVATED_OPTION);
   }
 
+  function test_a_deactivated_plugin_leaves_the_snapshot() {
+    update_option(onboarding\ACTIVE_SNAPSHOT_OPTION, ['a/a.php', 'ruletest/ruletest.php'], false);
+    do_action('deactivated_plugin', 'ruletest/ruletest.php', false);
+    $this->assertSame(['a/a.php'], get_option(onboarding\ACTIVE_SNAPSHOT_OPTION));
+    delete_option(onboarding\ACTIVE_SNAPSHOT_OPTION);
+  }
+
+  function test_only_a_sole_never_onboarded_wizard_is_guessed() {
+    delete_option(onboarding\ONBOARDED_OPTION);
+    foreach (array_keys(onboarding\registered_wizards()) as $name) {
+      if ($name !== 'ruletest') onboarding\mark_onboarded($name);
+    }
+    $this->assertSame('ruletest', onboarding\sole_unonboarded_wizard());
+    onboarding\registered_wizards('othertest');
+    $this->assertNull(onboarding\sole_unonboarded_wizard());
+    delete_option(onboarding\ONBOARDED_OPTION);
+  }
+
+  function test_the_notice_is_sticky_only_for_an_unlicensed_paid_plugin_on_a_live_site() {
+    $plugin = (object) [ 'name' => 'ruletest', 'setting_prefix' => 'ruletest' ];
+    $unlicensed = (object) [ 'licence_active' => false ];
+    $licensed = (object) [ 'licence_active' => true ];
+    $live = function () { return false; };
+    add_filter('tangible_onboarding_is_dev_site', $live);
+
+    update_option('ruletest_distribution', 'licensed');
+    $this->assertTrue(onboarding\notice_is_sticky($plugin, $unlicensed));
+    $this->assertFalse(onboarding\notice_is_sticky($plugin, $licensed));
+
+    update_option('ruletest_distribution', 'free');
+    $this->assertFalse(onboarding\notice_is_sticky($plugin, $unlicensed));
+    delete_option('ruletest_distribution');
+    $this->assertFalse(onboarding\notice_is_sticky($plugin, $unlicensed), 'unknown is not paid');
+
+    remove_filter('tangible_onboarding_is_dev_site', $live);
+    update_option('ruletest_distribution', 'licensed');
+    add_filter('tangible_onboarding_is_dev_site', '__return_true');
+    $this->assertFalse(onboarding\notice_is_sticky($plugin, $unlicensed), 'dev sites may dismiss');
+    remove_filter('tangible_onboarding_is_dev_site', '__return_true');
+    delete_option('ruletest_distribution');
+  }
+
   function test_the_onboarded_marker_is_set_once() {
     $this->assertFalse(onboarding\was_onboarded('ruletest'));
     onboarding\mark_onboarded('ruletest');
