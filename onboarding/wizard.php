@@ -298,9 +298,11 @@ function register_wizard($plugin) {
   // Always reachable: a "Setup" link on the plugin's row, whether or not
   // anything is pending — dismissing the notice must not strand the wizard.
   if (!empty($plugin->file_path)) {
-    add_filter('plugin_action_links_' . plugin_basename($plugin->file_path), function ($links) use ($plugin) {
+    add_filter('plugin_action_links_' . plugin_basename($plugin->file_path), function ($links) use ($plugin, $name) {
       if (!current_user_can('manage_options')) return $links;
-      array_unshift($links, '<a href="' . esc_url(get_setup_url($plugin)) . '">Setup</a>');
+      $left = steps_left($name);
+      $label = $left ? 'Setup (' . $left . ' step' . ($left === 1 ? '' : 's') . ' left)' : 'Setup';
+      array_unshift($links, '<a href="' . esc_url(get_setup_url($plugin)) . '">' . esc_html($label) . '</a>');
       return $links;
     });
   }
