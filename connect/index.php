@@ -31,16 +31,45 @@ const SITE_ID_OPTION = 'tangible_connect_site_id';
 const HEADER = 'X-Tangible-Site-Token';
 const FLOW_TTL = 15 * MINUTE_IN_SECONDS;
 
-/** API host. Override per site with TANGIBLE_CLOUD_API in wp-config.php. */
-function api_base() {
-  $base = defined('TANGIBLE_CLOUD_API') ? TANGIBLE_CLOUD_API : 'https://api.tangible.one/';
-  return rtrim((string) $base, '/');
+/**
+ * The origin of TANGIBLE_CLOUD_URL — the updater's switch, e.g.
+ * `https://api.staging.tangible.one/api/edd` → `https://api.staging.tangible.one`.
+ * A site pointed at staging for licences must not Connect to prod by default.
+ */
+function cloud_url_origin() {
+  return defined('TANGIBLE_CLOUD_URL') ? url_origin((string) TANGIBLE_CLOUD_URL) : '';
 }
 
-/** The tangible.one app (consent screen). Override with TANGIBLE_CONNECT_APP_URL. */
+/** scheme://host of a URL, or '' when it has neither. */
+function url_origin($url) {
+  $parts = wp_parse_url($url);
+  if (empty($parts['scheme']) || empty($parts['host'])) return '';
+  return $parts['scheme'] . '://' . $parts['host'];
+}
+
+/** The app for an API origin: its `api.` label dropped. */
+function app_for_api_origin($origin) {
+  return preg_replace('#^(https?://)api\.#', '$1', $origin);
+}
+
+/**
+ * API host. Override per site with TANGIBLE_CLOUD_API in wp-config.php; else
+ * the origin of TANGIBLE_CLOUD_URL; else production.
+ */
+function api_base() {
+  if (defined('TANGIBLE_CLOUD_API')) return rtrim((string) TANGIBLE_CLOUD_API, '/');
+  return cloud_url_origin() ?: 'https://api.tangible.one';
+}
+
+/**
+ * The tangible.one app (consent screen). Override with TANGIBLE_CONNECT_APP_URL;
+ * else TANGIBLE_CLOUD_URL's host with its `api.` label dropped
+ * (api.staging.tangible.one → staging.tangible.one); else production.
+ */
 function app_base() {
-  $base = defined('TANGIBLE_CONNECT_APP_URL') ? TANGIBLE_CONNECT_APP_URL : 'https://tangible.one';
-  return rtrim((string) $base, '/');
+  if (defined('TANGIBLE_CONNECT_APP_URL')) return rtrim((string) TANGIBLE_CONNECT_APP_URL, '/');
+  $origin = cloud_url_origin();
+  return $origin ? app_for_api_origin($origin) : 'https://tangible.one';
 }
 
 function get_state() {

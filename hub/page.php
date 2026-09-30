@@ -253,6 +253,10 @@ function render_site_block($steward, $connect) {
         <?php post_form('tangible_hub_steward', 'A client', 'hy-link', [ 'steward' => 'client' ]); ?>
       </div>
     <?php endif; ?>
+    <?php // The per-site usage-data refusal (ADR-011 §3), one answer for every Tangible plugin here.
+    if (function_exists('tangible\\onboarding\\render_site_telemetry_setting')) {
+      \tangible\onboarding\render_site_telemetry_setting('steward', 'hy-link');
+    } ?>
   </div>
   <div class="blk">
     <div class="top"><span class="hy-lbl">tangible.one</span></div>
