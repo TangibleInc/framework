@@ -188,11 +188,13 @@ class Core_Steps_TestCase extends \WP_UnitTestCase {
     $this->assertSame('consent', $recorded);
 
     $outbox = get_option(onboarding\CONSENT_OUTBOX);
-    $this->assertSame('granted', $outbox['telemetry_extended']['answer']);
+    // A licensed build is never asked about usage data (ADR-011 §4): the
+    // posted telemetry answer is ignored, marketing is recorded.
+    $this->assertArrayNotHasKey('telemetry_extended', $outbox);
     $this->assertSame('declined', $outbox['marketing']['answer']);
     // The exact wording shown rides with the answer — provable later.
     $this->assertNotEmpty($outbox['marketing']['consent_text']);
-    $this->assertFalse($outbox['telemetry_extended']['synced']);
+    $this->assertFalse($outbox['marketing']['synced']);
 
     // A declined marketing ask is an ANSWER: the wizard never re-asks it.
     $plan = onboarding\resolve_plan('coretest', onboarding\build_facts('coretest'));

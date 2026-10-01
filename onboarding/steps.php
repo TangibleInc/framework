@@ -256,8 +256,9 @@ function is_dev_site() {
 }
 
 const TELEMETRY_CONSENT_TEXT =
-  'Share anonymous performance and usage data — execution times, which features are used, '
-  . 'content counts, a role histogram. Never content, names, or visitor data. (extended telemetry v1)';
+  'Share usage data from this site — performance timings, which features are used, content counts, '
+  . 'a role histogram and version basics. Never content, names, or visitor data. One answer for every '
+  . 'Tangible plugin on the site. (telemetry v2, site answer)';
 
 const MARKETING_CONSENT_TEXT =
   'Email me release notes and product updates from Tangible. Unsubscribe any time. '
@@ -418,7 +419,13 @@ add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name =
   }
 
   // ── Consent: one step, two asks, asked separately, never bundled ─────────
-  $ask_telemetry = ($facts->ask['telemetry_extended'] ?? null) === 'ask';
+  // Telemetry (ADR-011 §4): only an UNCONNECTED FREE plugin is asked, once
+  // per site. A licensed or connected site's account accepted the Terms, which
+  // are the grant — whatever an older server's block says. Its refusal is the
+  // per-site setting (site-telemetry.php), not a wizard question.
+  $wizard_plugin = function_exists('tangible\\framework\\get_plugin') ? framework\get_plugin($plugin_name) : null;
+  $ask_telemetry = is_anonymous($wizard_plugin)
+    && ($facts->ask['telemetry_extended'] ?? null) === 'ask';
   $ask_marketing = ($facts->ask['marketing'] ?? null) === 'ask';
 
   $steps[] = [
@@ -434,11 +441,8 @@ add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name =
     },
     'skip_note' => 'on file',
     'render' => function ($plugin) use ($ask_telemetry, $ask_marketing) {
-      // The tier boundary, kept visibly straight: on a paid build, BASIC
-      // telemetry (WP/PHP/plugin versions, site URL) is already held as a
-      // term of purchase — checkout was the portal for it. This step asks
-      // for EXTENDED — usage data — so the payload shown is the extended
-      // payload: real values from this site, none of them version basics.
+      // The payload shown is real values from this site: the facts that
+      // would be sent, not a policy link.
       $roles = function_exists('wp_roles') ? count(wp_roles()->roles) : 0;
       $posts = wp_count_posts('post'); $pages = wp_count_posts('page');
       $payload = [
@@ -447,18 +451,17 @@ add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name =
         'active plugins'  => number_format_i18n(count((array) get_option('active_plugins', []))),
         'locale'          => get_locale(),
       ];
-      $free = is_free_distribution($plugin);
-      $paid = !empty($plugin->cloud_id) && !$free;
+      $both = $ask_telemetry && $ask_marketing;
       ?>
-      <h2>Two optional things</h2>
-      <p class="step-intro"><strong>No</strong> is a complete answer to both — the plugin works
+      <h2><?php echo $both ? 'Two optional things' : 'One optional thing'; ?></h2>
+      <p class="step-intro"><strong>No</strong> is a complete answer<?php echo $both ? ' to both' : ''; ?> — the plugin works
          exactly the same either way. We ask rather than assume, so you do have to answer.</p>
       <div class="tgbl-dbl"></div>
 
       <?php if ($ask_telemetry) {
         render_answer_pair('telemetry_extended',
-          'Share performance and usage data?',
-          'Execution times and performance timings, which features you use, content counts, a role histogram. Never your content, your users, or your visitors.');
+          'Share usage data from this site?',
+          'Performance timings, which features you use, content counts, a role histogram, and version basics (WordPress, PHP, plugin). Never your content, your users, or your visitors. One answer for every Tangible plugin here — change it any time in Tangible Home.');
         // Show the payload, not a policy link — this site's actual numbers.
         ?>
         <table style="margin:10px 0 0; border-collapse:collapse">
@@ -469,11 +472,7 @@ add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name =
             </tr>
           <?php endforeach; ?>
         </table>
-        <?php if ($paid) : ?>
-          <p class="whisper">Version and environment basics (WordPress, PHP,
-             plugin version) are already shared under your licence terms — this question is about
-             the rest.</p>
-        <?php endif;
+        <?php
       } ?>
 
       <?php if ($ask_marketing) {

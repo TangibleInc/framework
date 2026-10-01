@@ -185,6 +185,14 @@ class Connect_TestCase extends \WP_UnitTestCase {
     delete_option('tangible_onboarding_facts_cache__freeplug');
   }
 
+  function test_a_staging_cloud_url_points_connect_at_staging() {
+    $origin = connect\url_origin('https://api.staging.tangible.one/api/edd');
+    $this->assertSame('https://api.staging.tangible.one', $origin);
+    $this->assertSame('https://staging.tangible.one', connect\app_for_api_origin($origin));
+    $this->assertSame('https://dev-site.tangible.one', connect\app_for_api_origin('https://dev-site.tangible.one'));
+    $this->assertSame('', connect\url_origin('not a url'));
+  }
+
   function test_disconnect_revokes_server_side_then_clears_even_if_that_fails() {
     connect\save_state([ 'token' => self::TOKEN, 'status' => 'active' ]);
     $this->fake_platform([]);   // every call fails
@@ -230,23 +238,23 @@ class Connect_Step_TestCase extends \WP_UnitTestCase {
 
   function test_free_and_not_connected_shows_connect_before_consent() {
     $ids = $this->ids();
-    $this->assertContains('connect', $ids);
-    $this->assertLessThan(array_search('consent', $ids, true), array_search('connect', $ids, true));
+    $this->assertContains(connect\STEP_ID, $ids);
+    $this->assertLessThan(array_search('consent', $ids, true), array_search(connect\STEP_ID, $ids, true));
   }
 
   function test_connected_or_licensed_hides_it() {
     connect\save_state([ 'token' => Connect_TestCase::TOKEN, 'status' => 'active' ]);
-    $this->assertNotContains('connect', $this->ids());
+    $this->assertNotContains(connect\STEP_ID, $this->ids());
     connect\clear();
     update_option('freeconnect_distribution', 'licensed', false);
-    $this->assertNotContains('connect', $this->ids());
+    $this->assertNotContains(connect\STEP_ID, $this->ids());
   }
 
   function test_continue_starts_the_grant_and_records_nothing_yet() {
     wp_set_current_user(self::factory()->user->create([ 'role' => 'administrator' ]));
-    $this->assertNull(onboarding\handle_step_submission('freeconnect', [ 'step' => 'connect', 'do' => 'continue' ]));
+    $this->assertNull(onboarding\handle_step_submission('freeconnect', [ 'step' => connect\STEP_ID, 'do' => 'continue' ]));
     $this->assertStringStartsWith(connect\app_base() . '/connect/authorize?', onboarding\pending_redirect());
-    $this->assertContains('connect', $this->ids());
+    $this->assertContains(connect\STEP_ID, $this->ids());
     // tangible.one is an allowed redirect host only inside the step submission.
     $this->assertSame('nope', wp_validate_redirect(onboarding\pending_redirect(), 'nope'));
   }
@@ -264,6 +272,75 @@ class Connect_Step_TestCase extends \WP_UnitTestCase {
     $this->assertSame('', (string) $this->requests[0]['body']['license']);
     $this->assertNotFalse($this->requests[0]['sslverify'] ?? true);   // WP's verified default
     $this->assertTrue(get_option(onboarding\CONSENT_OUTBOX)['telemetry_extended']['synced']);
+  }
+
+  private function consent_needed() {
+    // Marketing answered elsewhere, so `needed` is the telemetry question alone.
+    $facts = onboarding\build_facts('freeconnect');
+    $facts->ask['marketing'] = 'skip';
+    foreach (onboarding\resolve_plan('freeconnect', $facts)['steps'] as $s) {
+      if ($s['id'] === 'consent') return ($s['needed'])($facts);
+    }
+    return false;
+  }
+
+  function test_only_an_unconnected_free_site_is_asked_about_usage_data() {
+    // ADR-011 §4: licensed and connected accounts accepted the Terms.
+    $this->assertTrue($this->consent_needed());
+    connect\save_state([ 'token' => Connect_TestCase::TOKEN, 'status' => 'active' ]);
+    $this->assertFalse($this->consent_needed());
+    connect\clear();
+    update_option('freeconnect_distribution', 'licensed', false);
+    $this->assertFalse($this->consent_needed());
+  }
+
+  function test_the_site_setting_is_one_answer_for_the_site() {
+    add_filter('pre_http_request', function () { return new \WP_Error('offline', 'no network in tests'); });
+    onboarding\set_site_telemetry(false);
+    $this->assertTrue(onboarding\site_telemetry_refused());
+    $entry = get_option(onboarding\CONSENT_OUTBOX)['telemetry_extended'];
+    $this->assertSame('declined', $entry['answer']);
+    $this->assertSame(onboarding\SITE_TELEMETRY_OFF_TEXT, $entry['consent_text']);
+    // Answered, so the wizard never asks it again.
+    $this->assertFalse($this->consent_needed());
+    onboarding\set_site_telemetry(true);
+    $this->assertFalse(onboarding\site_telemetry_refused());
+  }
+
+  function test_coexists_with_a_plugin_step_named_connect() {
+    // SearchSync's backend step is `connect`; the framework's must not collide.
+    add_filter('tangible_onboarding_steps', function ($steps, $facts, $name = '') {
+      if ($name === 'freeconnect') $steps[] = [ 'id' => 'connect', 'label' => 'Backend', 'weight' => 50 ];
+      return $steps;
+    }, 10, 3);
+    $ids = $this->ids();
+    $this->assertContains('connect', $ids);
+    $this->assertContains(connect\STEP_ID, $ids);
+  }
+
+  function test_pending_shows_why_and_check_again_stays_open_until_verified() {
+    wp_set_current_user(self::factory()->user->create([ 'role' => 'administrator' ]));
+    connect\save_state([ 'token' => Connect_TestCase::TOKEN, 'status' => 'pending', 'account_name' => 'Acme' ]);
+    $step = null;
+    foreach (onboarding\resolve_plan('freeconnect', onboarding\build_facts('freeconnect'))['steps'] as $s) {
+      if ($s['id'] === connect\STEP_ID) $step = $s;
+    }
+    ob_start(); ($step['render'])($this->plugin); $html = ob_get_clean();
+    $this->assertStringContainsString('waiting for tangible.one to verify', $html);
+    $this->assertStringContainsString('Check again', $html);
+
+    add_filter('pre_http_request', function () {
+      return [ 'response' => [ 'code' => 200 ], 'body' => wp_json_encode([ 'status' => 'pending' ]) ];
+    });
+    $_POST['connect_check'] = '1';
+    $this->assertInstanceOf(\WP_Error::class, ($step['handle'])($this->plugin));
+    remove_all_filters('pre_http_request');
+    add_filter('pre_http_request', function () {
+      return [ 'response' => [ 'code' => 200 ], 'body' => wp_json_encode([ 'status' => 'active' ]) ];
+    });
+    $this->assertTrue(($step['handle'])($this->plugin));
+    $this->assertTrue(connect\is_connected());
+    unset($_POST['connect_check']);
   }
 
   function test_a_revoked_token_on_consent_sync_falls_back_to_anonymous() {
