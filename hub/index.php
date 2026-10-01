@@ -1,7 +1,8 @@
 <?php
 /**
- * Tangible Hub — the landing page the shared "Tangible" menu never had,
- * and the admin-bar mark that gets people there.
+ * Tangible Hub — the landing page the shared "Tangible" menu never had.
+ * It sits under Settings → Tangible Hub; the admin-bar mark that used to lead
+ * here is switched off for now (filter tangible_hub_show_admin_bar_mark).
  *
  * One page for everything Tangible on a site (design-preview/tangible-hub-hybrid.html):
  * installed plugins with their licence or connection state, usage-data
@@ -53,21 +54,28 @@ function is_client_managed_site() {
   return $value === 'client';
 }
 
-// ── menu: first item under the shared Tangible top-level ──────────────────
-add_action('init', function () {
-  if (!is_admin()) return;
-  framework\register_admin_menu([
-    'name'       => PAGE,
-    'title'      => 'Home',
-    'page_title' => 'Tangible',
-    'position'   => -100,
-    'separator'  => 'after',
-    'callback'   => 'tangible\\hub\\render_page',
-  ]);
+// ── menu: Settings → Tangible Hub ─────────────────────────────────────────
+// For now the Hub is not the first item under the shared Tangible top-level;
+// it lives under Settings. The page slug is unchanged, so admin.php?page=… links keep working.
+add_action('admin_menu', function () {
+  add_submenu_page(
+    'options-general.php',
+    'Tangible Hub',
+    'Tangible Hub',
+    'manage_options',
+    PAGE,
+    'tangible\\hub\\render_page'
+  );
 });
 
 // ── the admin-bar mark ─────────────────────────────────────────────────────
+// Hidden for now. Return true from this filter to bring it back.
+function show_admin_bar_mark() {
+  return (bool) apply_filters('tangible_hub_show_admin_bar_mark', false);
+}
+
 add_action('admin_bar_menu', function ($bar) {
+  if (!show_admin_bar_mark()) return;
   if (!current_user_can('manage_options')) return;
 
   $count = hub\get_unread_count();
@@ -94,6 +102,7 @@ add_action('admin_bar_menu', function ($bar) {
 }, 80);
 
 add_action('wp_before_admin_bar_render', function () {
+  if (!show_admin_bar_mark()) return;
   ?><style>
     #wpadminbar .tgbl-bar-mark { vertical-align:middle; margin-top:-2px; }
     #wpadminbar .tgbl-bar-mark path { fill:#c3c4c7; }
