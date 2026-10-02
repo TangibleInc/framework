@@ -16,7 +16,7 @@ require_once __DIR__ . '/utils/index.php';
 (include __DIR__ . '/module-loader.php')(new class {
 
   public $name = 'tangible_framework';
-  public $version = '20251107';
+  public $version = '20261002';
 
   function load() {
 
