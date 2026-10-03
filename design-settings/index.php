@@ -133,9 +133,29 @@ function customizer( $fresh = false ) {
 	if ( $fresh || null === $manager ) {
 		require_once ABSPATH . WPINC . '/class-wp-customize-manager.php';
 		$manager = new \WP_Customize_Manager( array( 'settings_previewed' => false ) );
-		do_action( 'customize_register', $manager );
+
+		// Registration callbacks are written for a real Customizer request:
+		// some read the global (LearnDash does), and one that throws must not
+		// take the settings page down. Settings it would have added are
+		// simply absent, so their values are skipped, and the review says so.
+		$previous                  = $GLOBALS['wp_customize'] ?? null;
+		$GLOBALS['wp_customize']   = $manager;
+		framework::$state->design_settings_error = null;
+		try {
+			do_action( 'customize_register', $manager );
+		} catch ( \Throwable $e ) {
+			framework::$state->design_settings_error = $e->getMessage();
+		}
+		$GLOBALS['wp_customize'] = $previous;
 	}
 	return $manager;
+}
+
+/**
+ * Why the Customizer's settings couldn't all be loaded, if they couldn't.
+ */
+function customizer_error() {
+	return framework::$state->design_settings_error ?? null;
 }
 
 /**

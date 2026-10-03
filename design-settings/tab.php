@@ -124,6 +124,11 @@ function render_notices() {
 function render_review( array $payload ) {
 	$plan = plan( $payload );
 	?>
+	<?php if ( customizer_error() ) { ?>
+		<div class="notice notice-warning inline">
+			<p>Another plugin’s Customizer setup failed while this import was checked, so its values are listed as skipped. The plugin reported: <code><?php echo esc_html( customizer_error() ); ?></code></p>
+		</div>
+	<?php } ?>
 	<div class="notice notice-info inline tangible-design-review">
 		<h3>Review import</h3>
 		<p>

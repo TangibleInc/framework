@@ -142,6 +142,31 @@ class Design_Settings_TestCase extends \WP_UnitTestCase {
     $this->assertSame([ 'renamed' => 'kept' ], $plan['test-design']['values']['options']['test_design']);
   }
 
+  // ── registration outside a Customizer request ────────────────────
+
+  function test_registration_callbacks_can_rely_on_the_global() {
+    $seen = null;
+    add_action('customize_register', function () use (&$seen) {
+      global $wp_customize;
+      $seen = $wp_customize instanceof \WP_Customize_Manager;
+    }, 1);
+    $manager = design_settings\customizer(true);
+    $this->assertTrue($seen);
+    $this->assertNull($GLOBALS['wp_customize'] ?? null, 'global restored afterwards');
+    $this->assertNotNull($manager->get_setting('test_design[color]'));
+  }
+
+  function test_a_throwing_callback_is_contained_and_reported() {
+    add_action('customize_register', function () { throw new \RuntimeException('neighbour broke'); }, 1);
+    design_settings\customizer(true);
+    $this->assertSame('neighbour broke', design_settings\customizer_error());
+
+    // Our settings registered after it are absent, so values are skipped, never written unsanitized.
+    $plan = design_settings\plan($this->payload([ 'test-design' => [ 'version' => '2.0.0', 'options' => [ 'test_design' => [ 'color' => '#abcdef' ] ] ] ]));
+    $this->assertSame([], $plan['test-design']['values']['options']['test_design']);
+    $this->assertSame([ 'test_design[color]' ], $plan['test-design']['skipped']);
+  }
+
   // ── apply ────────────────────────────────────────────────────────
 
   function test_apply_replaces_the_chosen_plugins_design_only() {
