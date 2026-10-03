@@ -89,11 +89,14 @@ function export( array $names = array() ) {
 				$options[ $option ] = $value;
 			}
 		}
+		$mods = owned_theme_mods( $entry );
 		$plugins[ $name ] = array(
 			'title'      => $entry->plugin->title ?? $name,
 			'version'    => (string) ( $entry->plugin->version ?? '' ),
-			'options'    => $options,
-			'theme_mods' => owned_theme_mods( $entry ),
+			// Maps, even when empty: PHP would encode an empty array as [],
+			// and a hand-edited file then can't gain keys.
+			'options'    => $options ? $options : new \stdClass(),
+			'theme_mods' => $mods ? $mods : new \stdClass(),
 		);
 	}
 	return array(

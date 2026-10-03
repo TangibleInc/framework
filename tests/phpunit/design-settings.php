@@ -79,6 +79,12 @@ class Design_Settings_TestCase extends \WP_UnitTestCase {
     $this->assertStringNotContainsString('SECRET', wp_json_encode($export));
   }
 
+  function test_empty_sections_export_as_maps() {
+    $json = wp_json_encode(design_settings\export([ 'test-other' ]));
+    $this->assertStringContainsString('"options":{}', $json);
+    $this->assertStringContainsString('"theme_mods":{}', $json);
+  }
+
   function test_export_of_everything_includes_every_registered_plugin() {
     $this->assertSame([ 'test-design', 'test-other' ], array_keys(design_settings\export()['plugins']));
   }
