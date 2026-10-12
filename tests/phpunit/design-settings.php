@@ -21,7 +21,15 @@ class Design_Settings_TestCase extends \WP_UnitTestCase {
 
     self::$plugin = (object) [ 'name' => 'test-design', 'title' => 'Test Design', 'version' => '2.0.0' ];
     self::$other  = (object) [ 'name' => 'test-other', 'title' => 'Test Other', 'version' => '1.0.0' ];
+  }
 
+  function set_up() {
+    parent::set_up();
+
+    // Per test, not per class: WP_UnitTestCase restores the hooks it saved on
+    // the suite's first test after every test, so a hook added in
+    // set_up_before_class is gone from the second test on whenever another
+    // class ran first.
     add_action('customize_register', function ($wp_customize) {
       $wp_customize->add_setting('test_design[color]', [ 'type' => 'option', 'sanitize_callback' => 'sanitize_hex_color' ]);
       $wp_customize->add_setting('test_design[size]', [ 'type' => 'option', 'sanitize_callback' => 'absint' ]);
@@ -29,10 +37,7 @@ class Design_Settings_TestCase extends \WP_UnitTestCase {
       $wp_customize->add_setting('test_legacy_bg', [ 'type' => 'theme_mod', 'sanitize_callback' => 'sanitize_hex_color' ]);
       $wp_customize->add_setting('test_other[on]', [ 'type' => 'option', 'sanitize_callback' => 'sanitize_text_field' ]);
     });
-  }
 
-  function set_up() {
-    parent::set_up();
     \tangible\framework::$state->design_settings = [];
     design_settings\register(self::$plugin, [
       'options'    => [ 'test_design' ],
