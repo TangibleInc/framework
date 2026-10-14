@@ -42,6 +42,13 @@ class Connect_TestCase extends \WP_UnitTestCase {
     wp_set_current_user($this->admin);
   }
 
+  function test_approval_and_exchange_use_the_same_platform() {
+    // Approval happens on app_base(), the code is exchanged on api_base(): one
+    // platform, whatever constant set the API host.
+    $this->assertSame(connect\app_for_api_origin(connect\url_origin(connect\api_base())), connect\app_base());
+    $this->assertSame('https://staging.tangible.one', connect\app_for_api_origin('https://api.staging.tangible.one'));
+  }
+
   function tearDown(): void {
     connect\clear();
     delete_option(connect\SITE_ID_OPTION);

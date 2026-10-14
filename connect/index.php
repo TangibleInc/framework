@@ -64,13 +64,17 @@ function api_base() {
 
 /**
  * The tangible.one app (consent screen). Override with TANGIBLE_CONNECT_APP_URL;
- * else TANGIBLE_CLOUD_URL's host with its `api.` label dropped
- * (api.staging.tangible.one → staging.tangible.one); else production.
+ * else the API host's app (api.staging.tangible.one → staging.tangible.one).
+ *
+ * Derived from api_base(), never separately: approval happens on the app and
+ * the code is exchanged on the API, so the two must be the same platform. A
+ * plugin that defined TANGIBLE_CLOUD_API (Design Upgrade Pro defaults it to
+ * production) once sent the approval to staging and the exchange to
+ * production, and Connect silently never completed.
  */
 function app_base() {
   if (defined('TANGIBLE_CONNECT_APP_URL')) return rtrim((string) TANGIBLE_CONNECT_APP_URL, '/');
-  $origin = cloud_url_origin();
-  return $origin ? app_for_api_origin($origin) : 'https://tangible.one';
+  return app_for_api_origin(url_origin(api_base()) ?: 'https://api.tangible.one');
 }
 
 function get_state() {
