@@ -5,9 +5,10 @@
  * here is switched off for now (filter tangible_hub_show_admin_bar_mark).
  *
  * One page for everything Tangible on a site (design-preview/tangible-hub-hybrid.html):
- * installed plugins with their licence or connection state, usage-data
- * answer and setup progress; the site's Connect band; the notification rail
- * (the one owned channel — notifications.php); the site's steward answer.
+ * installed plugins with their licence or connection state and setup
+ * progress; the site's Connect band; the notification rail (the one owned
+ * channel — notifications.php); the site's own answers — who looks after it
+ * and whether it sends usage data, one each for every Tangible plugin here.
  *
  *   rows.php           facts → what each row says (pure, tested)
  *   page.php           the page, server-rendered

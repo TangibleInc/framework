@@ -94,11 +94,12 @@ function render_band($band) {
     $body = 'tangible.one has not verified this site yet. It calls back to this site\'s REST API; check that it is reachable, then try again.';
   } elseif ($band['has_free']) {
     $title = 'Connect this site to your tangible.one account';
-    $body = 'Optional, and free. One connection covers every free Tangible plugin on this site, now and later. '
+    $body = 'Optional, and free. One connection covers every free Tangible plugin on this site, now and later, '
+          . 'so setup answers follow your account instead of being asked again here. '
           . 'Licensed plugins keep working through their keys. If you are already signed in at tangible.one, it is one click.';
   } else {
     $title = 'Connect this site to your tangible.one account';
-    $body = 'Get free Tangible plugins and their updates without a licence key. '
+    $body = 'See this site in your tangible.one account, and any free Tangible plugin you add later takes its setup answers from it. '
           . 'Your licensed plugins already work through their keys; connecting changes nothing for them.';
   }
   ?>
@@ -123,7 +124,6 @@ function render_band($band) {
 
 function render_row($plugin, $f, $s) {
   $a = $s['account'];
-  $u = $s['usage'];
   $setup = $s['setup'];
   $settings_url = function_exists('tangible\\framework\\get_plugin_settings_page_url')
     ? framework\get_plugin_settings_page_url($plugin) : '';
@@ -148,10 +148,6 @@ function render_row($plugin, $f, $s) {
           <?php if ($a['action'] === 'connect') : ?> · <?php connect_form('Connect', 'hy-link'); ?><?php endif; ?></div>
       <?php endif; ?>
     </div>
-
-    <div class="cell"><?php if ($u) : ?><span class="k">Usage data</span><?php render_chip($u); ?>
-      <?php if ($u['sub'] !== '') : ?><div class="sub"><?php echo esc_html($u['sub']); ?></div><?php endif; ?>
-    <?php endif; ?></div>
 
     <div class="pacts">
       <?php if ($setup && $setup['done']) : ?>
@@ -238,16 +234,16 @@ function render_site_block($steward, $connect) {
   ?>
   <div class="blk" id="tgbl-hub-site">
     <div class="top"><span class="hy-lbl">This site</span></div>
+    <?php // The steward answer lives on this site only (never on tangible.one) and nothing acts on it yet
+    // (see is_client_managed_site), so the copy records the answer and promises no effect. ?>
     <?php if ($steward === 'client') : ?>
-      <p class="steward">You told us this site is <b>built for a client</b>. Licence and renewal news goes to
-        the account owner by email rather than to this admin.</p>
+      <p class="steward">You told us this site is <b>built for a client</b>. One answer for every Tangible plugin here.</p>
       <div class="acts"><?php post_form('tangible_hub_steward', 'Me or my team look after it', 'hy-link', [ 'steward' => 'team' ]); ?></div>
     <?php elseif ($steward === 'team') : ?>
-      <p class="steward">You told us <b>you or your team</b> look after this site, so licence and renewal
-        details show here. Building it for a client? Switch it and that news goes to the account owner by email.</p>
+      <p class="steward">You told us <b>you or your team</b> look after this site. One answer for every Tangible plugin here.</p>
       <div class="acts"><?php post_form('tangible_hub_steward', 'I\'m building this for a client', 'hy-link', [ 'steward' => 'client' ]); ?></div>
     <?php else : ?>
-      <p class="steward">Who looks after this site? It decides who hears about licences and renewals.</p>
+      <p class="steward">Who looks after this site? One answer for every Tangible plugin here.</p>
       <div class="acts">
         <?php post_form('tangible_hub_steward', 'Me or my team', 'hy-link', [ 'steward' => 'team' ]); ?>
         <?php post_form('tangible_hub_steward', 'A client', 'hy-link', [ 'steward' => 'client' ]); ?>
@@ -263,7 +259,7 @@ function render_site_block($steward, $connect) {
     <?php if ($connect === 'active') : ?>
       <p class="steward">Connected as <b><?php echo esc_html(($state['account_name'] ?? '') ?: 'your account'); ?></b><?php
         if (!empty($state['owner_email_masked'])) echo ' (' . esc_html($state['owner_email_masked']) . ')'; ?>.
-        Free Tangible plugins here update through this connection.</p>
+        Free Tangible plugins here take their setup answers from this account.</p>
       <div class="acts">
         <a class="hy-link" href="<?php echo esc_url(app_url('/websites/connected')); ?>" target="_blank" rel="noopener">Manage ↗</a>
         <?php post_form('tangible_connect_disconnect', 'Disconnect', 'hy-link'); ?>

@@ -9,8 +9,8 @@ use tangible\hub;
  *
  * The rules under test: Connect is for keyless FREE plugins only (a key
  * always wins); a plugin whose distribution is not known yet is never nagged;
- * usage data never claims more than the site can prove; setup outranks every
- * other action; the Connect band follows the site, not a plugin.
+ * usage data is the site's, not a row's (ADR-011); setup outranks every other
+ * action; the Connect band follows the site, not a plugin.
  */
 class Hub_Rows_TestCase extends \WP_UnitTestCase {
 
@@ -28,7 +28,19 @@ class Hub_Rows_TestCase extends \WP_UnitTestCase {
     $this->assertSame(['need', 'Key not entered', 'enter_key'],
       [ $s['account']['chip'], $s['account']['text'], $s['account']['action'] ]);
     $this->assertSame('enter_key', $s['primary']);
-    $this->assertSame('Asked after the key is activated', $s['usage']['sub']);
+  }
+
+  function test_rows_carry_no_usage_data_the_site_does() {
+    foreach ([ $this->paid(), $this->free(), $this->free([ 'connect' => 'active' ]) ] as $facts) {
+      $this->assertArrayNotHasKey('usage', hub\row_state($facts));
+    }
+  }
+
+  function test_site_usage_data_state() {
+    $this->assertSame('refused', \tangible\onboarding\site_telemetry_state('declined', true), 'a no beats the Terms');
+    $this->assertSame('granted', \tangible\onboarding\site_telemetry_state('granted', false));
+    $this->assertSame('terms', \tangible\onboarding\site_telemetry_state(null, true), 'keyed or connected: never asked');
+    $this->assertSame('none', \tangible\onboarding\site_telemetry_state(null, false), 'anonymous and unasked sends nothing');
   }
 
   function test_paid_licence_states() {
@@ -46,22 +58,16 @@ class Hub_Rows_TestCase extends \WP_UnitTestCase {
     $this->assertSame('Not activated', $inactive['account']['text']);
   }
 
-  function test_free_unconnected_offers_connect_and_shows_the_sites_own_answer() {
-    $s = hub\row_state($this->free([ 'telemetry_local' => 'declined' ]));
+  function test_free_unconnected_offers_connect() {
+    $s = hub\row_state($this->free());
     $this->assertSame('Account', $s['account']['key']);
     $this->assertSame(['free', 'Free · not connected', 'connect'],
       [ $s['account']['chip'], $s['account']['text'], $s['account']['action'] ]);
-    $this->assertSame('Off · this site', $s['usage']['text']);
   }
 
-  function test_free_connected_defers_usage_to_the_account() {
-    $s = hub\row_state($this->free([ 'connect' => 'active', 'connect_account' => 'Oakhill', 'telemetry_on_file' => true ]));
+  function test_free_connected_names_the_account() {
+    $s = hub\row_state($this->free([ 'connect' => 'active', 'connect_account' => 'Oakhill' ]));
     $this->assertSame(['ok', 'Connected', 'Oakhill'], [ $s['account']['chip'], $s['account']['text'], $s['account']['sub'] ]);
-    $this->assertSame('On file · account setting', $s['usage']['text']);
-
-    // An answer given here and not yet delivered says so rather than "on file".
-    $pending = hub\row_state($this->free([ 'connect' => 'active', 'telemetry_local' => 'granted', 'telemetry_synced' => false ]));
-    $this->assertSame('On · sync pending', $pending['usage']['text']);
   }
 
   function test_a_key_wins_over_a_free_build() {
@@ -73,7 +79,6 @@ class Hub_Rows_TestCase extends \WP_UnitTestCase {
   function test_unknown_distribution_is_not_nagged() {
     $s = hub\row_state([ 'licence_managed' => true, 'cloud' => true, 'free' => null ]);
     $this->assertSame(['off', 'Checking', null], [ $s['account']['chip'], $s['account']['text'], $s['account']['action'] ]);
-    $this->assertNull($s['usage']);
     $this->assertSame('open', $s['primary']);
 
     // A legacy build that never talks to tangible.one will never answer.

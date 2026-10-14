@@ -18,11 +18,9 @@
  * Rules (decided with Titus, 2026-09-26):
  *   - Connect is per SITE and for FREE plugins only. A paid plugin never shows
  *     a Connect chip; a key always wins, even on a free build.
- *   - Usage data: a connected (or keyed) plugin's answer lives on the account.
- *     The licence-check `telemetry` block that would carry it is not built, so
- *     the row shows only what is locally provable: an answer still waiting to
- *     sync, or "on file" when the server said it needs no asking.
- *     A free unconnected plugin shows the site's own answer.
+ *   - Usage data is per SITE, not per plugin (ADR-011): one answer covers
+ *     every Tangible plugin here, so rows carry no usage cell. The "This site"
+ *     block says what the site sends and why (onboarding\site_telemetry_state).
  *   - Setup: resolved from the onboarder's plan on every load — "✓ Set up" or
  *     "N steps left". The permanent way back into the wizard.
  */
@@ -78,15 +76,6 @@ function gather_facts($plugin) {
   if (is_object($cached)) $cached = (array) $cached;
   if (is_array($cached)) {
     $f['account_name'] = (string) ($cached['accountName'] ?? '');
-    $ask = (array) ($cached['ask'] ?? []);
-    $f['telemetry_on_file'] = ($ask['telemetry_extended'] ?? null) === 'skip';
-  }
-
-  // The site's own consent answer (the onboarder's outbox, site-wide).
-  $outbox = get_option('tangible_consent_outbox', []);
-  if (is_array($outbox) && isset($outbox['telemetry_extended']['answer'])) {
-    $f['telemetry_local']  = (string) $outbox['telemetry_extended']['answer'];
-    $f['telemetry_synced'] = !empty($outbox['telemetry_extended']['synced']);
   }
 
   // Setup — only plugins that registered a wizard have one.
@@ -127,9 +116,6 @@ function default_facts() {
     'connect'           => 'none',  // none | pending | active — the SITE's connection
     'connect_account'   => '',
     'account_name'      => '',
-    'telemetry_local'   => null,    // granted | declined | null — the site's outbox answer
-    'telemetry_synced'  => false,
-    'telemetry_on_file' => false,   // the server said "don't ask", i.e. an account answer exists
     'has_wizard'        => false,
     'steps_left'        => 0,
     'steps_total'       => 0,
@@ -141,11 +127,10 @@ function default_facts() {
  * The row, decided. Returns:
  *
  *   account  [ key: 'Licence'|'Account', chip, text, sub, action ]
- *   usage    [ chip, text, sub ] or null (not a Tangible-licensed plugin)
  *   setup    null (no wizard) | [ done, left, pct ]
  *   primary  resume | enter_key | renew | update | open
  *
- * chip is one of ok | free | need | bad | share | off.
+ * chip is one of ok | free | need | bad | off.
  * action (account) is null | connect | enter_key | renew.
  */
 function row_state($f) {
@@ -156,7 +141,7 @@ function row_state($f) {
   if ($keyless_free) {
     $key = 'Account';
     if ($f['connect'] === 'active') {
-      $account = chip('ok', 'Connected', $f['connect_account'] !== '' ? $f['connect_account'] : 'Updates through this site\'s connection');
+      $account = chip('ok', 'Connected', $f['connect_account'] !== '' ? $f['connect_account'] : 'Uses this site\'s connection');
     } elseif ($f['connect'] === 'pending') {
       $account = chip('need', 'Connecting', 'Waiting for tangible.one to verify this site');
     } else {
@@ -187,30 +172,6 @@ function row_state($f) {
   }
   $account['key'] = $key;
 
-  // ── usage data ─────────────────────────────────────────────────────────
-  $usage = null;
-  $server_side = ($keyless_free && $f['connect'] === 'active')
-    || (!$keyless_free && $f['has_key'] && in_array(strtolower($f['licence_status']), LICENCE_OK, true));
-
-  if ($keyless_free && !$server_side) {
-    // Anonymous: the site's own answer is the only answer.
-    if ($f['telemetry_local'] === 'granted')      $usage = chip('share', 'On · this site', '');
-    elseif ($f['telemetry_local'] === 'declined') $usage = chip('off', 'Off · this site', '');
-    else                                          $usage = chip('off', 'Not asked yet', '');
-  } elseif ($server_side) {
-    if ($f['telemetry_local'] !== null && !$f['telemetry_synced']) {
-      $usage = chip($f['telemetry_local'] === 'granted' ? 'share' : 'off',
-        ($f['telemetry_local'] === 'granted' ? 'On' : 'Off') . ' · sync pending',
-        'Answered here, not yet on the account');
-    } elseif ($f['telemetry_on_file']) {
-      $usage = chip('off', 'On file · account setting', 'Change it at tangible.one');
-    } else {
-      $usage = chip('off', 'Not asked yet', '');
-    }
-  } elseif ($f['licence_managed'] && $f['free'] !== null && $account['action'] === 'enter_key') {
-    $usage = chip('off', 'Not asked yet', 'Asked after the key is activated');
-  }
-
   // ── setup ──────────────────────────────────────────────────────────────
   $setup = null;
   if ($f['has_wizard']) {
@@ -230,7 +191,7 @@ function row_state($f) {
   elseif ($f['update'])                           $primary = 'update';
   else                                            $primary = 'open';
 
-  return [ 'account' => $account, 'usage' => $usage, 'setup' => $setup, 'primary' => $primary ];
+  return [ 'account' => $account, 'setup' => $setup, 'primary' => $primary ];
 }
 
 function chip($chip, $text, $sub, $action = null) {

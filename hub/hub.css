@@ -89,7 +89,7 @@
 .tgbl-hub .hy-plugins .head { display:flex; align-items:baseline; gap:10px; padding:16px 20px 12px;
   border-bottom:1px solid var(--line-soft); }
 .tgbl-hub .hy-plugins .head .meta { margin-left:auto; font-size:12.5px; color:var(--muted); }
-.tgbl-hub .prow { display:grid; grid-template-columns:44px minmax(0,1.25fr) minmax(0,1fr) minmax(0,1fr) 150px;
+.tgbl-hub .prow { display:grid; grid-template-columns:44px minmax(0,1.25fr) minmax(0,1fr) 150px;
   gap:16px; align-items:start; padding:16px 20px; border-bottom:1px solid var(--line-soft); }
 .tgbl-hub .prow:last-child { border-bottom:none; }
 .tgbl-hub .prow.empty { display:block; color:var(--muted); }
@@ -107,7 +107,6 @@
 .tgbl-hub .chip.ok { background:var(--mint); color:#3b5e05; } .tgbl-hub .chip.ok .d { background:var(--olive); }
 .tgbl-hub .chip.free { background:#EDEDF0; color:#3f3d45; } .tgbl-hub .chip.free .d { background:#8c8f94; }
 .tgbl-hub .chip.need { background:var(--tobacco-bg); color:#6e4f14; } .tgbl-hub .chip.need .d { background:var(--tobacco); }
-.tgbl-hub .chip.share { background:var(--indigo-soft); color:var(--indigo-deep); } .tgbl-hub .chip.share .d { background:var(--indigo); }
 .tgbl-hub .chip.off { background:#fff; color:var(--muted); border:1px solid var(--line); } .tgbl-hub .chip.off .d { background:#c3c4c7; }
 .tgbl-hub .chip.bad { background:var(--crit-bg); color:#8f2224; } .tgbl-hub .chip.bad .d { background:var(--crit); }
 .tgbl-hub .setup { display:flex; align-items:center; gap:8px; font-size:12.5px; }
