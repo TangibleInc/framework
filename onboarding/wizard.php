@@ -982,6 +982,15 @@ function render_wizard($plugin) {
       min-height: 68px; display: flex; align-items: center; justify-content: center;
       padding: 0 var(--tgbl-gutter); }
 
+    /* The header bands stay in view while a long step scrolls, as the
+       footer does: the stepper always, the top bar (and Exit setup) too
+       when the window is tall enough to spare 148px of header. */
+    .tgbl-wizard__stepbar { position: sticky; top: 0; z-index: 2; }
+    @media (min-height: 700px) {
+      .tgbl-wizard__topbar { position: sticky; top: 0; z-index: 3; }
+      .tgbl-wizard__stepbar { top: 80px; }
+    }
+
     /* The form is the flex spine between the bands: page grows, footer sits
        at the bottom of the viewport (G-3). */
     .tgbl-wizard form { display: flex; flex-direction: column; flex: 1; }
