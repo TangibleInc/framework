@@ -80,20 +80,22 @@ add_filter('tangible_onboarding_facts', function ($facts) {
 /**
  * Deliver unsynced outbox answers to the platform.
  *
- * Auth is the plugin's licence key (same trust as activation), endpoint is
- * the same activation_url the updater already talks to, action
- * `tangible_sync_consent`. Server side is idempotent — a redelivered answer
- * that matches resolved state is dropped there — so this client can retry
- * forever without bookkeeping beyond the synced flag.
+ * Auth is the plugin's licence key (same trust as activation), else the
+ * site's Connect token, else none (an anonymous free plugin); the endpoint is
+ * consent_endpoint(), action `tangible_sync_consent`. Server side is
+ * idempotent — a redelivered answer that matches resolved state is dropped
+ * there — so this client can retry forever without bookkeeping beyond the
+ * synced flag.
  *
- * No key yet (consent answered before licence, or a free build) → answers
- * simply wait; every call is a cheap no-op until a key exists. Failure of
- * any kind leaves synced=false and the next trigger retries. Never blocks
- * rendering: one POST, 15s cap, outcome recorded and forgotten.
+ * A paid plugin without its key yet → answers simply wait; every call is a
+ * cheap no-op until the key exists. Failure of any kind leaves synced=false
+ * and the next trigger retries. Never blocks rendering: one POST, 15s cap,
+ * outcome recorded and forgotten.
  */
 function attempt_consent_sync($plugin) {
-  if (empty($plugin->activation_url) || !function_exists('tangible\\updater\\get_license_key')) return;
-  $key = \tangible\updater\get_license_key($plugin);
+  if (!$plugin) return;
+  $key = function_exists('tangible\\updater\\get_license_key') && !empty($plugin->activation_url)
+    ? \tangible\updater\get_license_key($plugin) : '';
   // Who is delivering, in order of authority: a licence key (paid); else the
   // site's Connect token (connected free plugin, account-level as keyed); else
   // nothing but a site and a plugin name (anonymous free plugin, spec §1). A
@@ -139,7 +141,7 @@ function attempt_consent_sync($plugin) {
     $args['body']['url'] = \tangible\connect\site_address();
     $args['headers'] = [ \tangible\connect\HEADER => $site_token ];
   }
-  $response = wp_remote_post($plugin->activation_url, $args);
+  $response = wp_remote_post(consent_endpoint($plugin), $args);
   if (is_wp_error($response)) return;
   if ($site_token !== '' && wp_remote_retrieve_response_code($response) === 401) {
     // Revoked on tangible.one: fall back to Anonymous; answers stay unsynced.
@@ -156,6 +158,17 @@ function attempt_consent_sync($plugin) {
     }
   }
   update_option(CONSENT_OUTBOX, $outbox, false);
+}
+
+/**
+ * Where consent answers go: the plugin's own licence endpoint when the updater
+ * set one, else the tangible.one API (Connect's api_base(), which honours
+ * TANGIBLE_CLOUD_URL) — a build without the updater still delivers.
+ */
+function consent_endpoint($plugin) {
+  if (!empty($plugin->activation_url)) return (string) $plugin->activation_url;
+  $base = function_exists('tangible\\connect\\api_base') ? \tangible\connect\api_base() : 'https://api.tangible.one';
+  return rtrim($base, '/') . '/api/edd';
 }
 
 /**
@@ -226,8 +239,30 @@ function is_anonymous($plugin) {
 }
 
 function is_free_distribution($plugin) {
-  return $plugin && function_exists('tangible\\updater\\is_free_distribution')
-    && \tangible\updater\is_free_distribution($plugin);
+  if (!$plugin) return false;
+  if (function_exists('tangible\\updater\\is_free_distribution')
+    && \tangible\updater\is_free_distribution($plugin)) return true;
+  $known = function_exists('tangible\\updater\\is_distribution_known')
+    && \tangible\updater\is_distribution_known($plugin);
+  // No verdict, and THIS plugin never registered with the updater: a build that
+  // ships without it (wordpress.org forbids self-updating). Nothing can hold a
+  // licence key or unlock paid features in it, so it is free by construction —
+  // otherwise it would stay "unknown" forever and never be asked anything a free
+  // plugin is asked. A registered plugin waits for the server's verdict.
+  return !$known && !registered_with_updater($plugin);
+}
+
+/**
+ * The updater registered THIS plugin — another plugin's updater on the site
+ * doesn't count. Evidence: its update checker, or the activation_url the
+ * updater's register_plugin() gives it (see licence_applies()). A wordpress.org
+ * build must not pass activation_url itself, or it reads as registered.
+ */
+function registered_with_updater($plugin) {
+  if (!empty($plugin->activation_url)) return true;
+  if (!class_exists('tangible\\updater') || !isset(\tangible\updater::$instance)) return false;
+  $checkers = (array) (\tangible\updater::$instance->update_checkers ?? []);
+  return isset($checkers[ $plugin->name ?? '' ]);
 }
 
 /**
