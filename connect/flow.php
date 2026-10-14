@@ -93,11 +93,12 @@ add_action(REFRESH_EVENT, function () {
   }
 });
 
-/** Everything that should happen once a site is connected. */
+/**
+ * Everything that should happen once a site is connected. Nothing is marked
+ * in the onboarder: Connect lives inside its Welcome step now, and the
+ * connection itself is the fact Welcome and Usage data read.
+ */
 function after_connected($plugin_name) {
-  if ($plugin_name !== '' && function_exists('tangible\\onboarding\\mark')) {
-    \tangible\onboarding\mark($plugin_name, STEP_ID, 'done');
-  }
   // The update check is cached ~12h; refresh soon so the onboarding block
   // arrives — in cron, not in this request (which is already waiting on the
   // platform's callback into this site).

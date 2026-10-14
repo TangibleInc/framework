@@ -1,0 +1,182 @@
+/*
+ * Onboarder patterns — the core steps' screens (Cristian's Plugin Wizard
+ * Figma, "[Core] Free/Pro 01–03") on the layout rules in layout-rules.md.
+ * The shell geometry (bars, column, heading) stays inline in wizard.php;
+ * this file is the blocks that sit in the column.
+ *
+ * Hand-written, wizard-local classes (.tgbl-*): the TUI subset in
+ * wizard.css has no card, band, checkbox or stat strip of this shape.
+ * Every rule is scoped under .tgbl-wizard, because the host plugin's own
+ * WP-native TUI theme and wp-admin's form styles both reach in.
+ */
+
+/* ── Card furniture ─────────────────────────────────────────────────── */
+
+.tgbl-wizard .tgbl-card__title { margin: 0; font-size: 16px; font-weight: 500; line-height: 1.4;
+  color: var(--tui-color-fg); }
+.tgbl-wizard .tgbl-card__text { margin: 8px 0 0; font-size: 13px; line-height: 1.55;
+  color: var(--tui-color-fg-muted); }
+.tgbl-wizard .tgbl-card__text a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.tgbl-wizard .tgbl-card__note { margin: 24px 0 0; font-size: 13px; line-height: 1.55;
+  color: var(--tui-color-fg-muted); }
+.tgbl-wizard .tgbl-card > .tgbl-card__text { margin-top: 8px; }
+.tgbl-wizard .tgbl-card__button { margin-top: 24px; width: 100%; justify-content: center; }
+.tgbl-wizard .tgbl-divider { border: 0; border-top: 1px solid var(--tui-color-divider);
+  margin: 24px 0 !important; height: 0; }
+
+/* A text input that looks like the design's: 40 tall, 4px corners. wp-admin
+   styles input[type=…] at (0,1,1), hence the element in the selector. */
+.tgbl-wizard input.tgbl-input { display: block; width: 100%; height: 40px; margin: 16px 0 0;
+  padding: 0 12px; border: 1px solid #949494; border-radius: 4px; background: #fff;
+  font-size: 14px; color: var(--tui-color-fg); box-shadow: none; }
+.tgbl-wizard input.tgbl-input:focus { border-color: var(--tui-theme-primary-base);
+  box-shadow: 0 0 0 1px var(--tui-theme-primary-base); outline: none; }
+.tgbl-wizard input.tgbl-input.code { font-family: var(--tgbl-font-data); letter-spacing: .02em; }
+
+.tgbl-wizard .tgbl-status { display: flex; gap: 6px; align-items: flex-start; margin: 8px 0 0;
+  font-size: 13px; line-height: 1.5; color: var(--tui-color-fg-muted); }
+.tgbl-wizard .tgbl-status.is-ok { color: #007017; }
+.tgbl-wizard .tgbl-status svg { flex: none; margin-top: 3px; }
+
+/* A link-shaped submit button (Disconnect). */
+.tgbl-wizard .tgbl-textlink { padding: 0; border: 0; background: none; cursor: pointer;
+  font: inherit; font-size: 13px; color: var(--tui-color-fg); text-decoration: underline;
+  text-underline-offset: 2px; }
+
+/* ── Welcome: media card 720 beside form card 448 (§7) ──────────────── */
+
+.tgbl-wizard .tgbl-welcome { display: grid; grid-template-columns: minmax(0, 720fr) minmax(0, 448fr);
+  gap: 32px; align-items: stretch; }
+@media (max-width: 1100px) {
+  .tgbl-wizard .tgbl-welcome { grid-template-columns: 1fr; }
+}
+
+.tgbl-wizard .tgbl-media { display: flex; flex-direction: column; overflow: hidden;
+  border-radius: var(--tgbl-card-radius); background: #fff; box-shadow: var(--tgbl-card-shadow); }
+
+.tgbl-wizard .tgbl-hero { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 32px; align-items: center; padding: 40px;
+  background: linear-gradient(135deg, #2b1a6b 0%, #5a2fc2 55%, #8a4fe8 100%); color: #fff; }
+/* The fallback (no media described): a light ground, because a plugin's
+   own logo is usually drawn for white and vanishes on the gradient. */
+.tgbl-wizard .tgbl-hero.is-plain { grid-template-columns: 1fr; background: #f6f4fe; color: var(--tui-color-fg); }
+.tgbl-wizard .tgbl-hero.is-plain .tgbl-hero__headline { color: var(--tui-color-fg); }
+@media (max-width: 700px) {
+  .tgbl-wizard .tgbl-hero { grid-template-columns: 1fr; padding: 24px; }
+  .tgbl-wizard .tgbl-stats { grid-auto-flow: row; gap: 16px; }
+  .tgbl-wizard .tgbl-stats__item + .tgbl-stats__item { border-left: 0; }
+}
+.tgbl-wizard .tgbl-hero__logo { display: block; height: 32px; width: auto; margin-bottom: 24px; }
+.tgbl-wizard .tgbl-hero__headline { margin: 0; font-size: 28px; font-weight: 400; line-height: 1.2;
+  color: #fff; }
+.tgbl-wizard .tgbl-hero__headline em { font-style: normal; color: #ff9bd8; }
+.tgbl-wizard .tgbl-hero__bullets { list-style: none; margin: 24px 0 0; padding: 0;
+  display: grid; gap: 10px; font-size: 14px; }
+.tgbl-wizard .tgbl-hero__bullets li { display: flex; align-items: center; gap: 10px; margin: 0; }
+.tgbl-wizard .tgbl-hero__tick { display: inline-flex; align-items: center; justify-content: center;
+  flex: none; width: 20px; height: 20px; border-radius: 50%; background: rgba(255,255,255,.18); }
+
+.tgbl-wizard .tgbl-hero__inset { position: relative; padding: 20px; border-radius: 12px;
+  background: #fff; color: var(--tui-color-fg);
+  box-shadow: 0 12px 32px rgba(18, 8, 60, .35); }
+.tgbl-wizard .tgbl-play { position: absolute; right: -14px; bottom: -14px; display: flex;
+  align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 50%;
+  background: #fff; color: #5a2fc2; box-shadow: 0 4px 14px rgba(0,0,0,.25); text-decoration: none; }
+.tgbl-wizard .tgbl-play:hover, .tgbl-wizard .tgbl-play:focus-visible { color: #2b1a6b; }
+
+.tgbl-wizard .tgbl-inset-features { list-style: none; margin: 0; padding: 0;
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.tgbl-wizard .tgbl-inset-features li { display: flex; flex-direction: column; align-items: center;
+  gap: 8px; margin: 0; padding: 12px 4px; border-radius: 8px; background: #f6f4fe;
+  font-size: 12px; line-height: 1.3; text-align: center; color: #3c2a8a; }
+.tgbl-wizard .tgbl-inset-features .dashicons { width: 22px; height: 22px; font-size: 22px; color: #5a2fc2; }
+
+.tgbl-wizard .tgbl-inset-palette { display: grid; gap: 8px; }
+.tgbl-wizard .tgbl-inset-palette__row { display: grid; grid-template-columns: 64px repeat(5, 1fr);
+  gap: 6px; align-items: center; }
+.tgbl-wizard .tgbl-inset-palette__label { font-size: 12px; color: var(--tui-color-fg-muted); }
+.tgbl-wizard .tgbl-inset-palette__swatch { display: block; height: 20px; border-radius: 4px; }
+
+/* The stat strip under the hero: three figures, vertical rules between. */
+.tgbl-wizard .tgbl-stats { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr;
+  margin: 0; padding: 20px 0; background: #fff; }
+.tgbl-wizard .tgbl-stats__item { padding: 0 24px; text-align: center; }
+.tgbl-wizard .tgbl-stats__item + .tgbl-stats__item { border-left: 1px solid var(--tui-color-divider); }
+.tgbl-wizard .tgbl-stats dt { font-size: 18px; font-weight: 600; line-height: 1.3; color: var(--tui-color-fg); }
+.tgbl-wizard .tgbl-stats dd { margin: 2px 0 0; font-size: 13px; color: var(--tui-color-fg-muted); }
+
+/* Children carry their own top margins (title 0, text 8, field 16, button
+   24, divider 24); the card's generic 16px rhythm does not apply here. */
+.tgbl-wizard .tgbl-welcome__form { display: flex; flex-direction: column; }
+.tgbl-wizard .tgbl-welcome__form > .tgbl-check { margin-top: 0; }
+
+/* The connected state: a green success box in place of the button. */
+.tgbl-wizard .tgbl-connected { display: flex; gap: 12px; margin-top: 16px !important; padding: 16px;
+  border-radius: 8px; background: #edfaef; border: 1px solid #b8e6c1; }
+.tgbl-wizard .tgbl-connected__icon { display: inline-flex; align-items: center; justify-content: center;
+  flex: none; width: 24px; height: 24px; border-radius: 50%; background: #00a32a; color: #fff; }
+.tgbl-wizard .tgbl-connected__body p { margin: 0; font-size: 13px; line-height: 1.55; color: var(--tui-color-fg-secondary); }
+.tgbl-wizard .tgbl-connected__body p.tgbl-connected__title { font-size: 14px; font-weight: 500;
+  color: var(--tui-color-fg); margin-bottom: 4px; }
+.tgbl-wizard .tgbl-connected .tgbl-textlink { margin-top: 8px; }
+
+/* "I am installing this for a client" — a native checkbox, design-sized. */
+.tgbl-wizard .tgbl-check { display: flex; gap: 12px; align-items: flex-start; cursor: pointer; }
+.tgbl-wizard .tgbl-check input[type=checkbox] { flex: none; width: 20px; height: 20px; min-width: 20px;
+  margin: 1px 0 0; border: 1px solid #949494; border-radius: 4px; }
+.tgbl-wizard .tgbl-check input[type=checkbox]:checked { background: var(--tui-theme-primary-base);
+  border-color: var(--tui-theme-primary-base); }
+.tgbl-wizard .tgbl-check input[type=checkbox]:checked::before { content: "";
+  display: block; width: 6px; height: 11px; margin: 2px auto 0;
+  border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.tgbl-wizard .tgbl-check__body { display: flex; flex-direction: column; gap: 4px; }
+.tgbl-wizard .tgbl-check__title { font-size: 14px; font-weight: 500; }
+.tgbl-wizard .tgbl-check__help { font-size: 13px; font-weight: 400; line-height: 1.55; color: var(--tui-color-fg-muted); }
+
+/* ── Usage data: label/value rows (§7 "Values to show before agreeing") ─ */
+
+.tgbl-wizard .tgbl-facts { margin: 16px 0 0; }
+.tgbl-wizard .tgbl-facts__row { display: flex; justify-content: space-between; gap: 24px;
+  padding: 12px 0; border-bottom: 1px solid var(--tui-color-divider); font-size: 14px; }
+.tgbl-wizard .tgbl-facts__row:first-child { border-top: 1px solid var(--tui-color-divider); }
+.tgbl-wizard .tgbl-facts dt { color: var(--tui-color-fg-secondary); }
+.tgbl-wizard .tgbl-facts dd { margin: 0; font-weight: 500; font-variant-numeric: tabular-nums; }
+
+/* ── Done ───────────────────────────────────────────────────────────── */
+
+.tgbl-wizard .tgbl-next__label { margin: 0 0 12px; font-size: 14px; font-weight: 500; }
+.tgbl-wizard .tgbl-links { list-style: none; margin: 0; padding: 8px 32px; }
+.tgbl-wizard .tgbl-links__row { display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; margin: 0; padding: 16px 0; }
+.tgbl-wizard .tgbl-links__row + .tgbl-links__row { border-top: 1px solid var(--tui-color-divider); }
+.tgbl-wizard .tgbl-links__row a { font-size: 14px; text-decoration: none; }
+.tgbl-wizard .tgbl-links__row a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.tgbl-wizard .tgbl-tag { flex: none; padding: 2px 8px; border-radius: 4px; background: #f0f0f0;
+  font-size: 12px; color: var(--tui-color-fg-muted); }
+
+/* A band (§4): tinted, no shadow, after the step's main content. */
+.tgbl-wizard .tgbl-band { padding: 24px; border-radius: var(--tgbl-card-radius); background: #e2e9ff; }
+.tgbl-wizard .tgbl-band__title { margin: 0; font-size: 16px; font-weight: 500; line-height: 1.4; }
+.tgbl-wizard .tgbl-band__label { display: block; margin: 16px 0 0; font-size: 11px; font-weight: 600;
+  letter-spacing: .08em; text-transform: uppercase; color: var(--tui-color-fg-secondary); }
+.tgbl-wizard .tgbl-band input.tgbl-input { margin-top: 6px; }
+.tgbl-wizard .tgbl-band__value { margin: 6px 0 0; font-size: 14px; }
+.tgbl-wizard .tgbl-band__submit { width: 100%; justify-content: center; margin-top: 16px; }
+
+/* A warning right under the heading (§7 "A warning", Figma 03b). */
+.tgbl-wizard .tgbl-notice { display: flex; gap: 12px; padding: 20px 24px; border-radius: var(--tgbl-card-radius);
+  background: #fcf9e8; border: 1px solid #f0e6a6; text-align: left; }
+.tgbl-wizard .tgbl-notice__icon { flex: none; color: #996800; margin-top: 1px; }
+.tgbl-wizard .tgbl-notice__title { margin: 0; font-size: 14px; font-weight: 600; }
+.tgbl-wizard .tgbl-notice__text { margin: 4px 0 0; font-size: 13px; line-height: 1.55;
+  color: var(--tui-color-fg-secondary); }
+.tgbl-wizard .tgbl-notice__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px;
+  margin: 16px 0 0; }
+.tgbl-wizard a.tgbl-notice__button { display: inline-flex; align-items: center; height: 36px; padding: 0 16px;
+  border-radius: 4px; background: #1e1e1e; color: #fff; font-size: 13px; text-decoration: none; }
+.tgbl-wizard a.tgbl-notice__button:hover { background: #000; color: #fff; }
+.tgbl-wizard a.tgbl-notice__link { font-size: 13px; color: var(--tui-color-fg); text-decoration: underline;
+  text-underline-offset: 2px; }
+
+/* The centred Done heading keeps its blocks left-aligned (§6, §7). */
+.tgbl-wizard .tgbl-wizard__page.is-center .step-intro { max-width: 560px; margin-left: auto; margin-right: auto; }

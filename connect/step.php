@@ -1,32 +1,31 @@
 <?php
 /**
- * The `connect` core onboarder step (plugin-onboarder spec §3).
+ * Connect, inside the onboarder's Welcome step (Figma "[Core] Free 01
+ * Welcome" and "01b Welcome connected").
  *
- * Shown only when the plugin's distribution is FREE (the server's verdict,
- * cached by the updater) and the site is not connected. Site scope: one
- * answer per site — connecting (or skipping) from one free Tangible plugin
- * covers every other one. Optional: Skip keeps the plugin Anonymous.
+ * Connect used to be a rail step of its own (`tangible_connect`). Cristian's
+ * redesign puts it in Welcome's form card instead: optional, one button, and
+ * "Get started" moves on whether or not the site connects. So this file no
+ * longer registers a step; Welcome calls the two functions below when the
+ * plugin's distribution is FREE (the server's verdict, cached by the
+ * updater). One connection per site covers every free Tangible plugin on it.
  *
- * Continue is "Connect to tangible.one": the handler starts the grant and
- * leaves wp-admin by top-level navigation. It returns false so nothing is
- * recorded yet; the return handler marks the step done once the site is
- * actually connected.
+ * The card has three states:
  *
- * Pending — approved on tangible.one, but the platform could not reach this
- * site to verify it (a local dev site, a blocked REST API) — is its own state:
- * the step says so plainly, offers "Check again", and Skip moves on without
- * dropping the pending connection, which completes whenever verification does.
- *
- * The id is `tangible_connect`, not `connect`: plugins own the short names, and
- * SearchSync's backend step is already called `connect` (two steps with one id
- * is a fatal in resolve_plan).
+ *   not connected  title, one sentence, "Connect to tangible.one". The button
+ *                  posts Welcome with answer=connect; the handler starts the
+ *                  grant and leaves wp-admin by top-level navigation, and the
+ *                  return handler (flow.php) brings the admin back to setup.
+ *   connected      the green box: "Connected as <account>", Disconnect.
+ *   pending        approved on tangible.one, but the platform could not reach
+ *                  this site to verify it (a local dev site, a blocked REST
+ *                  API). Says why, offers "Check again"; Get started moves on
+ *                  without dropping the pending connection, which completes
+ *                  whenever verification does.
  */
 namespace tangible\connect;
 
-use tangible\framework;
 use tangible\onboarding;
-
-const STEP_ID = 'tangible_connect';
 
 /** Why a pending connection is still pending, in words. */
 function pending_reason() {
@@ -38,68 +37,71 @@ function pending_reason() {
   return sprintf('tangible.one could not reach %s/wp-json/ to verify it. Check that the site is public and its REST API is not blocked.', $host);
 }
 
-add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name = '') {
-  if (!function_exists('tangible\\onboarding\\registered_wizards')) return $steps;
-  if (empty(onboarding\registered_wizards()[$plugin_name])) return $steps;
-  $plugin = function_exists('tangible\\framework\\get_plugin') ? framework\get_plugin($plugin_name) : null;
-  if (!onboarding\is_free_distribution($plugin)) return $steps;
+/** The Connect half of Welcome's form card. */
+function render_welcome_section($plugin) {
+  $state = get_state();
+  $account = (string) ($state['account_name'] ?? '');
 
-  $steps[] = [
-    'id'           => STEP_ID,
-    'label'        => 'tangible.one',
-    'weight'       => 15,               // after licence (10), before consent (20)
-    'scope'        => 'site',
-    'skippable'    => true,
-    'needed'       => function () { return !is_connected(); },
-    'skip_note'    => 'connected',
-    'submit_label' => 'Connect to tangible.one',
-    'render'       => function () {
-      $pending = get_token() !== '' && !is_connected();
-      if ($pending) :
-        $account = (string) (get_state()['account_name'] ?? '');
-        ?>
-        <h2>Approved — waiting for tangible.one to verify this site</h2>
-        <p class="step-intro">You approved the connection<?php
-          echo $account !== '' ? ' to <b>' . esc_html($account) . '</b>' : ''; ?>. One step is left:
-          <?php echo esc_html(pending_reason()); ?></p>
-        <div class="tgbl-dbl"></div>
-        <ul class="tgbl-next">
-          <li>Check again once the site is reachable.</li>
-          <li>Or skip for now: the connection stays waiting and finishes by itself when verification succeeds.</li>
-          <li>Connecting again starts a fresh request.</li>
-        </ul>
-        <p><button type="submit" class="button" name="connect_check" value="1">Check again</button></p>
-        <?php
-        return;
-      endif;
-      ?>
-      <h2>Connect this site to tangible.one</h2>
-      <p class="step-intro">Optional. Connecting links this site — and every free Tangible plugin
-         on it — to your tangible.one account. Your answers then follow the account, so other
-         sites and plugins don't ask again.</p>
-      <div class="tgbl-dbl"></div>
-      <ul class="tgbl-next">
-        <li>You approve it on tangible.one, signed in as yourself.</li>
-        <li>No licence key, and licensed plugins are not affected.</li>
-        <li>Disconnect any time from the Tangible Home page or your tangible.one account.</li>
-      </ul>
-      <?php
-    },
-    'handle' => function ($plugin) use ($plugin_name) {
-      if (!current_user_can('manage_options')) return false;
-      // "Check again" on a pending connection: ask the platform to verify.
-      if (!empty($_POST['connect_check']) && get_token() !== '' && !is_connected()) {
-        if (confirm($plugin_name) === 'active') {
-          after_connected($plugin_name);
-          return true;
-        }
-        return new \WP_Error('tangible_connect_pending', 'Still waiting: ' . pending_reason());
-      }
-      $return_to = function_exists('tangible\\onboarding\\get_setup_url') && $plugin
-        ? onboarding\get_setup_url($plugin) : admin_url('admin.php?page=tangible-home');
-      onboarding\pending_redirect(start_flow(get_current_user_id(), $return_to, $plugin_name));
-      return false;   // recorded by the return handler once actually connected
-    },
-  ];
-  return $steps;
-}, 6, 3);
+  if (is_connected()) :
+    ?>
+    <h3 class="tgbl-card__title">Connect this site to tangible.one</h3>
+    <div class="tgbl-connected" role="status">
+      <span class="tgbl-connected__icon"><?php echo onboarding\check_svg('16px'); ?></span>
+      <div class="tgbl-connected__body">
+        <p class="tgbl-connected__title">Connected as <?php echo esc_html($account !== '' ? $account : 'your tangible.one account'); ?></p>
+        <p>Every free Tangible plugin on this site now uses this connection, and your setup answers follow the account.</p>
+        <button type="submit" class="tgbl-textlink" name="do" value="answer:disconnect" formnovalidate>Disconnect</button>
+      </div>
+    </div>
+    <?php
+    return;
+  endif;
+
+  if (get_token() !== '') :
+    ?>
+    <h3 class="tgbl-card__title">Waiting for tangible.one to verify this site</h3>
+    <p class="tgbl-card__text">You approved the connection<?php
+      echo $account !== '' ? ' to <b>' . esc_html($account) . '</b>' : ''; ?>. <?php echo esc_html(pending_reason()); ?>
+      It finishes by itself once verification works, so you can get started now.</p>
+    <button type="submit" class="tui-button is-style-outline tgbl-card__button" name="do" value="answer:connect_check" formnovalidate>Check again</button>
+    <?php
+    return;
+  endif;
+  ?>
+  <h3 class="tgbl-card__title">Connect this site to tangible.one</h3>
+  <p class="tgbl-card__text">Optional and free. One connection covers every free Tangible plugin on this site,
+     so you answer setup questions once instead of once per plugin.</p>
+  <button type="submit" class="tui-button is-style-outline tgbl-card__button" name="do" value="answer:connect" formnovalidate>Connect to tangible.one</button>
+  <?php
+}
+
+/**
+ * Welcome's Connect buttons. Every outcome returns false or a WP_Error:
+ * none of them is "Get started", so Welcome stays the current step and the
+ * card re-renders in its new state.
+ */
+function handle_welcome_answer($plugin, $answer) {
+  if (!current_user_can('manage_options')) return false;
+  $plugin_name = $plugin->name ?? '';
+
+  if ($answer === 'connect') {
+    $return_to = function_exists('tangible\\onboarding\\get_setup_url') && $plugin
+      ? onboarding\get_setup_url($plugin) : admin_url('admin.php?page=tangible-home');
+    onboarding\pending_redirect(start_flow(get_current_user_id(), $return_to, $plugin_name));
+    return false;
+  }
+
+  if ($answer === 'connect_check' && get_token() !== '' && !is_connected()) {
+    if (confirm($plugin_name) === 'active') {
+      after_connected($plugin_name);
+      return false;
+    }
+    return new \WP_Error('tangible_connect_pending', 'Still waiting: ' . pending_reason());
+  }
+
+  if ($answer === 'disconnect') {
+    disconnect();
+    return false;
+  }
+  return false;
+}

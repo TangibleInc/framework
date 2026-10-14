@@ -77,6 +77,20 @@ class Onboarding_TestCase extends \WP_UnitTestCase {
     $this->assertSame('current', $rail['engine']);
   }
 
+  function test_a_step_hidden_when_skipped_leaves_the_rail_until_recorded() {
+    add_filter(self::$filter, function ($steps) {
+      $steps[] = [ 'id' => 'usage', 'needed' => fn() => false, 'hidden_when_skipped' => true ];
+      $steps[] = [ 'id' => 'engine' ];
+      return $steps;
+    });
+    $plan = onboarding\resolve_plan('example', (object) []);
+    $this->assertSame(['engine'], array_column($plan['rail'], 'id'));
+    // Answered in this setup: recorded, so it rails as done again.
+    onboarding\mark('example', 'usage', 'done');
+    $rail = array_column(onboarding\resolve_plan('example', (object) [])['rail'], 'state', 'id');
+    $this->assertSame('done', $rail['usage']);
+  }
+
   function test_needed_receives_the_facts() {
     add_filter(self::$filter, function ($steps, $facts) {
       $steps[] = [ 'id' => 'consent',

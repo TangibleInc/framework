@@ -30,6 +30,39 @@ function site_telemetry_refused() {
 }
 
 /**
+ * What this site does with usage data — one answer for every Tangible plugin
+ * on it (ADR-011), decided from the site's own answer and whether an account's
+ * Terms cover the site. Pure, so the Hub's wording is testable.
+ *
+ *   refused  the site said no, in the wizard or a setting: nothing is sent,
+ *            whatever covers it
+ *   granted  the site said yes in the onboarder (an anonymous site's only grant)
+ *   terms    a licence key or the tangible.one connection covers the site: the
+ *            account's Terms are the grant, nobody here was asked
+ *   none     anonymous and never asked: nothing is sent
+ */
+function site_telemetry_state($answer, $covered_by_terms) {
+  if ($answer === 'declined') return 'refused';
+  if ($answer === 'granted') return 'granted';
+  return $covered_by_terms ? 'terms' : 'none';
+}
+
+/** An account's Terms cover this site: it is connected, or an onboarding plugin holds an active licence. */
+function site_covered_by_terms() {
+  if (function_exists('tangible\\connect\\get_active_token') && \tangible\connect\get_active_token() !== '') {
+    return true;
+  }
+  if (!function_exists('tangible\\framework\\get_plugin') || !function_exists('tangible\\updater\\get_license_status')) {
+    return false;
+  }
+  foreach (array_keys(registered_wizards()) as $name) {
+    $plugin = framework\get_plugin($name);
+    if ($plugin && in_array(\tangible\updater\get_license_status($plugin), ['valid', 'active'], true)) return true;
+  }
+  return false;
+}
+
+/**
  * Record the site's answer and try to deliver it now through any registered
  * Tangible plugin (the outbox is site-wide; the first delivery marks it synced).
  */
@@ -52,19 +85,23 @@ function set_site_telemetry($send) {
  * the page it was rendered on.
  */
 function render_site_telemetry_setting($text_class = 'tgbl-site-telemetry', $button_class = 'button-link') {
-  $refused = site_telemetry_refused();
+  $state = site_telemetry_state(get_consent_answer('telemetry_extended'), site_covered_by_terms());
+  $sending = in_array($state, ['granted', 'terms'], true);
+  $what = 'performance timings, which features are used, content counts. Never content, users or visitors.';
+  $text = [
+    'refused' => 'Usage data is <b>not sent</b> from this site, by any Tangible plugin.',
+    'none'    => 'Usage data is <b>not sent</b> from this site. Nobody has been asked yet.',
+    'granted' => 'Tangible plugins on this site send usage data — ' . $what,
+    'terms'   => 'Tangible plugins on this site send usage data under your tangible.one account\'s terms — ' . $what,
+  ][ $state ];
   ?>
-  <p class="<?php echo esc_attr($text_class); ?>">
-    <?php echo $refused
-      ? 'Usage data is <b>not sent</b> from this site, by any Tangible plugin.'
-      : 'Tangible plugins on this site send usage data — performance timings, which features are used, content counts. Never content, users or visitors.'; ?>
-  </p>
+  <p class="<?php echo esc_attr($text_class); ?>"><?php echo $text; ?></p>
   <form class="inline" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
     <input type="hidden" name="action" value="<?php echo esc_attr(SITE_TELEMETRY_ACTION); ?>" />
-    <input type="hidden" name="send" value="<?php echo $refused ? '1' : '0'; ?>" />
+    <input type="hidden" name="send" value="<?php echo $sending ? '0' : '1'; ?>" />
     <?php wp_nonce_field(SITE_TELEMETRY_ACTION); ?>
     <button type="submit" class="<?php echo esc_attr($button_class); ?>"><?php
-      echo esc_html($refused ? 'Send usage data from this site' : "Don't send usage data from this site"); ?></button>
+      echo esc_html($sending ? "Don't send usage data from this site" : 'Send usage data from this site'); ?></button>
   </form>
   <?php
 }

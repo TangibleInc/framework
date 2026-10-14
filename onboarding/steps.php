@@ -1,28 +1,30 @@
 <?php
 /**
- * The shell's own steps — the core archetypes from the design.
+ * The shell's own steps — Cristian's core screens (Plugin Wizard Figma,
+ * "[Core] Free/Pro 01–03", 2026-10-14). Three appear in a wizard:
  *
- * The artifact's step table names five archetypes; two belong to core and
- * live here, appearing in every Tangible plugin's wizard:
- *
- *   Licence   Identify the account. Always first, never skippable, absent
- *             entirely on free builds (no `cloud_id` = free).
- *   Consent   ONE step, two asks — diagnostics and email — asked separately,
- *             never bundled, and shown only when not already on file.
+ *   Welcome     every plugin, first (welcome.php). Carries the licence key
+ *               (paid), the Connect card (free) and the "installing this for
+ *               a client" checkbox (the steward answer). Licence, Connect and
+ *               steward used to be rail steps of their own; their logic is
+ *               below and in connect/step.php, called from Welcome.
+ *   Usage data  anonymous sites only (free, not connected — ADR-011): the
+ *               telemetry ask, once per site. Paid and connected sites never
+ *               see it; their Terms are the grant.
+ *   Done        every plugin, last. Next-step links, plugin notices, and the
+ *               release-notes band whose button finishes setup.
  *
  * Choice / Credentials / Verified-state are plugin archetypes: whatever a
  * plugin needs there is its business, the shell just supplies the infra
  * (render/handle contract, the WP_Error test path, submit_label).
  *
- * ## The consent step, in the Wordfence shape
+ * ## The usage-data ask, in the Wordfence shape
  *
  * The competitive teardown found exactly one decent consent flow shipping at
- * 4M+ installs: forced, unbiased, unbundled Yes/No that refuses to submit on
- * a non-answer. Three properties do the work and all three are here — equal
- * size and weight options, nothing preselected, Continue refuses until BOTH
- * are answered (server-enforced; the small script is progressive enhancement).
- * And the payload is SHOWN — the actual facts that would be sent — not a
- * policy link.
+ * 4M+ installs: forced, unbiased Yes/No that refuses a non-answer. The
+ * properties survive the redesign: two footer buttons of equal standing,
+ * nothing preselected, no Continue that could mean either — and the payload
+ * is SHOWN, this site's actual values, not a policy link.
  *
  * ## The consent outbox
  *
@@ -255,43 +257,219 @@ function is_dev_site() {
   return (bool) apply_filters('tangible_onboarding_is_dev_site', $dev);
 }
 
-const TELEMETRY_CONSENT_TEXT =
-  'Share usage data from this site — performance timings, which features are used, content counts, '
-  . 'a role histogram and version basics. Never content, names, or visitor data. One answer for every '
-  . 'Tangible plugin on the site. (telemetry v2, site answer)';
+/**
+ * Whether the platform knows who this site belongs to: a licence key (paid)
+ * or an active Connect token (connected free). With neither, an email answer
+ * has no account to land on, so the wizard asks for the address itself and
+ * the platform confirms it first (double opt-in).
+ */
+function has_account_identity($plugin) {
+  $key = $plugin && function_exists('tangible\\updater\\get_license_key')
+    ? \tangible\updater\get_license_key($plugin) : '';
+  $connected = function_exists('tangible\\connect\\get_active_token')
+    && \tangible\connect\get_active_token() !== '';
+  return !empty($key) || $connected;
+}
 
-const MARKETING_CONSENT_TEXT =
-  'Email me release notes and product updates from Tangible. Unsubscribe any time. '
-  . '(plugin wizard opt-in v1)';
+/** The name a sentence uses ("Design Upgrade works…"); the title otherwise. */
+function short_title($plugin) {
+  $args = $plugin ? wizard_args($plugin->name) : [];
+  return (string) ($args['short_title'] ?? ($plugin->title ?? ($plugin->name ?? '')));
+}
+
+// ── Licence — part of Welcome on paid builds ─────────────────────────────
 
 /**
- * One unbiased answer pair: same size, same weight, nothing preselected.
- * Wears the catalog's option-card DOM (a Yes/No two-card radiogroup) —
- * the Wordfence-shape properties are unchanged, only the skin moved.
+ * A licence ask needs activation machinery behind it, or it could only end
+ * in an error, and "no machinery" has three spellings:
+ *
+ *   no cloud_id            — a free build, nothing to activate
+ *   no updater functions   — the wp.org build deliberately ships without the
+ *                            updater (two things claiming one slug)
+ *   no activation_url      — THIS plugin never registered with the updater,
+ *                            even though another plugin on the site loaded
+ *                            its functions. activation_url is only defaulted
+ *                            inside the updater's own register_plugin(), so
+ *                            without it the key would be posted to null.
+ *
+ * function_exists() answers a site-wide question; activation_url answers the
+ * per-plugin one, which is the question that actually matters here. Same
+ * predicate attempt_consent_sync() uses above, for the same reason.
  */
-function render_answer_pair($field, $question, $detail) {
-  $id = esc_attr($field);
-  $check_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10.687 16.567 18.14 3.99l1.72 1.02-8.547 14.423-7.382-5.111 1.138-1.644z" clip-rule="evenodd"/></svg>';
+function licence_applies($plugin) {
+  return $plugin && !empty($plugin->cloud_id) && !empty($plugin->activation_url)
+    && function_exists('tangible\\updater\\get_license_key')
+    && !is_free_distribution($plugin);
+}
+
+function licence_is_active($plugin) {
+  return $plugin && function_exists('tangible\\updater\\get_license_status')
+    && in_array(\tangible\updater\get_license_status($plugin), ['valid', 'active'], true);
+}
+
+const LICENCE_INFO_OPTION = 'tangible_onboarding_licence__';
+
+/** What the last activation said about the licence: item name, expiry. */
+function licence_info($plugin) {
+  $info = get_option(LICENCE_INFO_OPTION . $plugin->name, []);
+  return is_array($info) ? $info : [];
+}
+
+/**
+ * Activate $key for $plugin — a REAL activation, through the updater's own
+ * machinery; no second activation path exists. Returns true or a WP_Error
+ * whose message the shell shows. The outcome rules, so no state leaks water:
+ *
+ *   key rejected (invalid/expired/revoked/no seats/site inactive)
+ *     → WP_Error with the updater's own message; Welcome stays open.
+ *       A wrong key fails HERE, not at the first missed update.
+ *   our API unreachable (timeout, DNS, firewall)
+ *     → the key is SAVED, status set to the real error-free unknown, and
+ *       setup goes on. OUR outage never blocks THEIR setup; the updater's
+ *       cron checker retries and the plugins-row notice reappears if the
+ *       key turns out bad.
+ *   success
+ *     → status stored where settings page, plugins row and hub all read it,
+ *       so no surface can disagree. If the response carries an `onboarding`
+ *       block (steward, consent decisions), it is cached as facts for the
+ *       rest of this wizard; its expiry is kept for Welcome's status line.
+ */
+function activate_licence($plugin, $key) {
+  if (!function_exists('tangible\\updater\\cloud_endpoint')) {
+    return new \WP_Error('tangible_onboarding', 'The updater module is not available on this site.');
+  }
+
+  // A different key can mean a different ACCOUNT: stale decisions from the
+  // old account must never govern the new one's wizard, so the facts cache
+  // dies with the old key. The activation response repopulates it.
+  delete_option('tangible_onboarding_facts_cache__' . $plugin->name);
+  delete_option(LICENCE_INFO_OPTION . $plugin->name);
+
+  // Save first — the exact subfield the update checker reads. Even on the
+  // deferred path, updates must query with this key.
+  framework\update_plugin_settings($plugin, [
+    \tangible\updater\get_license_key_setting_field() => $key,
+  ]);
+
+  $response = \tangible\updater\cloud_endpoint($plugin, $key, 'activate_license');
+
+  if (is_wp_error($response)) {
+    // Unreachable ≠ rejected. Defer, don't block.
+    \tangible\updater\set_license_status($plugin, 'pending');
+    return true;
+  }
+
+  $body = \tangible\updater\response_body($response);
+  $code = \tangible\updater\response_code($response);
+
+  if ($code === 403 || empty($body->success)) {
+    \tangible\updater\set_license_status($plugin, $body->license ?? 'invalid');
+    $message = $code === 403
+      ? ($body->error ?? 'License validation failed.')
+      : \tangible\updater\check_license_response($body, $plugin);
+    return new \WP_Error('tangible_onboarding', is_string($message) ? $message : 'License validation failed.');
+  }
+
+  \tangible\updater\set_license_status($plugin, $body->license ?? 'valid');
+  update_option(LICENCE_INFO_OPTION . $plugin->name, array_filter([
+    'item'    => sanitize_text_field($body->item_name ?? ''),
+    'expires' => sanitize_text_field($body->expires ?? ''),
+  ]), false);
+
+  // The facts seam: when the platform's activate response carries onboarding
+  // decisions, they land here and build_facts reads them.
+  if (!empty($body->onboarding)) {
+    // Deep-convert: a (array) cast is shallow and leaves nested stdClass
+    // objects, which the reader's is_array guard then rejects — the bug
+    // where a good skip/skip block was ignored and answered questions were
+    // asked again.
+    $data = json_decode(wp_json_encode($body->onboarding), true);
+    update_option('tangible_onboarding_facts_cache__' . $plugin->name,
+      [ 'at' => time(), 'data' => is_array($data) ? $data : [] ], false);
+  }
+  // Answers given before the key existed can be delivered now.
+  attempt_consent_sync($plugin);
+  return true;
+}
+
+/**
+ * Welcome's Get started, for the licence half. Paid stays mandatory: no
+ * active licence (or a deferred one, see above) means no way past Welcome.
+ */
+function handle_licence_field($plugin) {
+  $key = sanitize_text_field(wp_unslash($_POST['license_key'] ?? ''));
+  $existing = (string) \tangible\updater\get_license_key($plugin);
+  if (licence_is_active($plugin) && ($key === '' || $key === $existing)) return true;
+  if ($key === '') {
+    return new \WP_Error('tangible_onboarding',
+      'Enter your license key to continue. You can find it in your tangible.one account.');
+  }
+  return activate_licence($plugin, $key);
+}
+
+/** The licence half of Welcome's form card (Figma "[Core] Pro 01 Welcome"). */
+function render_licence_field($plugin) {
+  $existing = (string) \tangible\updater\get_license_key($plugin);
+  $status = function_exists('tangible\\updater\\get_license_status')
+    ? (string) \tangible\updater\get_license_status($plugin) : '';
+  $info = licence_info($plugin);
   ?>
-  <div class="tgbl-answer">
-    <p class="tgbl-answer__q"><?php echo esc_html($question); ?></p>
-    <p class="tgbl-answer__d"><?php echo esc_html($detail); ?></p>
-    <div role="radiogroup" aria-label="<?php echo esc_attr($question); ?>" class="tui-option-card-group">
-      <?php foreach ([ 'granted' => 'Yes', 'declined' => 'No' ] as $value => $label) : ?>
-        <label class="tui-option-card is-row" data-tgbl-option>
-          <input class="tui-option-card__input tui-visually-hidden" type="radio"
-                 name="<?php echo $id; ?>" value="<?php echo esc_attr($value); ?>" data-tgbl-consent />
-          <span class="tui-option-card__control" aria-hidden="true"><span class="tui-icon"><?php echo $check_svg; ?></span></span>
-          <span class="tui-option-card__body">
-            <span class="tui-option-card__heading">
-              <span class="tui-option-card__title"><?php echo esc_html($label); ?></span>
-            </span>
-          </span>
-        </label>
-      <?php endforeach; ?>
-    </div>
-  </div>
+  <h3 class="tgbl-card__title">Your license key</h3>
+  <p class="tgbl-card__text">Find it in your <a href="https://tangible.one/licensing" target="_blank" rel="noopener">tangible.one account</a>.
+     It activates this site and unlocks updates.</p>
+  <label class="tui-visually-hidden" for="tgbl-license-key">License key</label>
+  <input type="text" id="tgbl-license-key" name="license_key" class="tgbl-input code" autocomplete="off"
+         spellcheck="false" value="<?php echo esc_attr($existing); ?>" placeholder="TGBL-XXXX-XXXX-XXXX" />
   <?php
+  if (licence_is_active($plugin)) {
+    $line = 'Your license is valid.';
+    $item = $info['item'] ?? ($plugin->title ?? '');
+    $expires = $info['expires'] ?? '';
+    if ($expires === 'lifetime') $line .= ' ' . $item . ', lifetime.';
+    elseif ($expires !== '' && strtotime($expires)) $line .= ' ' . $item . ', renews ' . date_i18n('j F Y', strtotime($expires)) . '.';
+    echo '<p class="tgbl-status is-ok">' . check_svg() . '<span>' . esc_html($line) . '</span></p>';
+  } elseif ($status === 'pending' && $existing !== '') {
+    echo '<p class="tgbl-status">Saved. tangible.one could not be reached to confirm it, so it will be checked again shortly.</p>';
+  }
+}
+
+// ── Usage data (anonymous sites only) ────────────────────────────────────
+
+/**
+ * The values the Usage data card shows — this site's real numbers, the
+ * facts that would be sent. Plugins add their own (Design Upgrade: courses
+ * and lessons) through `tangible_onboarding_usage_rows`:
+ *
+ *   add_filter('tangible_onboarding_usage_rows', function ($rows, $plugin) {
+ *     $rows['Published courses and lessons'] = number_format_i18n($n);
+ *     return $rows;
+ *   }, 10, 2);
+ */
+function usage_rows($plugin) {
+  $posts = wp_count_posts('post'); $pages = wp_count_posts('page');
+  $rows = [
+    'Published posts and pages' => number_format_i18n((int) ($posts->publish ?? 0) + (int) ($pages->publish ?? 0)),
+    'User roles'     => number_format_i18n(function_exists('wp_roles') ? count(wp_roles()->roles) : 0),
+    'Active plugins' => number_format_i18n(count((array) get_option('active_plugins', []))),
+    'Locale'         => get_locale(),
+  ];
+  $rows = apply_filters('tangible_onboarding_usage_rows', $rows, $plugin);
+  return is_array($rows) ? $rows : [];
+}
+
+const USAGE_NOTE = 'Never your content, your users or your visitors. One answer covers every Tangible plugin '
+  . 'on this site, and you can change it any time in Settings.';
+
+/** The exact wording shown, row labels included — provable later. */
+function telemetry_consent_text($rows) {
+  return 'Share usage data from this site? Exactly what would be sent: ' . implode(', ', array_keys($rows))
+    . '. ' . USAGE_NOTE . ' (telemetry v2, site answer, wizard v3)';
+}
+
+/** The release-notes band's wording, per plugin. */
+function marketing_consent_text($plugin) {
+  return 'Get release notes from the makers of ' . ($plugin->title ?? $plugin->name ?? 'this plugin')
+    . '. Recorded when Finish Setup is pressed with this box shown. (plugin wizard opt-in v2, Done band)';
 }
 
 add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name = '') {
@@ -302,299 +480,70 @@ add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name =
   $plugin = function_exists('tangible\\framework\\get_plugin')
     ? framework\get_plugin($plugin_name) : null;
 
-  // ── Licence: always first, never skippable, absent on free builds ────────
-  // A licence ask with no activation machinery behind it could only end in an
-  // error, and "no machinery" has three spellings:
-  //
-  //   no cloud_id            — a free build, nothing to activate
-  //   no updater functions   — the wp.org build deliberately ships without the
-  //                            updater (two things claiming one slug)
-  //   no activation_url      — THIS plugin never registered with the updater,
-  //                            even though another plugin on the site loaded
-  //                            its functions. activation_url is only defaulted
-  //                            inside the updater's own register_plugin(), so
-  //                            without it the handler posts the key to null
-  //                            and takes the whole request down with it.
-  //
-  // function_exists() answers a site-wide question; activation_url answers the
-  // per-plugin one, which is the question that actually matters here. Same
-  // predicate attempt_consent_sync() uses above, for the same reason.
-  if (!empty($plugin->cloud_id) && !empty($plugin->activation_url)
-      && function_exists('tangible\\updater\\get_license_key')
-      && !is_free_distribution($plugin)) {
-    $steps[] = [
-      'id'     => 'licence',
-      'label'  => 'licence',
-      'weight' => 10,
-      'scope'  => 'plugin',
-      'skippable' => false,
-      'needed' => function ($f) { return empty($f->licence_active); },
-      'skip_note' => 'active',
-      'render' => function ($plugin) {
-        $existing = function_exists('tangible\\updater\\get_license_key')
-          ? \tangible\updater\get_license_key($plugin) : '';
-        ?>
-        <h2>Your licence key</h2>
-        <p class="step-intro">From your <a href="https://tangible.one/licensing" target="_blank" rel="noopener">tangible.one account</a>.
-           Identifies your account and unlocks updates for this site.</p>
-        <p><input type="text" name="license_key" class="code"
-                  value="<?php echo esc_attr($existing); ?>" placeholder="TGBL-…" /></p>
-        <?php
-      },
-      // A REAL activation, through the updater's own machinery — no second
-      // activation path exists. The outcome rules, so no state leaks water:
-      //
-      //   key rejected (invalid/expired/revoked/no seats/site inactive)
-      //     → WP_Error with the updater's own message; the step stays open.
-      //       A wrong key fails HERE, not at the first missed update.
-      //   our API unreachable (timeout, DNS, firewall)
-      //     → the key is SAVED, status set to the real error-free unknown,
-      //       and the step completes with a deferred note. OUR outage never
-      //       blocks THEIR setup; the updater's cron checker retries and the
-      //       plugins-row notice reappears if the key turns out bad.
-      //   success
-      //     → status stored where settings page, plugins row and hub all
-      //       read it, so no surface can disagree. If the response carries
-      //       an `onboarding` block (steward, consent decisions — the
-      //       platform's resolve endpoint, when it ships), it is cached as
-      //       facts for the rest of this wizard.
-      'handle' => function ($plugin) {
-        $key = sanitize_text_field($_POST['license_key'] ?? '');
-        if ($key === '') return false;
-        if (!function_exists('tangible\\updater\\cloud_endpoint')) {
-          return new \WP_Error('tangible_onboarding', 'The updater module is not available on this site.');
-        }
-
-        // A different key can mean a different ACCOUNT: stale decisions from
-        // the old account must never govern the new one's wizard, so the
-        // facts cache dies with the old key. The activation response
-        // repopulates it.
-        delete_option('tangible_onboarding_facts_cache__' . $plugin->name);
-
-        // Save first — the exact subfield the update checker reads. Even on
-        // the deferred path, updates must query with this key.
-        framework\update_plugin_settings($plugin, [
-          \tangible\updater\get_license_key_setting_field() => $key,
-        ]);
-
-        $response = \tangible\updater\cloud_endpoint($plugin, $key, 'activate_license');
-
-        if (is_wp_error($response)) {
-          // Unreachable ≠ rejected. Defer, don't block.
-          \tangible\updater\set_license_status($plugin, 'pending');
-          return true;
-        }
-
-        $body = \tangible\updater\response_body($response);
-        $code = \tangible\updater\response_code($response);
-
-        if ($code === 403 || empty($body->success)) {
-          \tangible\updater\set_license_status($plugin, $body->license ?? 'invalid');
-          $message = $code === 403
-            ? ($body->error ?? 'License validation failed.')
-            : \tangible\updater\check_license_response($body, $plugin);
-          return new \WP_Error('tangible_onboarding', is_string($message) ? $message : 'License validation failed.');
-        }
-
-        \tangible\updater\set_license_status($plugin, $body->license ?? 'valid');
-
-        // The facts seam: when the platform's activate response starts
-        // carrying onboarding decisions, they land here and build_facts
-        // reads them — nothing else changes.
-        if (!empty($body->onboarding)) {
-          // Deep-convert: a (array) cast is shallow and leaves nested
-          // stdClass objects, which the reader's is_array guard then
-          // rejects — the bug where a perfectly good skip/skip block was
-          // silently ignored and the wizard re-asked answered questions.
-          $data = json_decode(wp_json_encode($body->onboarding), true);
-          update_option('tangible_onboarding_facts_cache__' . $plugin->name,
-            [ 'at' => time(), 'data' => is_array($data) ? $data : [] ], false);
-        }
-        // Answers given before the key existed (consent asked first, or a
-        // free build that became licensed) can be delivered now.
-        attempt_consent_sync($plugin);
-        return true;
-      },
-    ];
-  }
-
-  // ── Consent: one step, two asks, asked separately, never bundled ─────────
-  // Telemetry (ADR-011 §4): only an UNCONNECTED FREE plugin is asked, once
-  // per site. A licensed or connected site's account accepted the Terms, which
-  // are the grant — whatever an older server's block says. Its refusal is the
+  // ADR-011 §4: only an UNCONNECTED FREE plugin is asked, once per site. A
+  // licensed or connected site's account accepted the Terms, which are the
+  // grant — whatever an older server's block says. Its refusal is the
   // per-site setting (site-telemetry.php), not a wizard question.
-  $wizard_plugin = function_exists('tangible\\framework\\get_plugin') ? framework\get_plugin($plugin_name) : null;
-  $ask_telemetry = is_anonymous($wizard_plugin)
+  $ask_telemetry = is_anonymous($plugin)
     && ($facts->ask['telemetry_extended'] ?? null) === 'ask';
-  $ask_marketing = ($facts->ask['marketing'] ?? null) === 'ask';
 
   $steps[] = [
-    'id'     => 'consent',
-    // The rail is a table of contents: short enough that eleven of them fit a
-    // row. The step's own heading still says "Two optional things".
-    'label'  => 'optional',
+    'id'     => 'usage',
+    'label'  => 'usage data',
     'weight' => 20,
-    'scope'  => 'account',
-    'skippable' => false,   // "no" is a complete answer, which is why there is no skip
-    'needed' => function () use ($ask_telemetry, $ask_marketing) {
-      return $ask_telemetry || $ask_marketing;
-    },
+    // Recorded per plugin so the rail keeps it as done for THIS setup; the
+    // answer itself is the site-wide outbox entry every plugin reads.
+    'scope'  => 'plugin',
+    'width'  => 'narrow',
+    'skippable' => false,   // "Don't share" is a complete answer, so there is no skip
+    'hidden_when_skipped' => true,
+    'needed' => function () use ($ask_telemetry) { return $ask_telemetry; },
     'skip_note' => 'on file',
-    'render' => function ($plugin) use ($ask_telemetry, $ask_marketing) {
-      // The payload shown is real values from this site: the facts that
-      // would be sent, not a policy link.
-      $roles = function_exists('wp_roles') ? count(wp_roles()->roles) : 0;
-      $posts = wp_count_posts('post'); $pages = wp_count_posts('page');
-      $payload = [
-        'published items' => number_format_i18n((int) ($posts->publish ?? 0) + (int) ($pages->publish ?? 0)),
-        'user roles'      => number_format_i18n($roles),
-        'active plugins'  => number_format_i18n(count((array) get_option('active_plugins', []))),
-        'locale'          => get_locale(),
-      ];
-      $both = $ask_telemetry && $ask_marketing;
+    'actions' => [
+      'declined' => [ 'label' => "Don't share", 'style' => 'outline' ],
+      'granted'  => [ 'label' => 'Share usage data', 'style' => 'primary' ],
+    ],
+    'render' => function ($plugin) {
+      $rows = usage_rows($plugin);
       ?>
-      <h2><?php echo $both ? 'Two optional things' : 'One optional thing'; ?></h2>
-      <p class="step-intro"><strong>No</strong> is a complete answer<?php echo $both ? ' to both' : ''; ?> — the plugin works
-         exactly the same either way. We ask rather than assume, so you do have to answer.</p>
-      <div class="tgbl-dbl"></div>
-
-      <?php if ($ask_telemetry) {
-        render_answer_pair('telemetry_extended',
-          'Share usage data from this site?',
-          'Performance timings, which features you use, content counts, a role histogram, and version basics (WordPress, PHP, plugin). Never your content, your users, or your visitors. One answer for every Tangible plugin here — change it any time in Tangible Home.');
-        // Show the payload, not a policy link — this site's actual numbers.
-        ?>
-        <table style="margin:10px 0 0; border-collapse:collapse">
-          <?php foreach ($payload as $k => $v) : ?>
-            <tr>
-              <td class="lbl tgbl-factkey"><?php echo esc_html($k); ?></td>
-              <td class="code" style="padding:2px 0"><?php echo esc_html($v); ?></td>
-            </tr>
+      <h2>Share usage data from this site?</h2>
+      <p class="step-intro">Optional. <?php echo esc_html(short_title($plugin)); ?> works exactly the same
+         either way, so No is a complete answer.</p>
+      <section class="tgbl-card">
+        <h3 class="tgbl-card__title">Exactly what would be sent</h3>
+        <dl class="tgbl-facts">
+          <?php foreach ($rows as $label => $value) : ?>
+            <div class="tgbl-facts__row"><dt><?php echo esc_html($label); ?></dt><dd><?php echo esc_html($value); ?></dd></div>
           <?php endforeach; ?>
-        </table>
-        <?php
-      } ?>
-
-      <?php if ($ask_marketing) {
-        render_answer_pair('marketing',
-          'Release notes by email?',
-          'What shipped and what it means for your site. No drip campaigns, unsubscribe any time.');
-        if (is_anonymous($plugin)) {
-          // No account to take an address from: ask for one. We email a
-          // confirmation link before anything else (double opt-in).
-          $current_user = wp_get_current_user();
-          ?>
-          <p class="tgbl-email-row">
-            <label for="tgbl-marketing-email" class="lbl">Send them to</label><br />
-            <input type="email" id="tgbl-marketing-email" name="marketing_email" class="regular-text"
-                   value="<?php echo esc_attr($current_user->user_email ?? ''); ?>" />
-            <span class="whisper">We'll email a link to confirm first.</span>
-          </p>
-          <?php
-        }
-      } ?>
-
-      <script>
-      /* Progressive enhancement only — the handler refuses a non-answer anyway. */
-      (function () {
-        var form = document.currentScript.closest('form'); if (!form) return;
-        var go = form.querySelector('[name="do"][value="continue"]'); if (!go) return;
-        var groups = {};
-        form.querySelectorAll('[data-tgbl-consent]').forEach(function (r) { groups[r.name] = true; });
-        var names = Object.keys(groups); if (!names.length) return;
-        function sync() {
-          go.disabled = !names.every(function (n) { return form.querySelector('[name="' + n + '"]:checked'); });
-        }
-        form.addEventListener('change', sync); sync();
-      })();
-      </script>
+        </dl>
+        <p class="tgbl-card__note"><?php echo esc_html(USAGE_NOTE); ?></p>
+      </section>
       <?php
     },
-    'handle' => function ($plugin) use ($ask_telemetry, $ask_marketing) {
-      $answers = [];
-      foreach ([
-        'telemetry_extended' => [$ask_telemetry, TELEMETRY_CONSENT_TEXT],
-        'marketing'          => [$ask_marketing, MARKETING_CONSENT_TEXT],
-      ] as $key => [$asked, $text]) {
-        if (!$asked) continue;
-        $answer = $_POST[$key] ?? '';
-        if (!in_array($answer, ['granted', 'declined'], true)) return false;  // both or stay open
-        $answers[$key] = [$answer, $text];
-      }
-      // Record only once every asked question has an answer — half-consent
-      // recorded is worse than none.
-      $email = '';
-      if (($answers['marketing'][0] ?? '') === 'granted' && is_anonymous($plugin)) {
-        $email = sanitize_email($_POST['marketing_email'] ?? '');
-        if (!is_email($email)) {
-          return new \WP_Error('tangible_onboarding', 'Enter an email address for the release notes, or answer No.');
-        }
-      }
-      foreach ($answers as $key => [$answer, $text]) {
-        record_consent_answer($key, $answer, $text, $key === 'marketing' ? $email : '');
-      }
-      // Deliver immediately when a key exists; otherwise the outbox waits for
-      // the next trigger (setup-page load, licence activation).
+    'handle' => function ($plugin) {
+      $answer = $_POST['answer'] ?? '';
+      if (!in_array($answer, ['granted', 'declined'], true)) return false;
+      record_consent_answer('telemetry_extended', $answer, telemetry_consent_text(usage_rows($plugin)));
+      // An anonymous site delivers with its URL and plugin name alone.
       if ($plugin) attempt_consent_sync($plugin);
       return true;
     },
-  ];
-
-  // ── Steward: site question, shell-owned — every Tangible plugin asks it
-  //    identically, once per site ────────────────────────────────────────────
-  $account_name = is_object($facts) ? ($facts->account_name ?? '') : '';
-  $steps[] = [
-    'id'     => 'steward',
-    'label'  => 'this site',
-    'weight' => 40,
-    // The site option IS the state: 'site' scope keeps the resolver's record
-    // shared too, so a second plugin on the site sees it answered.
-    'scope'  => 'site',
-    'skippable' => false,
-    'needed' => function () { return get_steward() === null; },
-    'skip_note' => 'answered',
-    'render' => function () use ($account_name) {
-      $current = get_steward();
-      $who = $account_name !== '' ? $account_name : 'your team';
-      ?>
-      <h2>Who will look after this site?</h2>
-      <p class="step-intro">This decides who we talk to about licences and renewals — here,
-         or the account owner by email. You can change it later.</p>
-      <div class="tgbl-dbl"></div>
-      <?php
-      render_option_group('Who will look after this site?', function () use ($current, $account_name, $who) {
-        render_option_card([
-          'name' => 'steward', 'value' => 'team', 'variant' => 'row',
-          'checked' => $current !== 'client',
-          'title' => 'Me or my team',
-          'description' => 'Licence, renewals and account details show here, where you will actually see them.',
-        ]);
-        render_option_card([
-          'name' => 'steward', 'value' => 'client', 'variant' => 'row',
-          'checked' => $current === 'client',
-          'title' => 'A client' . ($account_name !== '' ? ' — ' . $account_name . ' manages this site for them' : ''),
-          'description' => 'Billing, renewals and offers stay out of this admin — ' . $who . ' hears about them by email instead.',
-        ]);
-      });
-      ?>
-      <?php
+    // Back reopens the question: the outbox entry is the answer, so clear it.
+    // The new answer replaces it the moment one of the buttons is pressed.
+    'on_back' => function () {
+      $outbox = get_option(CONSENT_OUTBOX, []);
+      unset($outbox['telemetry_extended']);
+      update_option(CONSENT_OUTBOX, $outbox, false);
     },
-    'handle' => function () {
-      $v = $_POST['steward'] ?? '';
-      if (!in_array($v, ['team', 'client'], true)) return false;
-      set_steward($v);
-      return true;
-    },
-    // Back reopens the question: the option is the answer, so clear it.
-    'on_back' => function () { delete_option(STEWARD_OPTION); },
   ];
 
   return $steps;
 }, 5, 3);
 
 /**
- * Done — the last screen, a core step for every wizard (spec §3). Registered
- * late so a plugin that ships its own `done` step keeps it (SearchSync does).
+ * Done — the last screen, a core step for every wizard (Figma "[Core] Free
+ * 03 Done" and "03b"). Registered late so a plugin that ships its own `done`
+ * step keeps it (SearchSync does).
  *
  * A plugin shapes it through `tangible_onboarding_done`:
  *
@@ -603,8 +552,24 @@ add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name =
  *     $done['summary'] = 'Ready — no merges run yet.';
  *     $done['primary'] = [ 'label' => 'Open Merge User Accounts', 'url' => admin_url('tools.php?page=…') ];
  *     $done['links'][] = [ 'label' => 'How merges work', 'url' => 'https://…', 'kind' => 'Article' ];
+ *     // A warning right under the heading (Figma 03b):
+ *     $done['heading'] = 'My Plugin is installed';
+ *     $done['notices'][] = [ 'title' => '…', 'text' => '…', 'actions' => [
+ *       [ 'label' => 'Open settings', 'url' => …, 'style' => 'button' ],
+ *       [ 'label' => 'Read why', 'url' => …, 'style' => 'link' ],
+ *     ] ];
  *     return $done;
  *   }, 10, 2);
+ *
+ * `primary` is where Finish lands. Links open in a new tab, so setup is still
+ * there to finish.
+ *
+ * The email band shows while marketing is not on file for the site (an
+ * outbox answer or the server's skip both count). Its button is the step's
+ * Continue: pressing "Finish Setup" there records the release-notes opt-in —
+ * implemented as drawn; whether finishing should mean opting in is an open
+ * design question. With marketing on file, the footer carries a plain
+ * "Finish setup" instead.
  */
 add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name = '') {
   if (empty(registered_wizards()[$plugin_name])) return $steps;
@@ -614,10 +579,14 @@ add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name =
     ? framework\get_plugin($plugin_name) : null;
   $title = $plugin->title ?? $plugin_name;
   $done = apply_filters('tangible_onboarding_done', [
-    'summary' => $title . ' is set up.',
+    'heading' => $title . ' is ready',
+    'summary' => '',
+    'notices' => [],
+    'links_label' => 'What people usually do next',
     'primary' => [ 'label' => 'Go to Tangible Home', 'url' => admin_url('admin.php?page=tangible-home') ],
     'links'   => [],
   ], $plugin);
+  $ask_marketing = is_object($facts) && ($facts->ask['marketing'] ?? null) === 'ask';
 
   $steps[] = [
     'id'     => 'done',
@@ -628,25 +597,106 @@ add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name =
     'terminal' => true,
     'scope'  => 'plugin',
     'skippable' => false,
-    'submit_label' => $done['primary']['label'] ?? 'Finish',
+    'width'  => 'narrow',
+    'align'  => 'center',
+    'submit_in_body' => $ask_marketing,
+    'submit_label' => 'Finish setup',
     'redirect_to'  => $done['primary']['url'] ?? admin_url('admin.php?page=tangible-home'),
-    'render' => function () use ($done, $title) {
-      ?>
-      <h2><?php echo esc_html($title); ?> is ready</h2>
-      <p class="step-intro"><?php echo esc_html($done['summary'] ?? ''); ?></p>
-      <?php if (!empty($done['links'])) : ?>
-        <div class="tgbl-dbl"></div>
-        <p class="lbl">What people usually do next</p>
-        <ul class="tgbl-next">
-          <?php foreach ($done['links'] as $link) : ?>
-            <li><a href="<?php echo esc_url($link['url'] ?? '#'); ?>" target="_blank" rel="noopener"><?php
-              echo esc_html($link['label'] ?? ''); ?></a><?php
-              if (!empty($link['kind'])) echo ' <span class="whisper">' . esc_html($link['kind']) . '</span>'; ?></li>
-          <?php endforeach; ?>
-        </ul>
-      <?php endif;
+    'render' => function ($plugin) use ($done, $ask_marketing) {
+      render_done($plugin, $done, $ask_marketing);
     },
-    'handle' => '__return_true',
+    'handle' => function ($plugin) use ($ask_marketing) {
+      if (!$ask_marketing || !$plugin) return true;
+      // A site with an account sends nothing but the answer: the platform
+      // uses the account's verified email. Anonymous: the typed address,
+      // confirmed by email before anything is sent to it (double opt-in).
+      $email = '';
+      if (!has_account_identity($plugin)) {
+        $email = sanitize_email(wp_unslash($_POST['marketing_email'] ?? ''));
+        if (!is_email($email)) {
+          return new \WP_Error('tangible_onboarding', 'Enter an email address for the release notes.');
+        }
+      }
+      record_consent_answer('marketing', 'granted', marketing_consent_text($plugin), $email);
+      attempt_consent_sync($plugin);
+      return true;
+    },
   ];
   return $steps;
 }, 100, 3);
+
+function render_done($plugin, $done, $ask_marketing) {
+  ?>
+  <h2><?php echo esc_html($done['heading'] ?? ''); ?></h2>
+  <?php if (!empty($done['summary'])) : ?>
+    <p class="step-intro"><?php echo esc_html($done['summary']); ?></p>
+  <?php endif; ?>
+
+  <?php foreach ((array) ($done['notices'] ?? []) as $notice) render_done_notice($notice); ?>
+
+  <?php if (!empty($done['links'])) : ?>
+    <section class="tgbl-next">
+      <p class="tgbl-next__label"><?php echo esc_html($done['links_label'] ?? 'What people usually do next'); ?></p>
+      <ul class="tgbl-card tgbl-links">
+        <?php foreach ($done['links'] as $link) : ?>
+          <li class="tgbl-links__row">
+            <a href="<?php echo esc_url($link['url'] ?? '#'); ?>" target="_blank" rel="noopener"><?php
+              echo esc_html($link['label'] ?? ''); ?></a>
+            <?php if (!empty($link['kind'])) : ?><span class="tgbl-tag"><?php echo esc_html($link['kind']); ?></span><?php endif; ?>
+          </li>
+        <?php endforeach; ?>
+      </ul>
+    </section>
+  <?php endif; ?>
+
+  <?php if ($ask_marketing) :
+    $typed = !has_account_identity($plugin);
+    // The connection's masked address names the right account only when the
+    // delivery goes through Connect, i.e. this plugin has no licence key.
+    $keyed = function_exists('tangible\\updater\\get_license_key') && !empty(\tangible\updater\get_license_key($plugin));
+    $connect_state = !$keyed && function_exists('tangible\\connect\\get_state') ? \tangible\connect\get_state() : [];
+    ?>
+    <section class="tgbl-band tgbl-optin">
+      <h3 class="tgbl-band__title">Get release notes from the makers of <?php echo esc_html($plugin->title ?? $plugin->name); ?></h3>
+      <?php if ($typed) : ?>
+        <label class="tgbl-band__label" for="tgbl-marketing-email">Send to</label>
+        <input type="email" id="tgbl-marketing-email" name="marketing_email" class="tgbl-input" required
+               value="<?php echo esc_attr(wp_get_current_user()->user_email ?? ''); ?>" />
+      <?php else : ?>
+        <p class="tgbl-band__label">Send to</p>
+        <p class="tgbl-band__value"><?php
+          $masked = (string) ($connect_state['owner_email_masked'] ?? '');
+          echo esc_html($masked !== '' ? $masked . ', your tangible.one account email' : 'The email on your tangible.one account'); ?></p>
+      <?php endif; ?>
+      <button class="tui-button is-theme-primary tgbl-band__submit" type="submit" name="do" value="continue">Finish Setup 🎉</button>
+    </section>
+  <?php endif;
+}
+
+/**
+ * A warning under the Done heading (Figma 03b, layout rules "A warning"):
+ * full column width, never inside a card. $notice: title, text, actions
+ * ([label, url, style button|link]).
+ */
+function render_done_notice($notice) {
+  $warn_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M12 2 1 21h22L12 2zm0 4.2L19.5 19h-15L12 6.2zM11 10v5h2v-5h-2zm0 6v2h2v-2h-2z"/></svg>';
+  ?>
+  <div class="tgbl-notice is-<?php echo esc_attr($notice['tone'] ?? 'warning'); ?>" role="note">
+    <span class="tgbl-notice__icon"><?php echo $warn_svg; ?></span>
+    <div class="tgbl-notice__body">
+      <?php if (!empty($notice['title'])) : ?><p class="tgbl-notice__title"><?php echo esc_html($notice['title']); ?></p><?php endif; ?>
+      <?php if (!empty($notice['text'])) : ?><p class="tgbl-notice__text"><?php echo esc_html($notice['text']); ?></p><?php endif; ?>
+      <?php if (!empty($notice['actions'])) : ?>
+        <p class="tgbl-notice__actions">
+          <?php foreach ($notice['actions'] as $a) :
+            $is_button = ($a['style'] ?? 'link') === 'button'; ?>
+            <a class="<?php echo $is_button ? 'tgbl-notice__button' : 'tgbl-notice__link'; ?>"
+               href="<?php echo esc_url($a['url'] ?? '#'); ?>" target="_blank" rel="noopener"><?php echo esc_html($a['label'] ?? ''); ?></a>
+          <?php endforeach; ?>
+        </p>
+      <?php endif; ?>
+    </div>
+  </div>
+  <?php
+}
+

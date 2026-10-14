@@ -115,6 +115,7 @@ function get_steps($plugin_name, $facts) {
       'skippable' => true,
       'render'    => null,
       'skip_note' => null,
+      'hidden_when_skipped' => false,
     ];
     validate_scope($step['scope']);
     $step['_seq'] = $seq++;          // registration order, the tiebreak
@@ -217,7 +218,14 @@ function resolve_plan($plugin_name, $facts) {
     }
 
     if (!$blocked && is_callable($step['needed']) && !call_user_func($step['needed'], $facts)) {
-      $rail[] = [ 'id' => $step['id'], 'label' => $label, 'state' => 'skipped', 'note' => $step['skip_note'] ];
+      // A step that only exists for some sites (Usage data: anonymous free
+      // sites only) may leave the rail entirely when it does not apply, so
+      // the stepper names the steps THIS setup has, not every step the
+      // framework knows. Once answered here it is recorded, and records
+      // always rail as done above.
+      if (empty($step['hidden_when_skipped'])) {
+        $rail[] = [ 'id' => $step['id'], 'label' => $label, 'state' => 'skipped', 'note' => $step['skip_note'] ];
+      }
       continue;
     }
     $plan[] = $step;
@@ -284,4 +292,5 @@ function unmark($plugin_name, $step_id) {
 
 require_once __DIR__ . '/wizard.php';
 require_once __DIR__ . '/steps.php';
+require_once __DIR__ . '/welcome.php';
 require_once __DIR__ . '/site-telemetry.php';
