@@ -1370,17 +1370,20 @@ function render_wizard($plugin) {
     <?php if ($all_done) : ?>
       <form>
         <main class="tgbl-wizard__well">
-          <div class="tgbl-wizard__page">
+          <?php // Centred like Done, which this is on a return visit. ?>
+          <div class="<?php echo esc_attr(page_classes([ 'width' => 'narrow', 'align' => 'center' ])); ?>">
             <div class="tgbl-wizard__body">
               <h2><?php esc_html_e('Nothing left to ask.', 'tangible-framework'); ?></h2>
               <p class="step-intro"><?php esc_html_e('Everything is either configured or already on file.', 'tangible-framework'); ?></p>
+              <p class="tgbl-all-done__next"><a class="tui-button is-style-outline"
+                 href="<?php echo esc_url(admin_url('admin.php?page=tangible-home')); ?>"><?php esc_html_e('Go to Tangible Home', 'tangible-framework'); ?></a></p>
             </div>
           </div>
         </main>
         <footer class="tgbl-wizard__footer">
           <span style="flex:1"></span>
           <a class="tui-button is-theme-primary"
-             href="<?php echo esc_url(admin_url('admin.php?page=tangible-home')); ?>"><?php esc_html_e('Go to Tangible Home', 'tangible-framework'); ?></a>
+             href="<?php echo esc_url(admin_url('admin.php?page=tangible-home')); ?>"><?php esc_html_e('Exit', 'tangible-framework'); ?></a>
         </footer>
       </form>
     <?php else : ?>
