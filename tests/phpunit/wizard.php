@@ -361,12 +361,35 @@ class Consent_Sync_TestCase extends \WP_UnitTestCase {
   }
 
   function test_no_key_means_no_post_the_outbox_just_waits() {
+    // A paid plugin (the server said licensed) without its key yet.
+    update_option('synctest_distribution', 'licensed');
     \tangible\framework\update_plugin_settings($this->plugin, [
       \tangible\updater\get_license_key_setting_field() => '',
     ]);
     $this->fake_server([ 'success' => true ]);
     onboarding\attempt_consent_sync($this->plugin);
     $this->assertCount(0, $this->requests);
+    delete_option('synctest_distribution');
+  }
+
+  function test_a_build_without_the_updater_is_free_and_still_delivers() {
+    // A wordpress.org build: no update checker, no verdict, no endpoint of its own.
+    $plugin = \tangible\framework\register_plugin([ 'name' => 'wporgtest', 'title' => 'WP.org Test' ]);
+    $this->assertTrue(onboarding\is_free_distribution($plugin), 'free by construction');
+    $this->assertFalse(onboarding\is_licensed_distribution($plugin));
+
+    $this->fake_server([ 'success' => true, 'received' => true ]);
+    onboarding\attempt_consent_sync($plugin);
+    $this->assertCount(1, $this->requests);
+    $this->assertStringEndsWith('/api/edd', $this->requests[0]['url']);
+    $this->assertSame('', $this->requests[0]['body']['license'], 'anonymous: no key');
+  }
+
+  function test_a_server_verdict_beats_the_fallback() {
+    $plugin = \tangible\framework\register_plugin([ 'name' => 'verdicttest', 'title' => 'Verdict Test' ]);
+    update_option('verdicttest_distribution', 'licensed');
+    $this->assertFalse(onboarding\is_free_distribution($plugin));
+    delete_option('verdicttest_distribution');
   }
 }
 
