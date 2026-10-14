@@ -57,13 +57,14 @@ function render_page() {
   foreach (['tui.css', 'wp-admin-theme.css', 'hub.css'] as $file) : ?>
     <link rel="stylesheet" href="<?php echo esc_url(asset_url($file)); ?>" />
   <?php endforeach; ?>
+  <?php // Core moves admin notices to after this marker: above the page, on
+  // the admin grey, where core's own update nag sits — not inside the Hub. ?>
+  <hr class="wp-header-end tgbl-hub-notices" />
   <div class="wrap tui-interface tgbl-hub">
     <header class="tgbl-hub__header">
       <h1><?php esc_html_e('Tangible Hub', 'tangible-framework'); ?></h1>
     </header>
     <div class="tgbl-hub__content">
-      <?php // Core moves admin notices to after this marker, inside the page. ?>
-      <hr class="wp-header-end" />
 
       <?php if ($flash) : ?>
         <section class="tui-notice is-theme-success" role="status">

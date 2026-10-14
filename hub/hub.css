@@ -26,7 +26,9 @@
   border-bottom: 1px solid var(--tgbl-hub-border); }
 .tgbl-hub .tgbl-hub__header h1 { margin: 0; padding: 0; font-size: 16px; font-weight: 500; line-height: 24px; }
 .tgbl-hub .tgbl-hub__content { padding: 32px; }
-.tgbl-hub .tgbl-hub__content > .notice { margin: 0 0 24px; }
+/* Other plugins' notices sit above the page, aligned with it. */
+hr.tgbl-hub-notices { margin: 0; border: 0; }
+hr.tgbl-hub-notices ~ .notice { margin: 8px 8px 8px 0; }
 
 .tgbl-hub .tgbl-hub__grid { display: grid; grid-template-columns: minmax(0, 1fr) 384px; gap: 32px; align-items: start; }
 .tgbl-hub .tgbl-hub__main,
