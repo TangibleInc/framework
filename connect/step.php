@@ -49,7 +49,12 @@ function render_welcome_section($plugin) {
       <span class="tgbl-connected__icon"><?php echo onboarding\check_svg('16px'); ?></span>
       <div class="tgbl-connected__body">
         <p class="tgbl-connected__title">Connected as <?php echo esc_html($account !== '' ? $account : 'your tangible.one account'); ?></p>
-        <p>Every free Tangible plugin on this site now uses this connection, and your setup answers follow the account.</p>
+        <p>Every free Tangible plugin on this site now uses this connection, and your setup answers follow the account.<?php
+          // Connected sites are never asked about usage data (the account's Terms
+          // are the grant, ADR-011), so this is where they are told (Figma "Free 01b").
+          if (defined('tangible\\onboarding\\TERMS_USAGE_DISCLOSURE') && !onboarding\site_telemetry_refused()) {
+            echo ' ' . esc_html(onboarding\TERMS_USAGE_DISCLOSURE);
+          } ?></p>
         <button type="submit" class="tgbl-textlink" name="do" value="answer:disconnect" formnovalidate>Disconnect</button>
       </div>
     </div>

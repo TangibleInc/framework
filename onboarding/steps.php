@@ -463,6 +463,9 @@ function render_licence_field($plugin) {
     if ($expires === 'lifetime') $line .= ' ' . $item . ', lifetime.';
     elseif ($expires !== '' && strtotime($expires)) $line .= ' ' . $item . ', renews ' . date_i18n('j F Y', strtotime($expires)) . '.';
     echo '<p class="tgbl-status is-ok">' . check_svg() . '<span>' . esc_html($line) . '</span></p>';
+    // A licensed site is never asked about usage data (the Terms are the
+    // grant, ADR-011), so this is where it is told (Figma "[Core] Pro 01").
+    if (!site_telemetry_refused()) echo '<p class="tgbl-status">' . esc_html(TERMS_USAGE_DISCLOSURE) . '</p>';
   } elseif ($status === 'pending' && $existing !== '') {
     echo '<p class="tgbl-status">Saved. tangible.one could not be reached to confirm it, so it will be checked again shortly.</p>';
   }
@@ -472,13 +475,16 @@ function render_licence_field($plugin) {
 
 /**
  * The values the Usage data card shows — this site's real numbers, the
- * facts that would be sent. Plugins add their own (Design Upgrade: courses
- * and lessons) through `tangible_onboarding_usage_rows`:
+ * facts that would be sent. Plugins add their own content to the "Published
+ * content" row (Design Upgrade: courses and lessons) through
+ * `tangible_onboarding_content_counts`, as label => count:
  *
- *   add_filter('tangible_onboarding_usage_rows', function ($rows, $plugin) {
- *     $rows['Published courses and lessons'] = number_format_i18n($n);
- *     return $rows;
+ *   add_filter('tangible_onboarding_content_counts', function ($counts, $plugin) {
+ *     $counts['courses and lessons'] = $n;
+ *     return $counts;
  *   }, 10, 2);
+ *
+ * Whole rows can still be changed through `tangible_onboarding_usage_rows`.
  */
 function usage_rows($plugin) {
   global $wp_version;
@@ -489,20 +495,25 @@ function usage_rows($plugin) {
   }, ARRAY_FILTER_USE_BOTH));
   $theme = wp_get_theme();
 
-  // One row per group of what a check-in sends, each with this site's value.
-  // The keys are the wording the consent records (telemetry_consent_text), so
-  // renaming one is a new consent wording. 'Published posts and pages' is the
-  // key plugins replace with their own content (Design Upgrade: courses and
-  // lessons).
+  $counts = (array) apply_filters('tangible_onboarding_content_counts', [
+    'posts and pages' => (int) ($posts->publish ?? 0) + (int) ($pages->publish ?? 0),
+  ], $plugin);
+  $content = [];
+  foreach ($counts as $label => $n) $content[] = number_format_i18n((int) $n) . ' ' . $label;
+
+  // One row per group of what a check-in sends, each with this site's value
+  // (Cristian's copy, Plugin Wizard Figma "Free 02"). The keys are the wording
+  // the consent records (telemetry_consent_text), so renaming one is a new
+  // consent wording.
   $rows = [
-    'WordPress and PHP'         => $wp_version . ' · PHP ' . implode('.', array_slice(explode('.', PHP_VERSION), 0, 2)),
-    'Theme'                     => $theme->exists() ? $theme->get('Name') : '—',
-    'Active plugins'            => number_format_i18n(count((array) get_option('active_plugins', []))),
-    'Users and roles'           => sprintf('%s users · %s roles',
+    'WordPress and PHP versions' => $wp_version . ' · PHP ' . implode('.', array_slice(explode('.', PHP_VERSION), 0, 2)),
+    'Theme'                      => $theme->exists() ? $theme->get('Name') : '—',
+    'Active plugins'             => number_format_i18n(count((array) get_option('active_plugins', []))),
+    'Users and roles'            => sprintf('%s users · %s roles',
       number_format_i18n((int) ($users['total_users'] ?? 0)), number_format_i18n($roles)),
-    'Published posts and pages' => number_format_i18n((int) ($posts->publish ?? 0) + (int) ($pages->publish ?? 0)),
-    'Hosting provider'          => detect_host() ?: 'Not detected',
-    'Page speed'                => 'Weekly averages, measured after you say yes',
+    'Published content'          => implode(' · ', $content),
+    'Hosting provider'           => detect_host() ?: 'Not detected',
+    'Page speed'                 => 'Weekly averages, measured on this site',
   ];
   $rows = apply_filters('tangible_onboarding_usage_rows', $rows, $plugin);
   return is_array($rows) ? $rows : [];
@@ -535,7 +546,11 @@ function detect_host() {
   return (string) apply_filters('tangible_onboarding_host', $found);
 }
 
-const USAGE_NOTE = 'Never your content, your users or your visitors. One answer covers every Tangible plugin '
+/** Told to licensed and connected sites, who are never asked (Cristian's copy, Plugin Wizard Figma). */
+const TERMS_USAGE_DISCLOSURE = 'Usage data from this site is now shared under your tangible.one terms. '
+  . 'You can turn it off in Settings → Tangible Plugins.';
+
+const USAGE_NOTE ='Never your content, your users or your visitors. One answer covers every Tangible plugin '
   . 'on this site, and you can change it any time in Settings.';
 
 /** The exact wording shown, row labels included — provable later. */

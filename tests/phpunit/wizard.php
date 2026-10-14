@@ -609,10 +609,16 @@ class Shell_Rules_TestCase extends \WP_UnitTestCase {
     $plugin = (object) [ 'name' => 'rowstest' ];
     $rows = onboarding\usage_rows($plugin);
     $this->assertSame([
-      'WordPress and PHP', 'Theme', 'Active plugins', 'Users and roles',
-      'Published posts and pages', 'Hosting provider', 'Page speed',
+      'WordPress and PHP versions', 'Theme', 'Active plugins', 'Users and roles',
+      'Published content', 'Hosting provider', 'Page speed',
     ], array_keys($rows));
-    $this->assertStringContainsString('PHP ', $rows['WordPress and PHP']);
+    $this->assertStringContainsString('PHP ', $rows['WordPress and PHP versions']);
+
+    // Plugins add their own content to the one row.
+    $courses = function ($counts) { $counts['courses and lessons'] = 38; return $counts; };
+    add_filter('tangible_onboarding_content_counts', $courses);
+    $this->assertStringEndsWith(' posts and pages · 38 courses and lessons', onboarding\usage_rows($plugin)['Published content']);
+    remove_filter('tangible_onboarding_content_counts', $courses);
     $this->assertStringContainsString('users', $rows['Users and roles']);
 
     $named = function () { return 'Kinsta'; };
