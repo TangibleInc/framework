@@ -481,15 +481,58 @@ function render_licence_field($plugin) {
  *   }, 10, 2);
  */
 function usage_rows($plugin) {
+  global $wp_version;
   $posts = wp_count_posts('post'); $pages = wp_count_posts('page');
+  $users = function_exists('count_users') ? count_users() : [ 'total_users' => 0, 'avail_roles' => [] ];
+  $roles = count(array_filter((array) ($users['avail_roles'] ?? []), function ($n, $role) {
+    return $n > 0 && $role !== 'none';
+  }, ARRAY_FILTER_USE_BOTH));
+  $theme = wp_get_theme();
+
+  // One row per group of what a check-in sends, each with this site's value.
+  // The keys are the wording the consent records (telemetry_consent_text), so
+  // renaming one is a new consent wording. 'Published posts and pages' is the
+  // key plugins replace with their own content (Design Upgrade: courses and
+  // lessons).
   $rows = [
+    'WordPress and PHP'         => $wp_version . ' · PHP ' . implode('.', array_slice(explode('.', PHP_VERSION), 0, 2)),
+    'Theme'                     => $theme->exists() ? $theme->get('Name') : '—',
+    'Active plugins'            => number_format_i18n(count((array) get_option('active_plugins', []))),
+    'Users and roles'           => sprintf('%s users · %s roles',
+      number_format_i18n((int) ($users['total_users'] ?? 0)), number_format_i18n($roles)),
     'Published posts and pages' => number_format_i18n((int) ($posts->publish ?? 0) + (int) ($pages->publish ?? 0)),
-    'User roles'     => number_format_i18n(function_exists('wp_roles') ? count(wp_roles()->roles) : 0),
-    'Active plugins' => number_format_i18n(count((array) get_option('active_plugins', []))),
-    'Locale'         => get_locale(),
+    'Hosting provider'          => detect_host() ?: 'Not detected',
+    'Page speed'                => 'Weekly averages, measured after you say yes',
   ];
   $rows = apply_filters('tangible_onboarding_usage_rows', $rows, $plugin);
   return is_array($rows) ? $rows : [];
+}
+
+/**
+ * The hosting provider, from the constants and environment each host sets —
+ * never from the IP address. '' when nothing matches. Filterable for hosts
+ * this list misses (`tangible_onboarding_host`).
+ */
+function detect_host() {
+  $signs = [
+    'Kinsta'           => fn() => defined('KINSTAMU_VERSION') || defined('KINSTA_CACHE_ZONE'),
+    'WP Engine'        => fn() => defined('WPE_APIKEY') || function_exists('is_wpe'),
+    'Pressable'        => fn() => defined('IS_PRESSABLE'),
+    'WordPress.com'    => fn() => defined('IS_ATOMIC') || defined('WPCOMSH_VERSION'),
+    'Pantheon'         => fn() => isset($_ENV['PANTHEON_ENVIRONMENT']) || defined('PANTHEON_ENVIRONMENT'),
+    'Flywheel'         => fn() => defined('FLYWHEEL_CONFIG_DIR'),
+    'SiteGround'       => fn() => defined('SG_OPTIMIZER_VERSION') || is_dir(WP_CONTENT_DIR . '/mu-plugins/sg-security'),
+    'GoDaddy'          => fn() => defined('GD_SYSTEM_PLUGIN_DIR') || class_exists('\\WPaaS\\Plugin'),
+    'Cloudways'        => fn() => (bool) preg_match('/\.cloudwaysapps\.com$/', (string) wp_parse_url(home_url(), PHP_URL_HOST)),
+    'DreamHost'        => fn() => defined('DREAMPRESS_VERSION'),
+    'Bluehost'         => fn() => defined('BLUEHOST_PLUGIN_VERSION') || class_exists('\\Bluehost\\Plugin'),
+    'Local development' => fn() => is_dev_site(),
+  ];
+  $found = '';
+  foreach ($signs as $name => $test) {
+    if ($test()) { $found = $name; break; }
+  }
+  return (string) apply_filters('tangible_onboarding_host', $found);
 }
 
 const USAGE_NOTE = 'Never your content, your users or your visitors. One answer covers every Tangible plugin '
