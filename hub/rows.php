@@ -135,7 +135,7 @@ function default_facts() {
 /**
  * The row, decided. Returns:
  *
- *   account  [ key: 'Licence'|'Account', chip, text, sub, action ]
+ *   account  [ key: 'License'|'Account' (translated), chip, text, sub, action ]
  *   setup    null (no wizard) | [ done, left, pct ]
  *   primary  resume | enter_key | renew | update | open
  *
@@ -148,35 +148,35 @@ function row_state($f) {
 
   // ── account / licence ──────────────────────────────────────────────────
   if ($keyless_free) {
-    $key = 'Account';
+    $key = __('Account', 'tangible-framework');
     if ($f['connect'] === 'active') {
-      $account = chip('ok', 'Connected', $f['connect_account'] !== '' ? $f['connect_account'] : 'Uses this site\'s connection');
+      $account = chip('ok', __('Connected', 'tangible-framework'), $f['connect_account'] !== '' ? $f['connect_account'] : __('Uses this site\'s connection', 'tangible-framework'));
     } elseif ($f['connect'] === 'pending') {
-      $account = chip('need', 'Connecting', 'Waiting for tangible.one to verify this site');
+      $account = chip('need', __('Connecting', 'tangible-framework'), __('Waiting for tangible.one to verify this site', 'tangible-framework'));
     } else {
-      $account = chip('free', 'Free · not connected', 'Works without an account', 'connect');
+      $account = chip('free', __('Free · not connected', 'tangible-framework'), __('Works without an account', 'tangible-framework'), 'connect');
     }
   } else {
-    $key = 'Licence';
+    $key = __('License', 'tangible-framework');
     $status = strtolower($f['licence_status']);
     if (!$f['licence_managed'] || ($f['free'] === null && !$f['cloud'] && !$f['has_key'])) {
       // Not something this site's updater reports on (or a legacy build that
       // never talks to tangible.one) — say nothing rather than "no licence needed".
-      $account = chip('off', 'No licence info', '');
+      $account = chip('off', __('No license info', 'tangible-framework'), '');
     } elseif ($f['free'] === null && !$f['has_key']) {
       // Neither free nor paid is known yet — a nag here would be wrong for
       // every free plugin (same rule the updater's own notices follow).
-      $account = chip('off', 'Checking', 'Known after the first update check');
+      $account = chip('off', __('Checking', 'tangible-framework'), __('Known after the first update check', 'tangible-framework'));
     } elseif (!$f['has_key']) {
-      $account = chip('need', 'Key not entered', 'Paid features stay locked until it is activated', 'enter_key');
+      $account = chip('need', __('Key not entered', 'tangible-framework'), __('Paid features stay locked until it is activated', 'tangible-framework'), 'enter_key');
     } elseif (in_array($status, LICENCE_OK, true)) {
-      $account = chip('ok', 'Active', $f['account_name']);
+      $account = chip('ok', __('Active', 'tangible-framework'), $f['account_name']);
     } elseif (in_array($status, LICENCE_EXPIRED, true)) {
-      $account = chip('bad', 'Expired', 'Keeps working · no updates', 'renew');
+      $account = chip('bad', __('Expired', 'tangible-framework'), __('Keeps working · no updates', 'tangible-framework'), 'renew');
     } elseif (in_array($status, LICENCE_INVALID, true)) {
-      $account = chip('bad', 'Key not valid', 'Check the key on the licence page', 'enter_key');
+      $account = chip('bad', __('Key not valid', 'tangible-framework'), __('Check the key on the license page', 'tangible-framework'), 'enter_key');
     } else {
-      $account = chip('need', 'Not activated', 'Key entered, not active on this site', 'enter_key');
+      $account = chip('need', __('Not activated', 'tangible-framework'), __('Key entered, not active on this site', 'tangible-framework'), 'enter_key');
     }
   }
   $account['key'] = $key;

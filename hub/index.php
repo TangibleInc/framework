@@ -12,7 +12,7 @@
  *
  *   rows.php           facts → what each row says (pure, tested)
  *   page.php           the page, server-rendered
- *   hub.css            the hybrid skin
+ *   hub.css            layout; tui.css + wp-admin-theme.css carry the look
  *   notifications.php  the rail's store
  *
  * The Hub renders facts and stores nothing of its own, beyond dismissals
@@ -70,8 +70,8 @@ function url() {
 add_action('admin_menu', function () {
   add_submenu_page(
     'options-general.php',
-    'Tangible Hub',
-    'Tangible Hub',
+    __('Tangible Hub', 'tangible-framework'),
+    __('Tangible Hub', 'tangible-framework'),
     'manage_options',
     PAGE,
     'tangible\\hub\\render_page'

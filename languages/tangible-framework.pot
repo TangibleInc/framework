@@ -9,7 +9,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-10-14T19:39:48+00:00\n"
+"POT-Creation-Date: 2026-10-14T19:51:05+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: tangible-framework\n"
@@ -28,6 +28,7 @@ msgstr ""
 #: connect/flow.php:187
 #: connect/flow.php:196
 #: connect/flow.php:206
+#: hub/page.php:18
 #: onboarding/site-telemetry.php:114
 #: onboarding/wizard.php:568
 msgid "Nope"
@@ -89,10 +90,12 @@ msgid "Every free Tangible plugin on this site now uses this connection, and you
 msgstr ""
 
 #: connect/step.php:63
+#: hub/page.php:311
 msgid "Disconnect"
 msgstr ""
 
 #: connect/step.php:72
+#: hub/rows.php:155
 msgid "Waiting for tangible.one to verify this site"
 msgstr ""
 
@@ -111,6 +114,7 @@ msgid "It finishes by itself once verification works, so you can get started now
 msgstr ""
 
 #: connect/step.php:80
+#: hub/page.php:116
 msgid "Check again"
 msgstr ""
 
@@ -126,6 +130,323 @@ msgstr ""
 #: connect/step.php:113
 #, php-format
 msgid "Still waiting: %s"
+msgstr ""
+
+#: hub/index.php:73
+#: hub/index.php:74
+#: hub/page.php:42
+msgid "Tangible Hub"
+msgstr ""
+
+#: hub/page.php:56
+msgid "Your Tangible plugins"
+msgstr ""
+
+#: hub/page.php:65
+msgid "No Tangible plugins registered on this site."
+msgstr ""
+
+#: hub/page.php:100
+msgid "Finishing the connection to tangible.one"
+msgstr ""
+
+#: hub/page.php:101
+msgid "tangible.one has not verified this site yet. It calls back to this site's REST API; check that it is reachable, then try again."
+msgstr ""
+
+#: hub/page.php:103
+#: hub/page.php:106
+msgid "Connect this site to your tangible.one account"
+msgstr ""
+
+#: hub/page.php:104
+msgid "Optional, and free. One connection covers every free Tangible plugin on this site, now and later, so setup answers follow your account instead of being asked again here. Licensed plugins keep working through their keys. If you are already signed in at tangible.one, it is one click."
+msgstr ""
+
+#: hub/page.php:107
+msgid "See this site in your tangible.one account, and any free Tangible plugin you add later takes its setup answers from it. Your licensed plugins already work through their keys; connecting changes nothing for them."
+msgstr ""
+
+#: hub/page.php:117
+msgid "Cancel"
+msgstr ""
+
+#: hub/page.php:119
+#: hub/page.php:152
+msgid "Connect"
+msgstr ""
+
+#: hub/page.php:120
+msgid "Not now"
+msgstr ""
+
+#: hub/page.php:140
+msgid "free"
+msgstr ""
+
+#. translators: %s: version number
+#: hub/page.php:142
+#, php-format
+msgid "%s available"
+msgstr ""
+
+#: hub/page.php:158
+msgid "Set up"
+msgstr ""
+
+#. translators: %s: number of setup steps left
+#: hub/page.php:161
+#, php-format
+msgid "%s step left"
+msgid_plural "%s steps left"
+msgstr[0] ""
+msgstr[1] ""
+
+#: hub/page.php:164
+#: onboarding/wizard.php:342
+msgid "Setup"
+msgstr ""
+
+#: hub/page.php:183
+msgid "Resume setup"
+msgstr ""
+
+#: hub/page.php:189
+msgid "Enter key"
+msgstr ""
+
+#: hub/page.php:194
+msgid "Renew"
+msgstr ""
+
+#: hub/page.php:194
+#: hub/page.php:310
+#: onboarding/welcome.php:314
+msgid "(opens in a new tab)"
+msgstr ""
+
+#: hub/page.php:199
+msgid "Update"
+msgstr ""
+
+#. translators: %s: plugin name — completes the visible "Open" for screen readers
+#: hub/page.php:206
+#: hub/page.php:244
+msgid "Open"
+msgstr ""
+
+#: hub/page.php:229
+msgid "Notifications"
+msgstr ""
+
+#: hub/page.php:232
+msgid "Dismiss all"
+msgstr ""
+
+#. translators: 1: notification kind, e.g. "tip"; 2: how long ago, e.g. "3 days"
+#: hub/page.php:249
+#, php-format
+msgid "%1$s · %2$s ago"
+msgstr ""
+
+#: hub/page.php:252
+msgid "Dismiss"
+msgstr ""
+
+#: hub/page.php:257
+msgid "Nothing new. Release notes and heads-ups land here — Tangible never posts admin notices."
+msgstr ""
+
+#: hub/page.php:273
+msgid "This site"
+msgstr ""
+
+#: hub/page.php:278
+msgid "You told us this site is <b>built for a client</b>. One answer for every Tangible plugin here."
+msgstr ""
+
+#: hub/page.php:279
+msgid "Me or my team look after it"
+msgstr ""
+
+#: hub/page.php:281
+msgid "You told us <b>you or your team</b> look after this site. One answer for every Tangible plugin here."
+msgstr ""
+
+#: hub/page.php:282
+msgid "I'm building this for a client"
+msgstr ""
+
+#: hub/page.php:284
+msgid "Who looks after this site? One answer for every Tangible plugin here."
+msgstr ""
+
+#: hub/page.php:286
+msgid "Me or my team"
+msgstr ""
+
+#: hub/page.php:287
+msgid "A client"
+msgstr ""
+
+#: hub/page.php:304
+msgid "your account"
+msgstr ""
+
+#. translators: %s: the tangible.one account name, in bold, and its masked email
+#: hub/page.php:307
+#, php-format
+msgid "Connected as %s. Free Tangible plugins here take their setup answers from this account."
+msgstr ""
+
+#: hub/page.php:310
+msgid "Manage"
+msgstr ""
+
+#: hub/page.php:314
+msgid "Waiting for tangible.one to verify this site."
+msgstr ""
+
+#: hub/page.php:316
+msgid "Not connected. Licensed plugins work through their keys either way."
+msgstr ""
+
+#: hub/page.php:317
+msgid "Connect this site"
+msgstr ""
+
+#: hub/page.php:373
+msgid "a client"
+msgstr ""
+
+#: hub/page.php:374
+msgid "you or your team"
+msgstr ""
+
+#: hub/page.php:375
+msgid "not answered yet"
+msgstr ""
+
+#: hub/page.php:376
+msgid "Connected to tangible.one"
+msgstr ""
+
+#: hub/page.php:377
+msgid "Connecting to tangible.one"
+msgstr ""
+
+#: hub/page.php:378
+msgid "Not connected to tangible.one"
+msgstr ""
+
+#. translators: 1: this site's host name, in bold; 2: who looks after it, in bold; 3: connection state
+#: hub/page.php:380
+#, php-format
+msgid "Site %1$s · Looked after by %2$s · %3$s"
+msgstr ""
+
+#. translators: %s: number of installed Tangible plugins
+#: hub/page.php:386
+#, php-format
+msgid "%s installed"
+msgid_plural "%s installed"
+msgstr[0] ""
+msgstr[1] ""
+
+#. translators: %s: number of plugin updates available
+#: hub/page.php:388
+#, php-format
+msgid "%s update"
+msgid_plural "%s updates"
+msgstr[0] ""
+msgstr[1] ""
+
+#: hub/page.php:394
+msgid "What's new"
+msgstr ""
+
+#: hub/page.php:395
+msgid "Tip"
+msgstr ""
+
+#: hub/page.php:396
+msgid "Notice"
+msgstr ""
+
+#: hub/rows.php:151
+msgid "Account"
+msgstr ""
+
+#: hub/rows.php:153
+msgid "Connected"
+msgstr ""
+
+#: hub/rows.php:153
+msgid "Uses this site's connection"
+msgstr ""
+
+#: hub/rows.php:155
+msgid "Connecting"
+msgstr ""
+
+#: hub/rows.php:157
+msgid "Free · not connected"
+msgstr ""
+
+#: hub/rows.php:157
+msgid "Works without an account"
+msgstr ""
+
+#: hub/rows.php:160
+msgid "License"
+msgstr ""
+
+#: hub/rows.php:165
+msgid "No license info"
+msgstr ""
+
+#: hub/rows.php:169
+msgid "Checking"
+msgstr ""
+
+#: hub/rows.php:169
+msgid "Known after the first update check"
+msgstr ""
+
+#: hub/rows.php:171
+msgid "Key not entered"
+msgstr ""
+
+#: hub/rows.php:171
+msgid "Paid features stay locked until it is activated"
+msgstr ""
+
+#: hub/rows.php:173
+msgid "Active"
+msgstr ""
+
+#: hub/rows.php:175
+msgid "Expired"
+msgstr ""
+
+#: hub/rows.php:175
+msgid "Keeps working · no updates"
+msgstr ""
+
+#: hub/rows.php:177
+msgid "Key not valid"
+msgstr ""
+
+#: hub/rows.php:177
+msgid "Check the key on the license page"
+msgstr ""
+
+#: hub/rows.php:179
+msgid "Not activated"
+msgstr ""
+
+#: hub/rows.php:179
+msgid "Key entered, not active on this site"
 msgstr ""
 
 #: onboarding/site-telemetry.php:90
@@ -407,10 +728,6 @@ msgstr ""
 msgid "Read more"
 msgstr ""
 
-#: onboarding/welcome.php:314
-msgid "(opens in a new tab)"
-msgstr ""
-
 #. translators: %s: number of setup steps left
 #: onboarding/wizard.php:341
 #, php-format
@@ -418,10 +735,6 @@ msgid "Setup (%s step left)"
 msgid_plural "Setup (%s steps left)"
 msgstr[0] ""
 msgstr[1] ""
-
-#: onboarding/wizard.php:342
-msgid "Setup"
-msgstr ""
 
 #. translators: %s: plugin name
 #: onboarding/wizard.php:361

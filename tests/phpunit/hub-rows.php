@@ -24,7 +24,7 @@ class Hub_Rows_TestCase extends \WP_UnitTestCase {
 
   function test_paid_without_a_key_asks_for_it_and_never_offers_connect() {
     $s = hub\row_state($this->paid());
-    $this->assertSame('Licence', $s['account']['key']);
+    $this->assertSame('License', $s['account']['key']);
     $this->assertSame(['need', 'Key not entered', 'enter_key'],
       [ $s['account']['chip'], $s['account']['text'], $s['account']['action'] ]);
     $this->assertSame('enter_key', $s['primary']);
@@ -85,7 +85,7 @@ class Hub_Rows_TestCase extends \WP_UnitTestCase {
 
   function test_a_key_wins_over_a_free_build() {
     $s = hub\row_state($this->free([ 'has_key' => true, 'licence_status' => 'active' ]));
-    $this->assertSame('Licence', $s['account']['key']);
+    $this->assertSame('License', $s['account']['key']);
     $this->assertSame('Active', $s['account']['text']);
   }
 
