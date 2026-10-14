@@ -60,9 +60,10 @@
 /* The fallback (no media described): a light ground, because a plugin's
    own logo is usually drawn for white and vanishes on the gradient. */
 .tgbl-wizard .tgbl-hero.is-plain { grid-template-columns: 1fr; background: #f6f4fe; color: var(--tui-color-fg); }
+.tgbl-wizard .tgbl-hero.is-plain.has-aside { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 .tgbl-wizard .tgbl-hero.is-plain .tgbl-hero__headline { color: var(--tui-color-fg); }
 @media (max-width: 700px) {
-  .tgbl-wizard .tgbl-hero { grid-template-columns: 1fr; padding: 24px; }
+  .tgbl-wizard .tgbl-hero, .tgbl-wizard .tgbl-hero.is-plain.has-aside { grid-template-columns: 1fr; padding: 24px; }
   .tgbl-wizard .tgbl-stats { grid-auto-flow: row; gap: 16px; }
   .tgbl-wizard .tgbl-stats__item + .tgbl-stats__item { border-left: 0; }
 }
@@ -83,6 +84,27 @@
   align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 50%;
   background: #fff; color: #5a2fc2; box-shadow: 0 4px 14px rgba(0,0,0,.25); text-decoration: none; }
 .tgbl-wizard .tgbl-play:hover, .tgbl-wizard .tgbl-play:focus-visible { color: #2b1a6b; }
+
+/* The media image: a framed picture with its label beneath, the whole a
+   link when it has one. The label carries the hero's text colour, so it
+   reads on the gradient and on the plain ground alike. */
+.tgbl-wizard .tgbl-hero__figure { display: flex; flex-direction: column; gap: 12px; margin: 0;
+  color: inherit; text-decoration: none; }
+.tgbl-wizard .tgbl-media-link__frame { position: relative; display: block; overflow: hidden;
+  border-radius: 12px; box-shadow: 0 12px 32px rgba(18, 8, 60, .35); }
+.tgbl-wizard .tgbl-hero.is-plain .tgbl-media-link__frame { box-shadow: 0 8px 24px rgba(18, 8, 60, .12); }
+.tgbl-wizard .tgbl-media-link__frame img { display: block; width: 100%; height: auto; }
+.tgbl-wizard .tgbl-media-link__play { position: absolute; inset: 0; margin: auto; display: flex;
+  align-items: center; justify-content: center; width: 52px; height: 52px; border-radius: 50%;
+  background: #fff; color: #5a2fc2; box-shadow: 0 4px 14px rgba(0,0,0,.25); }
+.tgbl-wizard .tgbl-media-link__label { font-size: 14px; line-height: 1.4; }
+.tgbl-wizard .tgbl-media-link .tgbl-media-link__label { text-decoration: underline;
+  text-underline-offset: 3px; }
+.tgbl-wizard .tgbl-media-link__ext { margin-left: 4px; text-decoration: none; display: inline-block; }
+.tgbl-wizard .tgbl-media-link:hover .tgbl-media-link__label { text-decoration-thickness: 2px; }
+.tgbl-wizard .tgbl-media-link:focus { box-shadow: none; } /* WP admin's a:focus ring; ours is the outline */
+.tgbl-wizard .tgbl-media-link:focus-visible { outline: 2px solid currentColor; outline-offset: 4px;
+  border-radius: 12px; }
 
 .tgbl-wizard .tgbl-inset-features { list-style: none; margin: 0; padding: 0;
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }

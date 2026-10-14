@@ -34,11 +34,23 @@
  *       'inset'    => [ 'type' => 'features', 'items' => [ [ 'icon' => 'dashicons-…', 'label' => '…' ], … ] ],
  *                  // or [ 'type' => 'palette', 'rows' => [ [ 'label' => 'Primary', 'colors' => [ '#…', … ] ], … ] ]
  *                  // or a callable that echoes its own markup
- *       'video'    => $url,                         // the round play button
+ *       'media'    => [                              // an image, linked or captioned
+ *         'image' => $url,
+ *         'alt'   => '',                              // empty when the label says it all
+ *         'href'  => 'https://…/whats-new',           // optional; opens in a new tab
+ *         'label' => 'What’s new in 3.0',             // visible; the link's name
+ *         'kind'  => 'post',                          // 'post' | 'video' (play badge)
+ *       ],
+ *       'video'    => $url,                         // the round play button; with
+ *                                                   // no media image, same as
+ *                                                   // media [href, kind: video]
  *       'stats'    => [ [ 'value' => '7,000+', 'label' => 'active installs' ], … ],
  *       'background' => 'linear-gradient(…)',       // the hero's ground
  *     ],
  *   ]);
+ *
+ * The hero's right-hand column holds the media image when there is one,
+ * else the inset (with the video's play button on its corner).
  *
  * Without any of it, the card falls back to the plugin's logo and the
  * description from its plugin header — honest, if plain.
@@ -63,13 +75,31 @@ function welcome_config($plugin) {
     'accent'     => '',
     'bullets'    => [],
     'inset'      => null,
+    'media'      => null,
     'video'      => '',
     'stats'      => [],
     'background' => '',
   ], (array) (wizard_args($plugin->name)['welcome'] ?? []));
   if ($config['intro'] === '') $config['intro'] = plugin_description($plugin);
   $config = apply_filters('tangible_onboarding_welcome', $config, $plugin);
-  return is_array($config) ? $config : [];
+  if (!is_array($config)) return [];
+  $config['media'] = normalize_media($config['media'] ?? null, $config['video'] ?? '');
+  return $config;
+}
+
+/**
+ * The media slot, normalised: null, or every key present. A bare `video`
+ * URL is media with no image — the play button — so older registrations
+ * keep their look.
+ */
+function normalize_media($media, $video = '') {
+  if (!is_array($media) || (empty($media['image']) && empty($media['href']))) {
+    $media = $video !== '' ? ['href' => $video, 'kind' => 'video'] : null;
+  }
+  if (!$media) return null;
+  $media = array_merge(['image' => '', 'alt' => '', 'href' => '', 'label' => '', 'kind' => 'post'], $media);
+  $media['kind'] = $media['kind'] === 'video' ? 'video' : 'post';
+  return $media;
 }
 
 add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name = '') {
@@ -158,9 +188,13 @@ function render_welcome_media($plugin, $config) {
   $logo = $config['logo'] ? set_url_scheme($config['logo']) : '';
   $style = $config['background'] !== '' ? ' style="background:' . esc_attr($config['background']) . '"' : '';
   $rich = $config['headline'] !== '';
+  $media = $config['media'];
+  $image = $media && $media['image'] !== '';
+  $aside = $image || $config['inset'] || $media;
+  $classes = 'tgbl-hero' . ($rich ? '' : ' is-plain') . ($aside ? ' has-aside' : '');
   ?>
   <section class="tgbl-media">
-    <div class="tgbl-hero<?php echo $rich ? '' : ' is-plain'; ?>"<?php echo $style; ?>>
+    <div class="<?php echo esc_attr($classes); ?>"<?php echo $style; ?>>
       <div class="tgbl-hero__copy">
         <?php if ($logo) : ?>
           <img class="tgbl-hero__logo" src="<?php echo esc_url($logo); ?>" alt="" />
@@ -179,13 +213,15 @@ function render_welcome_media($plugin, $config) {
           <p class="tgbl-hero__headline"><?php echo esc_html($plugin->title ?? $plugin->name); ?></p>
         <?php endif; ?>
       </div>
-      <?php if ($config['inset'] || $config['video']) : ?>
+      <?php if ($image) : ?>
+        <?php render_media_image($media); ?>
+      <?php elseif ($config['inset'] || $media) : ?>
         <div class="tgbl-hero__inset">
           <?php render_inset($config['inset']); ?>
-          <?php if ($config['video']) : ?>
-            <a class="tgbl-play" href="<?php echo esc_url($config['video']); ?>" target="_blank" rel="noopener"
-               aria-label="Watch the video">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+          <?php if ($media) : ?>
+            <a class="tgbl-play" href="<?php echo esc_url($media['href']); ?>" target="_blank" rel="noopener"
+               aria-label="<?php echo esc_attr(media_label($media) . ' (opens in a new tab)'); ?>">
+              <?php echo play_svg(); ?>
             </a>
           <?php endif; ?>
         </div>
@@ -200,6 +236,48 @@ function render_welcome_media($plugin, $config) {
     <?php endif; ?>
   </section>
   <?php
+}
+
+/** The media's visible label: the plugin's, else one that names the kind. */
+function media_label($media) {
+  if ($media['label'] !== '') return $media['label'];
+  return $media['kind'] === 'video' ? 'Watch the video' : 'Read more';
+}
+
+function play_svg() {
+  return '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true" focusable="false"><path d="M8 5v14l11-7z"/></svg>';
+}
+
+/**
+ * The media image. Linked, the image and its visible label are one link
+ * and the label is its name (alt adds to it only if the image says more);
+ * the new tab is announced, since leaving the wizard's tab would lose
+ * the step. Unlinked, it is a captioned figure.
+ */
+function render_media_image($media) {
+  $src = set_url_scheme($media['image']);
+  $video = $media['kind'] === 'video';
+  if ($media['href'] !== '') : ?>
+    <a class="tgbl-hero__figure tgbl-media-link<?php echo $video ? ' is-video' : ''; ?>"
+       href="<?php echo esc_url($media['href']); ?>" target="_blank" rel="noopener">
+      <span class="tgbl-media-link__frame">
+        <img src="<?php echo esc_url($src); ?>" alt="<?php echo esc_attr($media['alt']); ?>" />
+        <?php if ($video) : ?><span class="tgbl-media-link__play"><?php echo play_svg(); ?></span><?php endif; ?>
+      </span>
+      <span class="tgbl-media-link__label"><?php echo esc_html(media_label($media)); ?><span
+        class="tgbl-media-link__ext" aria-hidden="true">↗</span><span
+        class="screen-reader-text"> (opens in a new tab)</span></span>
+    </a>
+  <?php else : ?>
+    <figure class="tgbl-hero__figure">
+      <span class="tgbl-media-link__frame">
+        <img src="<?php echo esc_url($src); ?>" alt="<?php echo esc_attr($media['alt']); ?>" />
+      </span>
+      <?php if ($media['label'] !== '') : ?>
+        <figcaption class="tgbl-media-link__label"><?php echo esc_html($media['label']); ?></figcaption>
+      <?php endif; ?>
+    </figure>
+  <?php endif;
 }
 
 /** The white card inside the hero: a feature grid, a palette, or the plugin's own. */
