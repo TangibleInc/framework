@@ -973,8 +973,8 @@ function render_wizard($plugin) {
     .tgbl-wizard__lockup span { color: var(--tui-color-fg-muted); font-weight: 600; }
     /* A ghost button: the design's Text Button (tertiary, 40px, label in
        the base primary), not an inline link. G-13 read it as a link. */
-    .tgbl-wizard__exit { margin-left: auto; --tui-button-fg: var(--tui-theme-primary-base);
-      min-height: 40px; padding-inline: 16px; }
+    .tgbl-wizard .tgbl-wizard__exit { margin-left: auto; --tui-button-fg: var(--tui-theme-primary-base);
+      --tui-control-height-md: 40px; padding-inline: 16px; }
 
     /* Stepper band — its own white strip under the top bar (G-2). */
     /* §1: 68px, white, steps centred. */
