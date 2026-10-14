@@ -51,6 +51,18 @@ class Wizard_TestCase extends \WP_UnitTestCase {
     $this->assertSame('second', onboarding\handle_step_submission('example', [ 'step' => 'second', 'do' => 'continue' ]));
   }
 
+  function test_an_answer_button_is_a_continue_carrying_its_answer() {
+    // Footer answer buttons post do=answer:<value>; the handler reads it.
+    $seen = [];
+    $this->register([[ 'id' => 'ask', 'actions' => [ 'no' => [ 'label' => 'No' ], 'yes' => [ 'label' => 'Yes' ] ],
+      'handle' => function () use (&$seen) { $seen[] = $_POST['answer'] ?? null; return true; } ]]);
+    $this->assertSame('ask', onboarding\handle_step_submission('example', [ 'step' => 'ask', 'do' => 'answer:yes' ]));
+    $this->assertSame(['yes'], $seen);
+    unset($_POST['answer']);
+    // Nothing after the colon is not an answer.
+    $this->assertNull(onboarding\handle_step_submission('example', [ 'step' => 'ask', 'do' => 'answer:' ]));
+  }
+
   function test_skip_respects_skippable_false() {
     $this->register([[ 'id' => 'consent', 'skippable' => false ]]);
     $this->assertNull(onboarding\handle_step_submission('example', [ 'step' => 'consent', 'do' => 'skip' ]));
@@ -118,14 +130,32 @@ class Core_Steps_TestCase extends \WP_UnitTestCase {
     parent::tearDown();
   }
 
-  function test_a_registered_wizard_gets_licence_and_consent() {
+  function test_a_paid_plugin_gets_welcome_then_done() {
+    // Figma "[Core] Pro 01": the licence lives in Welcome. A paid site is
+    // never asked about usage data (ADR-011), and the step leaves the rail
+    // rather than sitting there as "skipped".
     $plan = onboarding\resolve_plan('coretest', onboarding\build_facts('coretest'));
-    $ids = array_column($plan['steps'], 'id');
-    $this->assertContains('licence', $ids);
-    $this->assertContains('consent', $ids);
-    // Licence first, and never skippable.
-    $this->assertSame('licence', $plan['current']);
+    $this->assertSame(['welcome', 'done'], array_column($plan['steps'], 'id'));
+    $this->assertSame(['welcome', 'done'], array_column($plan['rail'], 'id'));
+    $this->assertSame('welcome', $plan['current']);
     $this->assertFalse($plan['steps'][0]['skippable']);
+    $this->assertSame(1, onboarding\steps_left('coretest'));
+  }
+
+  function test_welcome_refuses_get_started_without_a_licence() {
+    wp_set_current_user(self::factory()->user->create([ 'role' => 'administrator' ]));
+    $_POST = [];
+    $this->assertNull(onboarding\handle_step_submission('coretest', [ 'step' => 'welcome', 'do' => 'continue' ]));
+    $_POST = [];
+    $this->assertStringContainsString('license key', (string) get_transient(onboarding\step_error_key('coretest')));
+    $this->assertSame('welcome', onboarding\resolve_plan('coretest', onboarding\build_facts('coretest'))['current']);
+  }
+
+  function test_welcome_shows_the_licence_field_only_when_it_can_activate() {
+    ob_start(); onboarding\render_welcome($this->plugin); $html = ob_get_clean();
+    $this->assertStringContainsString('name="license_key"', $html);
+    $this->assertStringContainsString('Your license key', $html);
+    $this->assertStringContainsString('I am installing this for a client', $html);
   }
 
   function test_an_unregistered_name_gets_no_core_steps() {
@@ -136,8 +166,12 @@ class Core_Steps_TestCase extends \WP_UnitTestCase {
   function test_licence_is_absent_on_free_builds() {
     $free = \tangible\framework\register_plugin([ 'name' => 'freetest', 'title' => 'Free' ]);
     onboarding\register_wizard($free);
-    $plan = onboarding\resolve_plan('freetest', onboarding\build_facts('freetest'));
-    $this->assertNotContains('licence', array_column($plan['steps'], 'id'));
+    $this->assertFalse(onboarding\licence_applies($free));
+    ob_start(); onboarding\render_welcome($free); $html = ob_get_clean();
+    $this->assertStringNotContainsString('name="license_key"', $html);
+    // Nothing to activate, so Get started needs nothing but the checkbox.
+    $_POST = [];
+    $this->assertSame('welcome', onboarding\handle_step_submission('freetest', [ 'step' => 'welcome', 'do' => 'continue' ]));
     delete_option('tangible_onboarding_state__freetest');
   }
 
@@ -153,60 +187,58 @@ class Core_Steps_TestCase extends \WP_UnitTestCase {
       'name' => 'noactivation', 'title' => 'No Activation', 'cloud_id' => 'noactivation',
     ]);
     onboarding\register_wizard($unregistered);
-    $plan = onboarding\resolve_plan('noactivation', onboarding\build_facts('noactivation'));
-    $this->assertNotContains('licence', array_column($plan['steps'], 'id'));
+    $this->assertFalse(onboarding\licence_applies($unregistered));
+    ob_start(); onboarding\render_welcome($unregistered); $html = ob_get_clean();
+    $this->assertStringNotContainsString('name="license_key"', $html);
     delete_option('tangible_onboarding_state__noactivation');
   }
 
-  function test_consent_refuses_half_an_answer() {
-    // Answer only one of two asks: nothing may be recorded — half-consent
-    // recorded is worse than none.
-    add_filter('tangible_onboarding_facts', function ($f) {
-      $f->licence_active = true;   // clear the licence step out of the way
-      return $f;
-    });
-    // Step fields travel in $_POST — that is the render/handle contract.
-    $_POST = [ 'telemetry_extended' => 'granted' ];
-    $recorded = onboarding\handle_step_submission('coretest', [
-      'step' => 'consent', 'do' => 'continue',
-    ]);
-    $_POST = [];
-    $this->assertNull($recorded);
-    $this->assertSame([], get_option(onboarding\CONSENT_OUTBOX, []));
+  function test_a_finished_wizard_from_before_welcome_is_not_reopened() {
+    // A site that finished setup under the old rail has a Done record and no
+    // Welcome record; it must not turn into "1 step left".
+    update_option('tangible_onboarding_state__coretest', [ 'done' => [ 'status' => 'done', 'at' => 1 ] ]);
+    $plan = onboarding\resolve_plan('coretest', onboarding\build_facts('coretest'));
+    $this->assertSame([], $plan['steps']);
+    $this->assertSame(0, onboarding\steps_left('coretest'));
   }
 
-  function test_consent_records_both_and_silences_the_ask() {
-    add_filter('tangible_onboarding_facts', function ($f) {
-      $f->licence_active = true;
-      return $f;
-    });
-    $_POST = [ 'telemetry_extended' => 'granted', 'marketing' => 'declined' ];
-    $recorded = onboarding\handle_step_submission('coretest', [
-      'step' => 'consent', 'do' => 'continue',
+  function test_the_done_band_records_the_account_email_opt_in_for_a_keyed_site() {
+    // Keyed: no typed address — the platform uses the account's email.
+    \tangible\framework\update_plugin_settings($this->plugin, [
+      \tangible\updater\get_license_key_setting_field() => 'TGBL-TEST-KEY',
     ]);
-    $_POST = [];
-    $this->assertSame('consent', $recorded);
-
-    $outbox = get_option(onboarding\CONSENT_OUTBOX);
-    // A licensed build is never asked about usage data (ADR-011 §4): the
-    // posted telemetry answer is ignored, marketing is recorded.
-    $this->assertArrayNotHasKey('telemetry_extended', $outbox);
-    $this->assertSame('declined', $outbox['marketing']['answer']);
-    // The exact wording shown rides with the answer — provable later.
-    $this->assertNotEmpty($outbox['marketing']['consent_text']);
-    $this->assertFalse($outbox['marketing']['synced']);
-
-    // A declined marketing ask is an ANSWER: the wizard never re-asks it.
+    add_filter('pre_http_request', function () { return new \WP_Error('offline', 'no network in tests'); });
+    onboarding\mark('coretest', 'welcome', 'done');
     $plan = onboarding\resolve_plan('coretest', onboarding\build_facts('coretest'));
-    $this->assertNotContains('consent', array_column($plan['steps'], 'id'));
-    $rail = array_column($plan['rail'], 'state', 'id');
-    $this->assertSame('skipped', $rail['consent']);
+    $this->assertSame('done', $plan['current']);
+    $this->assertTrue($plan['steps'][0]['submit_in_body']);
+    ob_start(); ($plan['steps'][0]['render'])($this->plugin); $html = ob_get_clean();
+    $this->assertStringContainsString('Finish Setup', $html);
+    $this->assertStringNotContainsString('name="marketing_email"', $html);
+
+    $_POST = [];
+    $this->assertSame('done', onboarding\handle_step_submission('coretest', [ 'step' => 'done', 'do' => 'continue' ]));
+    $entry = get_option(onboarding\CONSENT_OUTBOX)['marketing'];
+    $this->assertSame('granted', $entry['answer']);
+    $this->assertSame('', $entry['email']);
+    $this->assertStringContainsString('Core Test', $entry['consent_text']);
+    delete_option('coretest_settings');
+    remove_all_filters('pre_http_request');
+  }
+
+  function test_with_marketing_on_file_done_finishes_from_the_footer_and_records_nothing() {
+    onboarding\record_consent_answer('marketing', 'declined', 'wording v1');
+    onboarding\mark('coretest', 'welcome', 'done');
+    $plan = onboarding\resolve_plan('coretest', onboarding\build_facts('coretest'));
+    $this->assertFalse($plan['steps'][0]['submit_in_body']);
+    $this->assertSame('done', onboarding\handle_step_submission('coretest', [ 'step' => 'done', 'do' => 'continue' ]));
+    $this->assertSame('declined', get_option(onboarding\CONSENT_OUTBOX)['marketing']['answer']);
   }
 
   function test_a_handler_wp_error_keeps_the_step_open_and_stores_the_reason() {
-    // The shell's steward step (weight 40) must not outrank the fixture's
-    // creds step (50): answer it up front.
-    onboarding\set_steward('team');
+    // Welcome (weight 5) must not outrank the fixture's creds step (50):
+    // answer it up front.
+    onboarding\mark('coretest', 'welcome', 'done');
     add_filter('tangible_onboarding_facts', function ($f) {
       $f->licence_active = true;
       $f->ask = [ 'telemetry_extended' => 'skip', 'marketing' => 'skip' ];
@@ -367,12 +399,24 @@ class Steward_TestCase extends \WP_UnitTestCase {
     return $plan;
   }
 
-  function test_one_answer_covers_the_site_whatever_the_account() {
-    $this->assertContains('steward', array_column($this->plan('acct_A')['steps'], 'id'));
-    onboarding\set_steward('client');
-    $this->assertNotContains('steward', array_column($this->plan('acct_A')['steps'], 'id'));
-    $this->assertNotContains('steward', array_column($this->plan('acct_B')['steps'], 'id'));
+  function test_the_welcome_checkbox_is_the_site_answer() {
+    // Ticked → client; the answer is the site's, so another plugin's Welcome
+    // opens with it ticked. Unticked is a complete answer too: me/my team.
+    $this->assertSame('welcome', $this->plan('acct_A')['current']);
+    $_POST = [ 'steward_client' => '1' ];
+    $this->assertSame('welcome', onboarding\handle_step_submission('stewtest', [ 'step' => 'welcome', 'do' => 'continue' ]));
+    $_POST = [];
     $this->assertSame('client', onboarding\get_steward());
+
+    $other = \tangible\framework\register_plugin([ 'name' => 'stewtest2', 'title' => 'Stew Test 2' ]);
+    onboarding\register_wizard($other);
+    ob_start(); onboarding\render_welcome($other); $html = ob_get_clean();
+    $this->assertMatchesRegularExpression('/name="steward_client" value="1"\s+checked/', $html);
+
+    $this->assertSame('welcome', onboarding\handle_step_submission('stewtest2', [ 'step' => 'welcome', 'do' => 'continue' ]));
+    $this->assertSame('team', onboarding\get_steward());
+    delete_option('tangible_onboarding_state__stewtest');
+    delete_option('tangible_onboarding_state__stewtest2');
   }
 
   function test_older_shapes_still_read() {
@@ -421,15 +465,35 @@ class Shell_Rules_TestCase extends \WP_UnitTestCase {
   }
 
   function test_done_is_last_and_never_counts_as_a_question() {
-    onboarding\set_steward('team');
+    onboarding\mark('ruletest', 'welcome', 'done');
     $plan = $this->plan();
     $this->assertSame(['done'], array_column($plan['steps'], 'id'));
     $this->assertSame([], onboarding\pending_questions($plan));
     $this->assertSame(0, onboarding\steps_left('ruletest'));
   }
 
+  function test_done_renders_plugin_notices_and_next_step_links() {
+    onboarding\mark('ruletest', 'welcome', 'done');
+    add_filter('tangible_onboarding_done', function ($done) {
+      $done['heading'] = 'Rule Test is installed';
+      $done['notices'][] = [ 'title' => 'A setting is in the way', 'text' => 'Turn it off.',
+        'actions' => [ [ 'label' => 'Open settings', 'url' => 'https://example.test/s', 'style' => 'button' ] ] ];
+      $done['links'][] = [ 'label' => 'See it on a course', 'url' => 'https://example.test/c', 'kind' => 'Course' ];
+      return $done;
+    });
+    $step = $this->plan()['steps'][0];
+    remove_all_filters('tangible_onboarding_done');
+    $this->assertSame('center', $step['align']);
+    ob_start(); ($step['render'])((object) [ 'name' => 'ruletest', 'title' => 'Rule Test' ]); $html = ob_get_clean();
+    $this->assertStringContainsString('Rule Test is installed', $html);
+    $this->assertStringContainsString('A setting is in the way', $html);
+    $this->assertStringContainsString('tgbl-notice__button', $html);
+    $this->assertStringContainsString('What people usually do next', $html);
+    $this->assertStringContainsString('<span class="tgbl-tag">Course</span>', $html);
+  }
+
   function test_done_redirects_to_its_primary_action() {
-    onboarding\set_steward('team');
+    onboarding\mark('ruletest', 'welcome', 'done');
     add_filter('tangible_onboarding_done', function ($done) {
       $done['primary'] = [ 'label' => 'Open it', 'url' => 'https://example.test/open' ];
       return $done;
@@ -501,14 +565,15 @@ class Shell_Rules_TestCase extends \WP_UnitTestCase {
     $this->assertSame($first, get_option(onboarding\ONBOARDED_OPTION)['ruletest']);
   }
 
-  function test_back_reopens_the_steward_question() {
-    $_POST = [ 'steward' => 'client' ];
-    $this->assertSame('steward', onboarding\handle_step_submission('ruletest', [ 'step' => 'steward', 'do' => 'continue' ]));
+  function test_back_from_done_reopens_welcome_with_its_answers_kept() {
+    $_POST = [ 'steward_client' => '1' ];
+    $this->assertSame('welcome', onboarding\handle_step_submission('ruletest', [ 'step' => 'welcome', 'do' => 'continue' ]));
     $_POST = [];
     $this->assertSame('done', $this->plan()['current']);
 
-    $this->assertSame('steward', onboarding\handle_step_submission('ruletest', [ 'step' => 'done', 'do' => 'back' ]));
-    $this->assertNull(onboarding\get_steward());
-    $this->assertSame('steward', $this->plan()['current']);
+    $this->assertSame('welcome', onboarding\handle_step_submission('ruletest', [ 'step' => 'done', 'do' => 'back' ]));
+    $this->assertSame('welcome', $this->plan()['current']);
+    // The checkbox is the site option; Welcome opens with it still ticked.
+    $this->assertSame('client', onboarding\get_steward());
   }
 }

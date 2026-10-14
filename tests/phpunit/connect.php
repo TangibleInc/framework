@@ -228,7 +228,9 @@ class Connect_Step_TestCase extends \WP_UnitTestCase {
     delete_option('tangible_onboarding_state__site');
     delete_option('tangible_onboarding_state__freeconnect');
     delete_option(onboarding\CONSENT_OUTBOX);
+    delete_option(onboarding\STEWARD_OPTION);
     remove_all_filters('pre_http_request');
+    $_POST = [];
     parent::tearDown();
   }
 
@@ -236,27 +238,96 @@ class Connect_Step_TestCase extends \WP_UnitTestCase {
     return array_column(onboarding\resolve_plan('freeconnect', onboarding\build_facts('freeconnect'))['steps'], 'id');
   }
 
-  function test_free_and_not_connected_shows_connect_before_consent() {
-    $ids = $this->ids();
-    $this->assertContains(connect\STEP_ID, $ids);
-    $this->assertLessThan(array_search('consent', $ids, true), array_search(connect\STEP_ID, $ids, true));
+  private function rail() {
+    return array_column(onboarding\resolve_plan('freeconnect', onboarding\build_facts('freeconnect'))['rail'], 'id');
   }
 
-  function test_connected_or_licensed_hides_it() {
-    connect\save_state([ 'token' => Connect_TestCase::TOKEN, 'status' => 'active' ]);
-    $this->assertNotContains(connect\STEP_ID, $this->ids());
-    connect\clear();
-    update_option('freeconnect_distribution', 'licensed', false);
-    $this->assertNotContains(connect\STEP_ID, $this->ids());
+  private function welcome_html() {
+    ob_start(); onboarding\render_welcome($this->plugin); return ob_get_clean();
   }
 
-  function test_continue_starts_the_grant_and_records_nothing_yet() {
+  function test_anonymous_free_is_welcome_usage_data_done() {
+    // Figma "[Core] Free 01": Welcome · Usage data · Done.
+    $this->assertSame(['welcome', 'usage', 'done'], $this->ids());
+    $this->assertSame(['welcome', 'usage', 'done'], $this->rail());
+    $this->assertStringContainsString('Connect to tangible.one', $this->welcome_html());
+  }
+
+  function test_connected_free_is_welcome_then_done() {
+    // Figma "[Core] Free 01b": the usage step leaves the rail entirely.
+    connect\save_state([ 'token' => Connect_TestCase::TOKEN, 'status' => 'active', 'account_name' => 'Oakhill Learning' ]);
+    $this->assertSame(['welcome', 'done'], $this->ids());
+    $this->assertSame(['welcome', 'done'], $this->rail());
+    $html = $this->welcome_html();
+    $this->assertStringContainsString('Connected as Oakhill Learning', $html);
+    $this->assertStringContainsString('answer:disconnect', $html);
+    $this->assertStringNotContainsString('answer:connect"', $html);
+  }
+
+  function test_connect_starts_the_grant_and_records_nothing_yet() {
     wp_set_current_user(self::factory()->user->create([ 'role' => 'administrator' ]));
-    $this->assertNull(onboarding\handle_step_submission('freeconnect', [ 'step' => connect\STEP_ID, 'do' => 'continue' ]));
+    $_POST = [ 'steward_client' => '1' ];
+    $this->assertNull(onboarding\handle_step_submission('freeconnect', [ 'step' => 'welcome', 'do' => 'answer:connect' ]));
+    $_POST = [];
     $this->assertStringStartsWith(connect\app_base() . '/connect/authorize?', onboarding\pending_redirect());
-    $this->assertContains(connect\STEP_ID, $this->ids());
+    $this->assertSame('welcome', $this->ids()[0]);
+    // The checkbox ticked before leaving is not lost on the round trip.
+    $this->assertSame('client', onboarding\get_steward());
     // tangible.one is an allowed redirect host only inside the step submission.
     $this->assertSame('nope', wp_validate_redirect(onboarding\pending_redirect(), 'nope'));
+    delete_option(onboarding\STEWARD_OPTION);
+  }
+
+  function test_disconnect_from_welcome_brings_the_usage_question_back() {
+    wp_set_current_user(self::factory()->user->create([ 'role' => 'administrator' ]));
+    connect\save_state([ 'token' => Connect_TestCase::TOKEN, 'status' => 'active' ]);
+    add_filter('pre_http_request', function () { return new \WP_Error('offline', 'no network in tests'); });
+    $this->assertNull(onboarding\handle_step_submission('freeconnect', [ 'step' => 'welcome', 'do' => 'answer:disconnect' ]));
+    $_POST = [];
+    $this->assertSame('', connect\get_token());
+    $this->assertSame(['welcome', 'usage', 'done'], $this->ids());
+  }
+
+  function test_usage_data_records_either_answer_and_stays_on_the_rail_as_done() {
+    add_filter('pre_http_request', function () { return new \WP_Error('offline', 'no network in tests'); });
+    onboarding\mark('freeconnect', 'welcome', 'done');
+    // No answer is not an answer.
+    $this->assertNull(onboarding\handle_step_submission('freeconnect', [ 'step' => 'usage', 'do' => 'continue' ]));
+
+    foreach (['declined', 'granted'] as $answer) {
+      $this->assertSame('usage', onboarding\handle_step_submission('freeconnect', [ 'step' => 'usage', 'do' => 'answer:' . $answer ]));
+      $entry = get_option(onboarding\CONSENT_OUTBOX)['telemetry_extended'];
+      $this->assertSame($answer, $entry['answer']);
+      // The exact wording shown, rows included — provable later.
+      $this->assertStringContainsString('Active plugins', $entry['consent_text']);
+      $plan = onboarding\resolve_plan('freeconnect', onboarding\build_facts('freeconnect'));
+      $this->assertSame('done', $plan['current']);
+      $this->assertSame('done', array_column($plan['rail'], 'state', 'id')['usage']);
+      // Back reopens the question.
+      $this->assertSame('usage', onboarding\handle_step_submission('freeconnect', [ 'step' => 'done', 'do' => 'back' ]));
+      $this->assertArrayNotHasKey('telemetry_extended', get_option(onboarding\CONSENT_OUTBOX));
+    }
+    unset($_POST['answer']);
+  }
+
+  function test_the_done_band_asks_an_anonymous_site_for_an_address() {
+    add_filter('pre_http_request', function () { return new \WP_Error('offline', 'no network in tests'); });
+    onboarding\mark('freeconnect', 'welcome', 'done');
+    onboarding\record_consent_answer('telemetry_extended', 'declined', 'wording v1');
+    $plan = onboarding\resolve_plan('freeconnect', onboarding\build_facts('freeconnect'));
+    $this->assertSame('done', $plan['current']);
+    ob_start(); ($plan['steps'][0]['render'])($this->plugin); $html = ob_get_clean();
+    $this->assertStringContainsString('name="marketing_email"', $html);
+
+    $_POST = [ 'marketing_email' => 'not an address' ];
+    $this->assertNull(onboarding\handle_step_submission('freeconnect', [ 'step' => 'done', 'do' => 'continue' ]));
+    $this->assertArrayNotHasKey('marketing', get_option(onboarding\CONSENT_OUTBOX));
+
+    $_POST = [ 'marketing_email' => 'owner@example.test' ];
+    $this->assertSame('done', onboarding\handle_step_submission('freeconnect', [ 'step' => 'done', 'do' => 'continue' ]));
+    $_POST = [];
+    $entry = get_option(onboarding\CONSENT_OUTBOX)['marketing'];
+    $this->assertSame([ 'granted', 'owner@example.test' ], [ $entry['answer'], $entry['email'] ]);
   }
 
   function test_connected_consent_sync_sends_the_token_header_and_no_key() {
@@ -279,7 +350,7 @@ class Connect_Step_TestCase extends \WP_UnitTestCase {
     $facts = onboarding\build_facts('freeconnect');
     $facts->ask['marketing'] = 'skip';
     foreach (onboarding\resolve_plan('freeconnect', $facts)['steps'] as $s) {
-      if ($s['id'] === 'consent') return ($s['needed'])($facts);
+      if ($s['id'] === 'usage') return ($s['needed'])($facts);
     }
     return false;
   }
@@ -315,32 +386,38 @@ class Connect_Step_TestCase extends \WP_UnitTestCase {
     }, 10, 3);
     $ids = $this->ids();
     $this->assertContains('connect', $ids);
-    $this->assertContains(connect\STEP_ID, $ids);
+    $this->assertContains('welcome', $ids);
   }
 
-  function test_pending_shows_why_and_check_again_stays_open_until_verified() {
+  function test_pending_shows_why_and_check_again_stays_on_welcome_until_verified() {
     wp_set_current_user(self::factory()->user->create([ 'role' => 'administrator' ]));
     connect\save_state([ 'token' => Connect_TestCase::TOKEN, 'status' => 'pending', 'account_name' => 'Acme' ]);
-    $step = null;
-    foreach (onboarding\resolve_plan('freeconnect', onboarding\build_facts('freeconnect'))['steps'] as $s) {
-      if ($s['id'] === connect\STEP_ID) $step = $s;
-    }
-    ob_start(); ($step['render'])($this->plugin); $html = ob_get_clean();
-    $this->assertStringContainsString('waiting for tangible.one to verify', $html);
-    $this->assertStringContainsString('Check again', $html);
+    $html = $this->welcome_html();
+    $this->assertStringContainsString('Waiting for tangible.one to verify', $html);
+    $this->assertStringContainsString('answer:connect_check', $html);
 
     add_filter('pre_http_request', function () {
       return [ 'response' => [ 'code' => 200 ], 'body' => wp_json_encode([ 'status' => 'pending' ]) ];
     });
-    $_POST['connect_check'] = '1';
-    $this->assertInstanceOf(\WP_Error::class, ($step['handle'])($this->plugin));
+    $this->assertNull(onboarding\handle_step_submission('freeconnect', [ 'step' => 'welcome', 'do' => 'answer:connect_check' ]));
+    $this->assertStringStartsWith('Still waiting', (string) get_transient(onboarding\step_error_key('freeconnect')));
     remove_all_filters('pre_http_request');
     add_filter('pre_http_request', function () {
       return [ 'response' => [ 'code' => 200 ], 'body' => wp_json_encode([ 'status' => 'active' ]) ];
     });
-    $this->assertTrue(($step['handle'])($this->plugin));
+    $this->assertNull(onboarding\handle_step_submission('freeconnect', [ 'step' => 'welcome', 'do' => 'answer:connect_check' ]));
     $this->assertTrue(connect\is_connected());
-    unset($_POST['connect_check']);
+    // Still on Welcome, now showing the connected box.
+    $this->assertSame('welcome', $this->ids()[0]);
+    $this->assertStringContainsString('Connected as Acme', $this->welcome_html());
+    unset($_POST['answer']);
+  }
+
+  function test_get_started_with_a_pending_connection_moves_on() {
+    connect\save_state([ 'token' => Connect_TestCase::TOKEN, 'status' => 'pending' ]);
+    $_POST = [];
+    $this->assertSame('welcome', onboarding\handle_step_submission('freeconnect', [ 'step' => 'welcome', 'do' => 'continue' ]));
+    $this->assertSame(Connect_TestCase::TOKEN, connect\get_token());
   }
 
   function test_a_revoked_token_on_consent_sync_falls_back_to_anonymous() {

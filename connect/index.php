@@ -13,7 +13,8 @@
  *               Disconnect
  *   hooks.php   the REST verify endpoint, the updater's get_metadata header,
  *               the notice copy the Hub shows (hub/page.php draws the band)
- *   step.php    the `connect` core onboarder step (free plugins only)
+ *   step.php    the Connect card inside the onboarder's Welcome step (free
+ *               plugins only)
  *
  * Security notes
  *   - Every call to tangible.one here uses VERIFIED TLS (WordPress's default).
