@@ -49,7 +49,11 @@
 .tgbl-hub .tgbl-hub__text { display: grid; gap: 4px; flex: 1; min-width: 0; }
 .tgbl-hub .tgbl-hub__form { display: inline; margin: 0; }
 .tgbl-hub .tgbl-hub__end { margin-left: auto; }
-.tgbl-hub .tui-button.is-style-link { min-height: 0; padding: 0; font-size: 12px; }
+.tgbl-hub .tui-button.is-style-link { min-height: 0; padding: 0; font-size: 12px; line-height: 16px; text-decoration: none; }
+.tgbl-hub .tui-button.is-style-link:hover,
+.tgbl-hub .tui-button.is-style-link:focus-visible { text-decoration: underline; }
+.tgbl-hub .tui-card__head .tui-button.is-style-link,
+.tgbl-hub .tgbl-hub__band .tui-button.is-style-link { font-size: 13px; line-height: 20px; }
 
 /* Cards: header 24/24/16, body 0/24/24. */
 .tgbl-hub .tui-card__head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
@@ -58,9 +62,9 @@
 
 /* The Connect band. */
 .tgbl-hub .tgbl-hub__band { margin: 0 0 24px; border: 0; border-radius: 8px; }
-.tgbl-hub .tgbl-hub__band .tui-notice__inner { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 32px; padding: 24px; }
+.tgbl-hub .tgbl-hub__band .tui-notice__inner { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 16px 32px; padding: 24px; }
 .tgbl-hub .tgbl-hub__band-text { display: grid; gap: 4px; flex: 1 1 420px; }
-.tgbl-hub .tgbl-hub__band .tui-notice__body { color: var(--tgbl-hub-fg-alt); }
+.tgbl-hub .tgbl-hub__band .tui-notice__body { padding: 0; color: var(--tgbl-hub-fg-alt); font-size: 13px; line-height: 20px; }
 .tgbl-hub .tgbl-hub__band-actions { display: flex; align-items: center; gap: 16px; }
 
 /* A 40px tile for a plugin's icon. */
@@ -81,8 +85,6 @@
 .tgbl-hub .tgbl-hub__table { width: 100%; border-collapse: collapse; table-layout: fixed; }
 .tgbl-hub .tgbl-hub__table thead th { padding: 0 24px 8px 0; font-size: 11px; font-weight: 500; line-height: 16px;
   text-transform: uppercase; color: var(--tgbl-hub-fg-alt); text-align: left; }
-.tgbl-hub .tgbl-hub__table thead th:first-child,
-.tgbl-hub .tgbl-hub__table tbody th { padding-left: 24px; }
 .tgbl-hub .tgbl-hub__table thead th:nth-child(2) { width: 136px; }
 .tgbl-hub .tgbl-hub__table thead th:nth-child(3) { width: 176px; }
 .tgbl-hub .tgbl-hub__table thead th:last-child { width: 128px; padding-right: 24px; }
@@ -90,6 +92,8 @@
 .tgbl-hub .tgbl-hub__table td { padding: 16px 24px 16px 0; border-top: 1px solid var(--tgbl-hub-border);
   vertical-align: middle; text-align: left; font-weight: normal; }
 .tgbl-hub .tgbl-hub__table td:last-child { padding-right: 24px; }
+.tgbl-hub .tgbl-hub__table thead th:first-child,
+.tgbl-hub .tgbl-hub__table tbody th { padding-left: 24px; }
 .tgbl-hub .tgbl-hub__table td > * + * { margin-top: 4px; }
 .tgbl-hub .tgbl-hub__plugin { display: flex; align-items: center; gap: 16px; }
 .tgbl-hub .tgbl-hub__name { font-size: 13px; font-weight: 500; line-height: 20px; }
