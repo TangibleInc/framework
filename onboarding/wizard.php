@@ -973,7 +973,8 @@ function render_wizard($plugin) {
     .tgbl-wizard__lockup span { color: var(--tui-color-fg-muted); font-weight: 600; }
     /* A ghost button: the design's Text Button (tertiary, 40px, label in
        the base primary), not an inline link. G-13 read it as a link. */
-    .tgbl-wizard__exit { margin-left: auto; --tui-button-fg: var(--tui-theme-primary-base); }
+    .tgbl-wizard__exit { margin-left: auto; --tui-button-fg: var(--tui-theme-primary-base);
+      min-height: 40px; padding-inline: 16px; }
 
     /* Stepper band — its own white strip under the top bar (G-2). */
     /* §1: 68px, white, steps centred. */
@@ -1351,7 +1352,7 @@ function render_wizard($plugin) {
   <div class="tui-interface tgbl-wizard">
     <header class="tgbl-wizard__topbar">
       <?php render_lockup($plugin); ?>
-      <a class="tui-button is-style-ghost is-theme-primary is-size-lg tgbl-wizard__exit"
+      <a class="tui-button is-style-ghost is-theme-primary tgbl-wizard__exit"
          href="<?php echo esc_url(admin_url('admin.php?page=tangible-home')); ?>">Exit setup</a>
     </header>
     <div class="tgbl-wizard__stepbar">
