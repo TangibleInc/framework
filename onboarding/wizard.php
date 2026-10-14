@@ -361,6 +361,11 @@ function register_wizard($plugin, $args = []) {
         // (is_admin_bar_showing() returns true outright for is_admin()), so
         // the render action is what has to go.
         remove_action('in_admin_header', 'wp_admin_bar_render', 0);
+        // Screen Options is a float at the top of #wpbody-content, and the
+        // wizard is a new formatting context, so it narrows beside the
+        // float: a grey strip down the right of every step. Not emitting it
+        // is the fix; the help tab, if a plugin adds one, is hidden in CSS.
+        add_filter('screen_options_show_screen', '__return_false');
       });
     }
   });
@@ -852,6 +857,7 @@ function render_wizard($plugin) {
     /* Full-screen takeover: the wizard owns the page (Figma: no admin chrome). */
     html.wp-toolbar { padding-top: 0 !important; }
     #wpadminbar, #adminmenumain, #adminmenuback, #adminmenuwrap, #adminmenu, #wpfooter,
+    #screen-meta, #screen-meta-links,
     .notice, .update-nag, .updated, .error:not(.tgbl-keep) { display: none !important; }
     /* The admin menu's dark column is also painted by body/#wpwrap backgrounds
        under the hidden menu, which is the ~20px sliver on the launchpad (G-18). */
