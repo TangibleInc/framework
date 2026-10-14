@@ -609,8 +609,9 @@ function marketing_consent_text($plugin) {
 
 function release_notes_title($plugin) {
   /* translators: %s: plugin name */
+  $name = $plugin ? short_title($plugin) : '';
   return sprintf(__('Get release notes from the makers of %s', 'tangible-framework'),
-    $plugin->title ?? $plugin->name ?? __('this plugin', 'tangible-framework'));
+    $name !== '' ? $name : __('this plugin', 'tangible-framework'));
 }
 
 add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name = '') {
@@ -722,7 +723,7 @@ add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name =
   $title = $plugin->title ?? $plugin_name;
   $done = apply_filters('tangible_onboarding_done', [
     /* translators: %s: plugin name */
-    'heading' => sprintf(__('%s is ready', 'tangible-framework'), $title),
+    'heading' => sprintf(__('%s is ready', 'tangible-framework'), $plugin ? short_title($plugin) : $title),
     'summary' => '',
     'notices' => [],
     'links_label' => __('What people usually do next', 'tangible-framework'),
