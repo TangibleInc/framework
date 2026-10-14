@@ -861,6 +861,9 @@ function render_wizard($plugin) {
        bands' scroll container — one that never scrolls — so neither the
        header nor the footer held. */
     #wpwrap { overflow: visible !important; }
+    /* Below 601px WP pads #wpbody 46px for the admin bar, which the
+       takeover hides: the gap would sit above the wizard. */
+    #wpbody { padding-top: 0 !important; }
     #wpbody-content .tgbl-wizard { min-height: 100vh; }
 
     /* ------------------------------------------------------------------
