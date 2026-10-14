@@ -651,7 +651,10 @@ function render_done($plugin, $done, $ask_marketing) {
 
   <?php if ($ask_marketing) :
     $typed = !has_account_identity($plugin);
-    $connect_state = function_exists('tangible\\connect\\get_state') ? \tangible\connect\get_state() : [];
+    // The connection's masked address names the right account only when the
+    // delivery goes through Connect, i.e. this plugin has no licence key.
+    $keyed = function_exists('tangible\\updater\\get_license_key') && !empty(\tangible\updater\get_license_key($plugin));
+    $connect_state = !$keyed && function_exists('tangible\\connect\\get_state') ? \tangible\connect\get_state() : [];
     ?>
     <section class="tgbl-band tgbl-optin">
       <h3 class="tgbl-band__title">Get release notes from the makers of <?php echo esc_html($plugin->title ?? $plugin->name); ?></h3>

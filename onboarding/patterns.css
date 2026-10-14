@@ -57,7 +57,15 @@
 .tgbl-wizard .tgbl-hero { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 32px; align-items: center; padding: 40px;
   background: linear-gradient(135deg, #2b1a6b 0%, #5a2fc2 55%, #8a4fe8 100%); color: #fff; }
-.tgbl-wizard .tgbl-hero.is-plain { grid-template-columns: 1fr; }
+/* The fallback (no media described): a light ground, because a plugin's
+   own logo is usually drawn for white and vanishes on the gradient. */
+.tgbl-wizard .tgbl-hero.is-plain { grid-template-columns: 1fr; background: #f6f4fe; color: var(--tui-color-fg); }
+.tgbl-wizard .tgbl-hero.is-plain .tgbl-hero__headline { color: var(--tui-color-fg); }
+@media (max-width: 700px) {
+  .tgbl-wizard .tgbl-hero { grid-template-columns: 1fr; padding: 24px; }
+  .tgbl-wizard .tgbl-stats { grid-auto-flow: row; gap: 16px; }
+  .tgbl-wizard .tgbl-stats__item + .tgbl-stats__item { border-left: 0; }
+}
 .tgbl-wizard .tgbl-hero__logo { display: block; height: 32px; width: auto; margin-bottom: 24px; }
 .tgbl-wizard .tgbl-hero__headline { margin: 0; font-size: 28px; font-weight: 400; line-height: 1.2;
   color: #fff; }
@@ -97,8 +105,10 @@
 .tgbl-wizard .tgbl-stats dt { font-size: 18px; font-weight: 600; line-height: 1.3; color: var(--tui-color-fg); }
 .tgbl-wizard .tgbl-stats dd { margin: 2px 0 0; font-size: 13px; color: var(--tui-color-fg-muted); }
 
+/* Children carry their own top margins (title 0, text 8, field 16, button
+   24, divider 24); the card's generic 16px rhythm does not apply here. */
 .tgbl-wizard .tgbl-welcome__form { display: flex; flex-direction: column; }
-.tgbl-wizard .tgbl-welcome__form > * + * { margin-top: 0; }
+.tgbl-wizard .tgbl-welcome__form > .tgbl-check { margin-top: 0; }
 
 /* The connected state: a green success box in place of the button. */
 .tgbl-wizard .tgbl-connected { display: flex; gap: 12px; margin-top: 16px !important; padding: 16px;
@@ -121,7 +131,7 @@
   border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
 .tgbl-wizard .tgbl-check__body { display: flex; flex-direction: column; gap: 4px; }
 .tgbl-wizard .tgbl-check__title { font-size: 14px; font-weight: 500; }
-.tgbl-wizard .tgbl-check__help { font-size: 13px; line-height: 1.55; color: var(--tui-color-fg-muted); }
+.tgbl-wizard .tgbl-check__help { font-size: 13px; font-weight: 400; line-height: 1.55; color: var(--tui-color-fg-muted); }
 
 /* ── Usage data: label/value rows (§7 "Values to show before agreeing") ─ */
 
