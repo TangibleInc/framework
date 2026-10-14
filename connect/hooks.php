@@ -40,6 +40,23 @@ add_action('rest_api_init', function () {
   ]);
 });
 
+/**
+ * Tangible Site Gate closes the REST API to logged-out visitors on sites that
+ * have not launched — which includes the platform's verification call, so a
+ * gated site could approve a connection but never finish it. Let exactly this
+ * route through: it answers only while a connection is pending, and the proof
+ * is its own authentication.
+ */
+function is_verify_request() {
+  $route = (string) ($GLOBALS['wp']->query_vars['rest_route'] ?? ($_GET['rest_route'] ?? ''));
+  if ($route === '') $route = (string) wp_parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH);
+  return (bool) preg_match('#/tangible/v1/connect/verify/?$#', $route);
+}
+
+add_filter('tangible_site_gate_bypass', function ($bypass) {
+  return $bypass || is_verify_request();
+});
+
 // ── updater (PUC) ─────────────────────────────────────────────────────────
 
 /** Keyless plugins only: a key always wins, paid plugins never use Connect. */
