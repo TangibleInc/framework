@@ -556,6 +556,32 @@ class Shell_Rules_TestCase extends \WP_UnitTestCase {
     delete_option('ruletest_distribution');
   }
 
+  function test_the_updater_licence_nag_yields_only_while_setup_speaks() {
+    wp_set_current_user(self::factory()->user->create([ 'role' => 'administrator' ]));
+    $plugin = \tangible\framework\register_plugin([ 'name' => 'yieldtest', 'title' => 'Yield Test' ]);
+    onboarding\register_wizard($plugin);
+    add_filter('tangible_onboarding_steps', $add = function ($steps, $facts, $name = '') {
+      if ($name === 'yieldtest') $steps[] = [ 'id' => 'ask', 'needed' => fn() => true ];
+      return $steps;
+    }, 10, 3);
+    $this->assertTrue(apply_filters('tangible_updater_licence_notice_yields', false, $plugin),
+      'setup pending: its notice is the one licence message');
+
+    $other = (object) [ 'name' => 'someone-else' ];
+    $this->assertFalse(apply_filters('tangible_updater_licence_notice_yields', false, $other),
+      'only for its own plugin');
+
+    remove_filter('tangible_onboarding_steps', $add, 10);
+    onboarding\mark('yieldtest', 'welcome', 'done');
+    $fresh = \tangible\framework\register_plugin([ 'name' => 'yieldtest2', 'title' => 'Yield Two' ]);
+    onboarding\register_wizard($fresh);
+    onboarding\mark('yieldtest2', 'welcome', 'done');
+    $this->assertFalse(apply_filters('tangible_updater_licence_notice_yields', false, $fresh),
+      'setup finished: a key removed later is the updater\'s to report');
+    delete_option('tangible_onboarding_state__yieldtest');
+    delete_option('tangible_onboarding_state__yieldtest2');
+  }
+
   function test_the_onboarded_marker_is_set_once() {
     $this->assertFalse(onboarding\was_onboarded('ruletest'));
     onboarding\mark_onboarded('ruletest');

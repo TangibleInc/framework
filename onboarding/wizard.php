@@ -389,25 +389,76 @@ function register_wizard($plugin, $args = []) {
   });
 
   add_action('admin_init', function () use ($plugin, $name) {
-    if (!current_user_can('manage_options') || is_disabled()) return;
     if (($_GET['page'] ?? '') === get_setup_slug($plugin)) return;
-    $notice_key = $name . '-setup-pending';
-    $facts = build_facts($name);
-    $sticky = notice_is_sticky($plugin, $facts);
-    if (!$sticky && framework\is_admin_notice_dismissed($notice_key)) return;
-    $plan = onboarding\resolve_plan($name, $facts);
-    $questions = pending_questions($plan);
-    if (!$questions) return;
-    framework\register_admin_notice(function () use ($plugin, $questions, $notice_key, $sticky) {
+    $notice = setup_notice($plugin);
+    if (!$notice) return;
+    framework\register_admin_notice(function () use ($plugin, $notice) {
       $title = esc_html($plugin->title ?? $plugin->name);
       $url = esc_url(get_setup_url($plugin));
-      $n = count($questions);
-      $class = $sticky ? 'notice notice-warning' : 'notice notice-info is-dismissible';
-      echo "<div class=\"$class\" data-tangible-admin-notice=\"$notice_key\">"
-         . "<p><strong>$title</strong> — setup has $n step" . ($n === 1 ? '' : 's') . " left. "
+      $n = $notice['steps'];
+      $key = $notice['key'];
+      $class = $notice['sticky'] ? 'notice notice-warning' : 'notice notice-info is-dismissible';
+      // When the licence is what's missing, say so: this notice is the only
+      // licence message while setup is pending (the updater's yield below).
+      $what = $notice['licence']
+        ? 'add your license key to finish setup.'
+        : "setup has $n step" . ($n === 1 ? '' : 's') . ' left.';
+      echo "<div class=\"$class\" data-tangible-admin-notice=\"$key\">"
+         . "<p><strong>$title</strong> — $what "
          . "<a href=\"$url\">Continue setup</a></p></div>";
     });
   });
+
+  // One licence message at a time: while setup is pending and speaking for
+  // this plugin (its notice showing, or the wizard itself open), the updater's
+  // "License key is missing" notice and Plugins-row strip stay quiet. Once
+  // setup is finished, a key removed, expired or revoked later is the
+  // updater's to report again.
+  add_filter('tangible_updater_licence_notice_yields', function ($yields, $for_plugin) use ($plugin, $name) {
+    if (($for_plugin->name ?? null) !== $name) return $yields;
+    if (($_GET['page'] ?? '') === get_setup_slug($plugin)) return true;
+    return $yields || (bool) setup_notice($plugin);
+  }, 10, 2);
+}
+
+/**
+ * URL of a stylesheet in this module, versioned by the framework version AND
+ * the file's modification time: hosts cache these for years, so a CSS change
+ * made without a version bump would otherwise never reach a browser that has
+ * seen the page. module_url carries no trailing slash and may answer with the
+ * wrong scheme behind SSL proxies — normalize both or the stylesheet 404s.
+ */
+function asset_url($file) {
+  $mtime = @filemtime(__DIR__ . '/' . $file);
+  return set_url_scheme(trailingslashit(framework\module_url(__FILE__)) . $file)
+    . '?v=' . rawurlencode((framework::$state->version ?? '1') . ($mtime ? '.' . $mtime : ''));
+}
+
+/**
+ * Whether the "setup pending" notice shows for this plugin on this request,
+ * and what it says: null, or [ key, steps, sticky, licence ]. Shared by the
+ * notice and the updater's yield so the two can never disagree.
+ */
+function setup_notice($plugin) {
+  static $memo = [];
+  $name = $plugin->name;
+  if (array_key_exists($name, $memo)) return $memo[$name];
+  $memo[$name] = null;
+
+  if (!current_user_can('manage_options') || is_disabled()) return null;
+  $key = $name . '-setup-pending';
+  $facts = build_facts($name);
+  $sticky = notice_is_sticky($plugin, $facts);
+  if (!$sticky && framework\is_admin_notice_dismissed($key)) return null;
+  $questions = pending_questions(onboarding\resolve_plan($name, $facts));
+  if (!$questions) return null;
+
+  return $memo[$name] = [
+    'key'     => $key,
+    'steps'   => count($questions),
+    'sticky'  => $sticky,
+    'licence' => licence_applies($plugin) && empty($facts->licence_active),
+  ];
 }
 
 /**
@@ -782,10 +833,7 @@ function render_wizard($plugin) {
   }
   $all_done = !$step;
 
-  // module_url carries no trailing slash and may answer with the wrong
-  // scheme behind SSL proxies — normalize both or the stylesheet 404s.
-  $css_url = set_url_scheme(trailingslashit(framework\module_url(__FILE__)) . 'wizard.css')
-    . '?v=' . rawurlencode(framework::$state->version ?? '1');
+  $css_url = asset_url('wizard.css');
   ?>
   <link rel="stylesheet" href="<?php echo esc_url($css_url); ?>" />
   <style>
@@ -1300,7 +1348,7 @@ function render_wizard($plugin) {
         padding-left: 0; padding-top: 16px; width: 100%; }
     }
   </style>
-  <link rel="stylesheet" href="<?php echo esc_url(str_replace('wizard.css', 'patterns.css', $css_url)); ?>" />
+  <link rel="stylesheet" href="<?php echo esc_url(asset_url('patterns.css')); ?>" />
   <div class="tui-interface tgbl-wizard">
     <header class="tgbl-wizard__topbar">
       <?php render_lockup($plugin); ?>

@@ -122,12 +122,18 @@
 
 /* "I am installing this for a client" — a native checkbox, design-sized. */
 .tgbl-wizard .tgbl-check { display: flex; gap: 12px; align-items: flex-start; cursor: pointer; }
-.tgbl-wizard .tgbl-check input[type=checkbox] { flex: none; width: 20px; height: 20px; min-width: 20px;
-  margin: 1px 0 0; border: 1px solid #949494; border-radius: 4px; }
+/* wp-admin draws its own checked tick (a floated ::before with negative
+   margins), which pushed ours off-centre. Own the box outright and place the
+   tick absolutely, so core's float and margins have nothing to move. */
+.tgbl-wizard .tgbl-check input[type=checkbox] { appearance: none; -webkit-appearance: none;
+  position: relative; flex: none; width: 20px; height: 20px; min-width: 20px; margin: 1px 0 0;
+  padding: 0; border: 1px solid #949494; border-radius: 4px; background: #fff; box-shadow: none; cursor: pointer; }
+.tgbl-wizard .tgbl-check input[type=checkbox]:focus-visible { outline: 2px solid var(--tui-theme-primary-base);
+  outline-offset: 2px; }
 .tgbl-wizard .tgbl-check input[type=checkbox]:checked { background: var(--tui-theme-primary-base);
   border-color: var(--tui-theme-primary-base); }
-.tgbl-wizard .tgbl-check input[type=checkbox]:checked::before { content: "";
-  display: block; width: 6px; height: 11px; margin: 2px auto 0;
+.tgbl-wizard .tgbl-check input[type=checkbox]:checked::before { content: ""; position: absolute;
+  left: 6px; top: 2px; float: none; width: 5px; height: 10px; margin: 0; box-sizing: content-box;
   border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
 .tgbl-wizard .tgbl-check__body { display: flex; flex-direction: column; gap: 4px; }
 .tgbl-wizard .tgbl-check__title { font-size: 14px; font-weight: 500; }

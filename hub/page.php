@@ -30,8 +30,11 @@ function render_page() {
   $items = hub\get_notifications();
   $flash = connect_flash();
 
+  // Versioned by the file's mtime too: hosts cache CSS for years, so an edit
+  // without a framework version bump would otherwise never reach a browser.
+  $css_mtime = @filemtime(__DIR__ . '/hub.css');
   $css_url = set_url_scheme(trailingslashit(framework\module_url(__FILE__)) . 'hub.css')
-    . '?v=' . rawurlencode(framework::$state->version ?? '1');
+    . '?v=' . rawurlencode((framework::$state->version ?? '1') . ($css_mtime ? '.' . $css_mtime : ''));
   ?>
   <link rel="stylesheet" href="<?php echo esc_url($css_url); ?>" />
   <style><?php echo font_faces_css(); ?></style>
