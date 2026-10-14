@@ -43,6 +43,11 @@ function gather_facts($plugin) {
   $f['title']   = $plugin->title ?? $name;
   $f['version'] = (string) ($plugin->version ?? '');
   $f['cloud']   = !empty($plugin->cloud_id);
+  // Optional plugin config: a 24px icon (URL) for the row's tile, and where
+  // its release notes live. Without them the tile shows a generic plugin
+  // glyph and the row links to Settings only.
+  $f['icon']          = (string) ($plugin->icon ?? '');
+  $f['release_notes'] = (string) ($plugin->release_notes_url ?? '');
 
   // Licence — the updater's, when present and managing this plugin.
   $has_updater = class_exists('tangible\\updater') && isset(\tangible\updater::$instance->update_checkers);
@@ -56,6 +61,10 @@ function gather_facts($plugin) {
     if (function_exists('tangible\\updater\\get_license_status')) {
       $f['licence_status'] = (string) \tangible\updater\get_license_status($plugin);
     }
+  }
+  // Expiry, as the last activation reported it (the onboarder keeps it).
+  if (function_exists('tangible\\onboarding\\licence_info')) {
+    $f['expires'] = (string) (\tangible\onboarding\licence_info($plugin)['expires'] ?? '');
   }
 
   // Distribution — the onboarder's rule for plugins on the tangible.one platform
@@ -100,6 +109,9 @@ function gather_facts($plugin) {
     }));
     $f['steps_total'] = count($asking);
     $f['steps_left']  = count(\tangible\onboarding\pending_questions($plan));
+    foreach ($plan['rail'] as $r) {
+      if ($r['id'] === ($plan['current'] ?? null)) $f['next_step'] = (string) $r['label'];
+    }
   }
 
   // Pending update — core's transient, which the updater's checker hydrates.
@@ -128,6 +140,10 @@ function default_facts() {
     'has_wizard'        => false,
     'steps_left'        => 0,
     'steps_total'       => 0,
+    'next_step'         => '',      // the current step's label, while setup is pending
+    'expires'           => '',      // licence expiry: a date, 'lifetime', or unknown
+    'icon'              => '',
+    'release_notes'     => '',
     'update'            => null,
   ];
 }
@@ -138,8 +154,10 @@ function default_facts() {
  *   account  [ key: 'License'|'Account' (translated), chip, text, sub, action ]
  *   setup    null (no wizard) | [ done, left, pct ]
  *   primary  resume | enter_key | renew | update | open
+ *   action   the row's own action, setup aside (setup has its own card):
+ *            enter_key | renew | update | null
  *
- * chip is one of ok | free | need | bad | off.
+ * chip is one of ok | info | free | need | bad | off.
  * action (account) is null | connect | enter_key | renew.
  */
 function row_state($f) {
@@ -150,11 +168,11 @@ function row_state($f) {
   if ($keyless_free) {
     $key = __('Account', 'tangible-framework');
     if ($f['connect'] === 'active') {
-      $account = chip('ok', __('Connected', 'tangible-framework'), $f['connect_account'] !== '' ? $f['connect_account'] : __('Uses this site\'s connection', 'tangible-framework'));
+      $account = chip('info', __('Free', 'tangible-framework'), __('Via your tangible.one connection', 'tangible-framework'));
     } elseif ($f['connect'] === 'pending') {
       $account = chip('need', __('Connecting', 'tangible-framework'), __('Waiting for tangible.one to verify this site', 'tangible-framework'));
     } else {
-      $account = chip('free', __('Free · not connected', 'tangible-framework'), __('Works without an account', 'tangible-framework'), 'connect');
+      $account = chip('off', __('Not connected', 'tangible-framework'), __('Free', 'tangible-framework'), 'connect');
     }
   } else {
     $key = __('License', 'tangible-framework');
@@ -170,11 +188,11 @@ function row_state($f) {
     } elseif (!$f['has_key']) {
       $account = chip('need', __('Key not entered', 'tangible-framework'), __('Paid features stay locked until it is activated', 'tangible-framework'), 'enter_key');
     } elseif (in_array($status, LICENCE_OK, true)) {
-      $account = chip('ok', __('Active', 'tangible-framework'), $f['account_name']);
+      $account = chip('ok', __('Active', 'tangible-framework'), renews_line($f['expires'], $f['account_name']));
     } elseif (in_array($status, LICENCE_EXPIRED, true)) {
-      $account = chip('bad', __('Expired', 'tangible-framework'), __('Keeps working · no updates', 'tangible-framework'), 'renew');
+      $account = chip('bad', __('Expired', 'tangible-framework'), expired_line($f['expires']), 'renew');
     } elseif (in_array($status, LICENCE_INVALID, true)) {
-      $account = chip('bad', __('Key not valid', 'tangible-framework'), __('Check the key on the license page', 'tangible-framework'), 'enter_key');
+      $account = chip('bad', __('Invalid key', 'tangible-framework'), __('Check the key on the license page', 'tangible-framework'), 'enter_key');
     } else {
       $account = chip('need', __('Not activated', 'tangible-framework'), __('Key entered, not active on this site', 'tangible-framework'), 'enter_key');
     }
@@ -200,7 +218,26 @@ function row_state($f) {
   elseif ($f['update'])                           $primary = 'update';
   else                                            $primary = 'open';
 
-  return [ 'account' => $account, 'setup' => $setup, 'primary' => $primary ];
+  if (in_array($account['action'], ['enter_key', 'renew'], true)) $action = $account['action'];
+  elseif ($f['update'])                                           $action = 'update';
+  else                                                            $action = null;
+
+  return [ 'account' => $account, 'setup' => $setup, 'primary' => $primary, 'action' => $action ];
+}
+
+/** "Renews 12 Mar 2027", "Lifetime license", or the account name when the date is not known. */
+function renews_line($expires, $fallback = '') {
+  if ($expires === 'lifetime') return __('Lifetime license', 'tangible-framework');
+  $time = $expires !== '' ? strtotime($expires) : false;
+  /* translators: %s: renewal date */
+  return $time ? sprintf(__('Renews %s', 'tangible-framework'), date_i18n('j M Y', $time)) : (string) $fallback;
+}
+
+function expired_line($expires) {
+  $time = $expires !== '' && $expires !== 'lifetime' ? strtotime($expires) : false;
+  /* translators: %s: expiry date */
+  return $time ? sprintf(__('Expired %s. Updates are paused', 'tangible-framework'), date_i18n('j M Y', $time))
+    : __('Updates are paused', 'tangible-framework');
 }
 
 function chip($chip, $text, $sub, $action = null) {

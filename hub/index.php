@@ -164,3 +164,11 @@ add_action('admin_post_tangible_hub_connect_snooze', function () {
   update_user_meta(get_current_user_id(), BAND_SNOOZE_META, time() + BAND_SNOOZE_DAYS * DAY_IN_SECONDS);
   back_to_hub();
 });
+
+// "More from Tangible" stays dismissed for this admin.
+add_action('admin_post_tangible_hub_more_dismiss', function () {
+  if (!current_user_can('manage_options')) wp_die('Nope', 403);
+  check_admin_referer('tangible_hub_more_dismiss');
+  update_user_meta(get_current_user_id(), MORE_DISMISSED_META, 1);
+  back_to_hub();
+});

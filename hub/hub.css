@@ -1,65 +1,145 @@
 /*
- * Tangible Hub — layout only. Colour, type and controls come from
- * @tangible/ui (tui.css) wearing the WordPress admin theme
- * (wp-admin-theme.css); this file places the pieces and nothing else.
+ * Tangible Hub — layout, per the Plugin Wizard Figma's "Tangible Hub"
+ * section. Colour, type and controls come from @tangible/ui (tui.css) in
+ * the WordPress admin theme (wp-admin-theme.css); this file places the
+ * pieces and sets the design's few values of its own.
  *
- * Small print uses --tui-color-fg-secondary, not -fg-muted: the admin
- * theme's muted grey (#949494) is 3:1 on white, under 4.5:1 for text.
+ * Small print is #757575 (the design's foreground/alt, 4.6:1 on white),
+ * not the admin theme's --tui-color-fg-muted (#949494, 3:1).
  */
 
-.tgbl-hub { max-width: 1200px;
-  /* Cards are white on wp-admin's grey, as core's postboxes are: the admin
-     theme's --tui-color-bg is the page grey, which TUI cards default to. */
-  --tui-card-bg: var(--tui-color-bg-surface); }
-.tgbl-hub .tgbl-hub__site { margin: 4px 0 20px; color: var(--tui-color-fg-secondary); }
+.tgbl-hub {
+  --tgbl-hub-fg-alt: #757575;
+  --tgbl-hub-border: #ccc;
+  --tgbl-hub-subdued: #f0f0f0;
+  --tui-card-bg: #fff;
+  --tui-card-border: var(--tgbl-hub-border);
+  --tui-card-radius: 8px;
+  --tui-card-shadow: none;
+  --tui-progress-track: #d6d6d6;
+}
 
-.tgbl-hub .tui-notice { margin: 0 0 20px; }
-.tgbl-hub .tui-notice__title { margin: 0; font-size: 14px; }
-.tgbl-hub .tui-notice__body { max-width: 72ch; }
-.tgbl-hub .tui-notice__foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+/* The page: white, rounded, a header band over padded content. */
+.wrap.tgbl-hub { margin: 8px 8px 8px 0; padding: 0; background: #fff; border-radius: 8px;
+  min-height: calc(100vh - 32px - 16px - 65px); }
+.tgbl-hub .tgbl-hub__header { display: flex; align-items: center; min-height: 64px; padding: 0 32px;
+  border-bottom: 1px solid var(--tgbl-hub-border); }
+.tgbl-hub .tgbl-hub__header h1 { margin: 0; padding: 0; font-size: 16px; font-weight: 500; line-height: 24px; }
+.tgbl-hub .tgbl-hub__content { padding: 32px; }
+.tgbl-hub .tgbl-hub__content > .notice { margin: 0 0 24px; }
 
-.tgbl-hub .tgbl-hub__grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; align-items: start; }
-.tgbl-hub .tgbl-hub__aside { display: grid; gap: 20px; }
-@media (max-width: 960px) {
+.tgbl-hub .tgbl-hub__grid { display: grid; grid-template-columns: minmax(0, 1fr) 384px; gap: 32px; align-items: start; }
+.tgbl-hub .tgbl-hub__main,
+.tgbl-hub .tgbl-hub__rail { display: grid; gap: 24px; min-width: 0; }
+@media (max-width: 1100px) {
   .tgbl-hub .tgbl-hub__grid { grid-template-columns: minmax(0, 1fr); }
 }
-
-/* Card heads: the heading, then whatever counts or acts on it. */
-.tgbl-hub .tui-card__head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.tgbl-hub .tui-card__head h2 { margin: 0; font-size: 14px; font-weight: 600; }
-.tgbl-hub .tui-card__head .tgbl-hub__meta,
-.tgbl-hub .tui-card__head .tgbl-hub__end { margin-left: auto; }
-.tgbl-hub .tui-card__body > p { margin: 0 0 12px; }
-.tgbl-hub .tui-card__body > :last-child { margin-bottom: 0; }
-
-.tgbl-hub .tgbl-hub__meta { margin: 0; color: var(--tui-color-fg-secondary); font-size: 12px; }
-.tgbl-hub .tgbl-hub__form { display: inline; margin: 0; }
-.tgbl-hub .tgbl-hub__inline { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
-
-/* Plugin rows: name | licence | setup and the one action. */
-.tgbl-hub .tgbl-hub__rows { margin: 0; padding: 0; list-style: none; }
-.tgbl-hub .tgbl-hub__row { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto;
-  gap: 8px 24px; align-items: start; margin: 0; padding: 16px 0; }
-.tgbl-hub .tgbl-hub__row:first-child { padding-top: 0; }
-.tgbl-hub .tgbl-hub__row:last-child { padding-bottom: 0; }
-.tgbl-hub .tgbl-hub__row + .tgbl-hub__row { border-top: 1px solid var(--tui-color-divider); }
-.tgbl-hub .tgbl-hub__name h3 { margin: 0 0 2px; font-size: 14px; font-weight: 600; }
-.tgbl-hub .tgbl-hub__account { display: grid; justify-items: start; gap: 4px; }
-.tgbl-hub .tgbl-hub__actions { display: grid; justify-items: end; gap: 8px; text-align: right; }
-.tgbl-hub .tgbl-hub__setup { display: grid; justify-items: end; gap: 4px; }
-.tgbl-hub .tgbl-hub__setup .tui-progress { width: 96px; }
-@media (max-width: 600px) {
-  .tgbl-hub .tgbl-hub__row { grid-template-columns: minmax(0, 1fr); }
-  .tgbl-hub .tgbl-hub__actions,
-  .tgbl-hub .tgbl-hub__setup { justify-items: start; text-align: left; }
+@media (max-width: 782px) {
+  .wrap.tgbl-hub { margin: 0; border-radius: 0; }
+  .tgbl-hub .tgbl-hub__header { padding: 0 16px; }
+  .tgbl-hub .tgbl-hub__content { padding: 16px; }
 }
 
-/* Notifications. */
-.tgbl-hub .tgbl-hub__notes { margin: 0; padding: 0; list-style: none; }
-.tgbl-hub .tgbl-hub__note { margin: 0; padding: 12px 0; }
-.tgbl-hub .tgbl-hub__note:first-child { padding-top: 0; }
-.tgbl-hub .tgbl-hub__note + .tgbl-hub__note { border-top: 1px solid var(--tui-color-divider); }
-.tgbl-hub .tgbl-hub__note h3 { margin: 0 0 4px; font-size: 13px; font-weight: 600; }
-.tgbl-hub .tgbl-hub__note p { margin: 0 0 4px; }
+/* Type: titles 16/24 medium, names 13/20 medium, small print 12/16. */
+.tgbl-hub h2,
+.tgbl-hub .tui-notice__title { margin: 0; font-size: 16px; font-weight: 500; line-height: 24px; }
+.tgbl-hub h3 { margin: 0; font-size: 13px; font-weight: 500; line-height: 20px; }
+.tgbl-hub p { margin: 0; font-size: 13px; line-height: 20px; }
+.tgbl-hub .tgbl-hub__small { display: block; font-size: 12px; line-height: 16px; color: var(--tgbl-hub-fg-alt); }
+.tgbl-hub .tgbl-hub__text { display: grid; gap: 4px; flex: 1; min-width: 0; }
+.tgbl-hub .tgbl-hub__form { display: inline; margin: 0; }
+.tgbl-hub .tgbl-hub__end { margin-left: auto; }
+.tgbl-hub .tui-button.is-style-link { min-height: 0; padding: 0; font-size: 12px; }
 
-.tgbl-hub .tgbl-hub__telemetry { margin: 12px 0 4px; }
+/* Cards: header 24/24/16, body 0/24/24. */
+.tgbl-hub .tui-card__head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+  padding: 24px 24px 16px; }
+.tgbl-hub .tui-card__body { padding: 0 24px 24px; }
+
+/* The Connect band. */
+.tgbl-hub .tgbl-hub__band { margin: 0 0 24px; border: 0; border-radius: 8px; }
+.tgbl-hub .tgbl-hub__band .tui-notice__inner { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 32px; padding: 24px; }
+.tgbl-hub .tgbl-hub__band-text { display: grid; gap: 4px; flex: 1 1 420px; }
+.tgbl-hub .tgbl-hub__band .tui-notice__body { color: var(--tgbl-hub-fg-alt); }
+.tgbl-hub .tgbl-hub__band-actions { display: flex; align-items: center; gap: 16px; }
+
+/* A 40px tile for a plugin's icon. */
+.tgbl-hub .tgbl-hub__tile { display: inline-flex; flex: none; align-items: center; justify-content: center;
+  width: 40px; height: 40px; border-radius: 8px; background: var(--tgbl-hub-subdued); color: #1e1e1e; }
+.tgbl-hub .tgbl-hub__tile img { display: block; width: 24px; height: 24px; }
+
+/* Finish setting up. */
+.tgbl-hub .tgbl-hub__list,
+.tgbl-hub .tgbl-hub__more,
+.tgbl-hub .tgbl-hub__notes { margin: 0; padding: 0; list-style: none; }
+.tgbl-hub .tgbl-hub__setup { display: flex; align-items: center; gap: 16px; margin: 0; }
+.tgbl-hub .tgbl-hub__setup + .tgbl-hub__setup { margin-top: 16px; }
+.tgbl-hub .tgbl-hub__progress { flex: none; width: 160px; --tui-progress-block-size: 12px; }
+
+/* Your Tangible plugins: a table, the design's columns. */
+.tgbl-hub .tgbl-hub__client { padding: 0 24px 12px; }
+.tgbl-hub .tgbl-hub__table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.tgbl-hub .tgbl-hub__table thead th { padding: 0 24px 8px 0; font-size: 11px; font-weight: 500; line-height: 16px;
+  text-transform: uppercase; color: var(--tgbl-hub-fg-alt); text-align: left; }
+.tgbl-hub .tgbl-hub__table thead th:first-child,
+.tgbl-hub .tgbl-hub__table tbody th { padding-left: 24px; }
+.tgbl-hub .tgbl-hub__table thead th:nth-child(2) { width: 136px; }
+.tgbl-hub .tgbl-hub__table thead th:nth-child(3) { width: 176px; }
+.tgbl-hub .tgbl-hub__table thead th:last-child { width: 128px; padding-right: 24px; }
+.tgbl-hub .tgbl-hub__table tbody th,
+.tgbl-hub .tgbl-hub__table td { padding: 16px 24px 16px 0; border-top: 1px solid var(--tgbl-hub-border);
+  vertical-align: middle; text-align: left; font-weight: normal; }
+.tgbl-hub .tgbl-hub__table td:last-child { padding-right: 24px; }
+.tgbl-hub .tgbl-hub__table td > * + * { margin-top: 4px; }
+.tgbl-hub .tgbl-hub__plugin { display: flex; align-items: center; gap: 16px; }
+.tgbl-hub .tgbl-hub__name { font-size: 13px; font-weight: 500; line-height: 20px; }
+.tgbl-hub .tgbl-hub__value { display: block; font-size: 13px; line-height: 20px; }
+.tgbl-hub .tgbl-hub__links { font-size: 12px; line-height: 16px; color: var(--tui-theme-primary-base); }
+.tgbl-hub .tgbl-hub__links a { color: var(--tui-theme-primary-base); text-decoration: none; }
+.tgbl-hub .tgbl-hub__links a:hover,
+.tgbl-hub .tgbl-hub__links a:focus-visible { text-decoration: underline; }
+.tgbl-hub .tgbl-hub__action { text-align: right; }
+@media (max-width: 782px) {
+  .tgbl-hub .tgbl-hub__table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .tgbl-hub .tgbl-hub__table,
+  .tgbl-hub .tgbl-hub__table tbody,
+  .tgbl-hub .tgbl-hub__table tr,
+  .tgbl-hub .tgbl-hub__table th,
+  .tgbl-hub .tgbl-hub__table td { display: block; width: auto; }
+  .tgbl-hub .tgbl-hub__table tr { padding: 16px 24px; border-top: 1px solid var(--tgbl-hub-border); }
+  .tgbl-hub .tgbl-hub__table tbody th,
+  .tgbl-hub .tgbl-hub__table td { padding: 0 0 8px 56px; border: 0; }
+  .tgbl-hub .tgbl-hub__table tbody th { padding-left: 0; }
+  .tgbl-hub .tgbl-hub__action { text-align: left; }
+}
+
+/* The status chip, with the design's dot. */
+.tgbl-hub .tgbl-hub__chip { --tui-chip-radius: 16px; gap: 4px; padding: 4px 8px; font-size: 12px; line-height: 16px; }
+.tgbl-hub .tgbl-hub__chip .tui-chip__text { color: #1e1e1e; }
+.tgbl-hub .tgbl-hub__dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+
+/* More from Tangible. */
+.tgbl-hub .tgbl-hub__more { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px; }
+.tgbl-hub .tgbl-hub__more li { display: flex; align-items: flex-start; gap: 16px; margin: 0; }
+.tgbl-hub .tgbl-hub__more a { color: var(--tui-theme-primary-base); text-decoration: none; }
+
+/* Notifications. */
+.tgbl-hub .tgbl-hub__notes { margin-top: -8px; }
+.tgbl-hub .tgbl-hub__note { display: flex; align-items: flex-start; gap: 12px; margin: 0; padding: 16px 0; }
+.tgbl-hub .tgbl-hub__note:last-child { padding-bottom: 0; }
+.tgbl-hub .tgbl-hub__note + .tgbl-hub__note { border-top: 1px solid var(--tgbl-hub-border); }
+.tgbl-hub .tgbl-hub__note.is-unread::before { content: ""; flex: none; width: 8px; height: 8px; margin-top: 6px;
+  border-radius: 50%; background: var(--tui-theme-primary-base); }
+.tgbl-hub .tgbl-hub__note p:not(.tgbl-hub__small) { color: var(--tgbl-hub-fg-alt); }
+.tgbl-hub .tgbl-hub__note .tui-icon-button { flex: none; }
+
+/* This site. */
+.tgbl-hub .tgbl-hub__toggle { display: grid; gap: 4px; }
+.tgbl-hub .tgbl-hub__toggle .tui-switch { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; }
+.tgbl-hub .tgbl-hub__toggle .tgbl-hub__small { padding-left: 44px; }
+.tgbl-hub .tgbl-hub__divider { margin: 24px 0; border: 0; border-top: 1px solid var(--tgbl-hub-border); }
+.tgbl-hub .tgbl-hub__usage { display: grid; gap: 4px; justify-items: start; }
+
+/* tangible.one. */
+.tgbl-hub .tui-card__body > h3 + .tgbl-hub__small { margin-top: 4px; }
+.tgbl-hub .tui-card__body > .tgbl-hub__links { display: flex; flex-wrap: wrap; gap: 16px; padding-top: 8px; }

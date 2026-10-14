@@ -4,15 +4,21 @@
  * or a POST form to admin-post.php. What each row says is decided in
  * rows.php; this file only draws it.
  *
- * It is a wp-admin page and looks like one: a .wrap with core's <h1>, and
- * @tangible/ui's own DOM (Card, Chip, Notice, Progress, Button) wearing the
- * WordPress admin theme (wp-admin-theme.css) — the admin colour scheme, the
- * system font, 13px controls. No brand faces, no skin of its own.
+ * The design is the Plugin Wizard Figma's "Tangible Hub" section (busy site,
+ * fresh free site, client site, license problem): a white page with a header
+ * band, a main column (Finish setting up, Your Tangible plugins, More from
+ * Tangible) and a rail (Notifications, This site, tangible.one). It is drawn
+ * with @tangible/ui's own DOM (Card, Chip, Notice, Progress, Button,
+ * IconButton, Switch) wearing the WordPress admin theme (wp-admin-theme.css):
+ * the admin colour scheme and the system font. No brand faces.
  */
 namespace tangible\hub;
 
 use tangible\framework;
 use tangible\hub;
+
+const SEEN_META = 'tangible_hub_notifications_seen_at';
+const MORE_DISMISSED_META = 'tangible_hub_more_dismissed';
 
 function render_page() {
   if (!current_user_can('manage_options')) wp_die(esc_html__('Nope', 'tangible-framework'), 403);
@@ -21,64 +27,68 @@ function render_page() {
   $rows = [];
   $has_free = false;
   $updates = 0;
+  $attention = 0;
   foreach ($plugins as $plugin) {
     $facts = gather_facts($plugin);
-    $rows[] = [ 'plugin' => $plugin, 'facts' => $facts, 'state' => row_state($facts) ];
+    $state = row_state($facts);
+    $rows[] = [ 'plugin' => $plugin, 'facts' => $facts, 'state' => $state ];
     if ($facts['free'] === true && !$facts['has_key']) $has_free = true;
     if ($facts['update']) $updates++;
+    if (in_array($state['account']['chip'], ['need', 'bad'], true)) $attention++;
   }
 
   $connect = connect_status();
   $snoozed = (int) get_user_meta(get_current_user_id(), BAND_SNOOZE_META, true);
   $band = band_state($connect, $has_free, $snoozed, time());
   $steward = function_exists('tangible\\onboarding\\get_steward') ? \tangible\onboarding\get_steward() : null;
+  // A client's site keeps licences and renewals off this dashboard (they go
+  // to the account owner by email), so the plugin list drops that column.
+  $client = $steward === 'client';
   $items = hub\get_notifications();
   $flash = connect_flash();
+  $pending = array_values(array_filter($rows, function ($row) {
+    return $row['state']['setup'] && !$row['state']['setup']['done'];
+  }));
+
+  // Unread is "arrived since this admin last opened the Hub".
+  $seen_at = (int) get_user_meta(get_current_user_id(), SEEN_META, true);
+  update_user_meta(get_current_user_id(), SEEN_META, time());
 
   foreach (['tui.css', 'wp-admin-theme.css', 'hub.css'] as $file) : ?>
     <link rel="stylesheet" href="<?php echo esc_url(asset_url($file)); ?>" />
   <?php endforeach; ?>
   <div class="wrap tui-interface tgbl-hub">
-    <h1><?php esc_html_e('Tangible Hub', 'tangible-framework'); ?></h1>
-    <p class="tgbl-hub__site"><?php echo wp_kses(site_line($steward, $connect), [ 'b' => [] ]); ?></p>
-    <?php // Core moves admin notices to after this marker, not between <h1> and the site line. ?>
-    <hr class="wp-header-end" />
+    <header class="tgbl-hub__header">
+      <h1><?php esc_html_e('Tangible Hub', 'tangible-framework'); ?></h1>
+    </header>
+    <div class="tgbl-hub__content">
+      <?php // Core moves admin notices to after this marker, inside the page. ?>
+      <hr class="wp-header-end" />
 
-    <?php if ($flash) : ?>
-      <section class="tui-notice is-theme-success" role="status">
-        <div class="tui-notice__inner"><div class="tui-notice__body"><?php echo esc_html($flash); ?></div></div>
-      </section>
-    <?php endif; ?>
-    <?php if ($band) render_band($band); ?>
+      <?php if ($flash) : ?>
+        <section class="tui-notice is-theme-success" role="status">
+          <div class="tui-notice__inner"><div class="tui-notice__body"><?php echo esc_html($flash); ?></div></div>
+        </section>
+      <?php endif; ?>
+      <?php if ($band) render_band($band); ?>
 
-    <div class="tgbl-hub__grid">
-      <article class="tui-card is-style-solid tgbl-hub__plugins" aria-labelledby="tgbl-hub-installed">
-        <div class="tui-card__inner">
-          <div class="tui-card__head">
-            <h2 id="tgbl-hub-installed"><?php esc_html_e('Your Tangible plugins', 'tangible-framework'); ?></h2>
-            <span class="tgbl-hub__meta"><?php echo esc_html(installed_line(count($rows), $updates)); ?></span>
-          </div>
-          <div class="tui-card__body">
-            <?php if ($rows) : ?>
-              <ul class="tgbl-hub__rows">
-                <?php foreach ($rows as $row) render_row($row['plugin'], $row['facts'], $row['state']); ?>
-              </ul>
-            <?php else : ?>
-              <p><?php esc_html_e('No Tangible plugins registered on this site.', 'tangible-framework'); ?></p>
-            <?php endif; ?>
-          </div>
+      <div class="tgbl-hub__grid">
+        <div class="tgbl-hub__main">
+          <?php if ($pending) render_setup_card($pending); ?>
+          <?php render_plugins_card($rows, $updates, $client ? 0 : $attention, $client); ?>
+          <?php render_more_card($rows); ?>
+          <?php
+          // Cards contributed by other modules, under the main column.
+          do_action('tangible_hub_main_cards');
+          ?>
         </div>
-      </article>
-
-      <div class="tgbl-hub__aside">
-        <?php render_notifications($items); ?>
-        <?php render_site_block($steward, $connect); ?>
+        <div class="tgbl-hub__rail">
+          <?php render_notifications($items, $seen_at); ?>
+          <?php render_site_block($steward); ?>
+          <?php render_one_block($connect); ?>
+        </div>
       </div>
     </div>
-    <?php
-    // Cards contributed by other modules, under the grid.
-    do_action('tangible_hub_main_cards');
-    ?>
   </div>
   <?php
 }
@@ -94,7 +104,7 @@ function asset_url($file) {
     . '?v=' . rawurlencode((framework::$state->version ?? '1') . ($mtime ? '.' . $mtime : ''));
 }
 
-// ── pieces ────────────────────────────────────────────────────────────────
+// ── the main column ───────────────────────────────────────────────────────
 
 function render_band($band) {
   $pending = $band['status'] === 'pending';
@@ -102,24 +112,26 @@ function render_band($band) {
     $title = __('Finishing the connection to tangible.one', 'tangible-framework');
     $body = __('tangible.one has not verified this site yet. It calls back to this site\'s REST API; check that it is reachable, then try again.', 'tangible-framework');
   } elseif ($band['has_free']) {
-    $title = __('Connect this site to your tangible.one account', 'tangible-framework');
-    $body = __('Optional, and free. One connection covers every free Tangible plugin on this site, now and later, so setup answers follow your account instead of being asked again here. Licensed plugins keep working through their keys. If you are already signed in at tangible.one, it is one click.', 'tangible-framework');
+    $title = __('Connect this site to tangible.one', 'tangible-framework');
+    $body = __('Optional, and free. One connection covers every free Tangible plugin on this site, now and later, so your setup answers follow your account instead of being asked again.', 'tangible-framework');
   } else {
-    $title = __('Connect this site to your tangible.one account', 'tangible-framework');
+    $title = __('Connect this site to tangible.one', 'tangible-framework');
     $body = __('See this site in your tangible.one account, and any free Tangible plugin you add later takes its setup answers from it. Your licensed plugins already work through their keys; connecting changes nothing for them.', 'tangible-framework');
   }
   ?>
   <section class="tui-notice is-theme-info tgbl-hub__band" aria-labelledby="tgbl-hub-connect">
     <div class="tui-notice__inner">
-      <div class="tui-notice__head"><h2 id="tgbl-hub-connect" class="tui-notice__title"><?php echo esc_html($title); ?></h2></div>
-      <div class="tui-notice__body"><?php echo esc_html($body); ?></div>
-      <div class="tui-notice__foot">
+      <div class="tgbl-hub__band-text">
+        <h2 id="tgbl-hub-connect" class="tui-notice__title"><?php echo esc_html($title); ?></h2>
+        <div class="tui-notice__body"><?php echo esc_html($body); ?></div>
+      </div>
+      <div class="tgbl-hub__band-actions">
         <?php if ($pending) : ?>
-          <?php post_form('tangible_connect_confirm', __('Check again', 'tangible-framework'), button_class('primary')); ?>
           <?php post_form('tangible_connect_disconnect', __('Cancel', 'tangible-framework'), button_class('link')); ?>
+          <?php post_form('tangible_connect_confirm', __('Check again', 'tangible-framework'), button_class('primary')); ?>
         <?php else : ?>
-          <?php connect_form(__('Connect', 'tangible-framework'), button_class('primary')); ?>
           <?php post_form('tangible_hub_connect_snooze', __('Not now', 'tangible-framework'), button_class('link')); ?>
+          <?php connect_form(__('Connect', 'tangible-framework'), button_class('primary')); ?>
         <?php endif; ?>
       </div>
     </div>
@@ -127,136 +139,268 @@ function render_band($band) {
   <?php
 }
 
-function render_row($plugin, $f, $s) {
-  $a = $s['account'];
-  $setup = $s['setup'];
-  $settings_url = function_exists('tangible\\framework\\get_plugin_settings_page_url')
-    ? framework\get_plugin_settings_page_url($plugin) : '';
+/** Plugins whose setup is not finished: where they are, and the way back in. */
+function render_setup_card($pending) {
   ?>
-  <li class="tgbl-hub__row">
-    <div class="tgbl-hub__name">
-      <h3><?php echo esc_html($f['title']); ?></h3>
-      <p class="tgbl-hub__meta"><?php
-        $meta = [];
-        if ($f['version'] !== '') $meta[] = esc_html($f['version']);
-        if ($f['free'] === true && !$f['has_key']) $meta[] = esc_html__('free', 'tangible-framework');
-        /* translators: %s: version number */
-        if ($f['update']) $meta[] = '<b>' . esc_html(sprintf(__('%s available', 'tangible-framework'), $f['update'])) . '</b>';
-        echo implode(' · ', $meta);
-      ?></p>
+  <article class="tui-card is-style-solid" aria-labelledby="tgbl-hub-setup">
+    <div class="tui-card__inner">
+      <div class="tui-card__head"><h2 id="tgbl-hub-setup"><?php esc_html_e('Finish setting up', 'tangible-framework'); ?></h2></div>
+      <div class="tui-card__body">
+        <ul class="tgbl-hub__list">
+          <?php foreach ($pending as $row) :
+            $f = $row['facts'];
+            $setup = $row['state']['setup'];
+            $total = max(1, (int) $f['steps_total']);
+            $step = min($total, $total - (int) $setup['left'] + 1);
+            /* translators: 1: current step number, 2: number of steps */
+            $where = sprintf(__('Step %1$s of %2$s', 'tangible-framework'), number_format_i18n($step), number_format_i18n($total));
+            /* translators: 1: "Step 2 of 3"; 2: the step's name */
+            if ($f['next_step'] !== '') $where = sprintf(__('%1$s: %2$s', 'tangible-framework'), $where, $f['next_step']); ?>
+            <li class="tgbl-hub__setup">
+              <?php render_tile($f['icon']); ?>
+              <div class="tgbl-hub__text">
+                <h3><?php echo esc_html($f['title']); ?></h3>
+                <p class="tgbl-hub__small"><?php echo esc_html($where); ?></p>
+              </div>
+              <div role="progressbar" aria-valuenow="<?php echo (int) $setup['pct']; ?>" aria-valuemin="0" aria-valuemax="100"
+                   aria-label="<?php echo esc_attr(sprintf(__('%s setup', 'tangible-framework'), $f['title'])); ?>"
+                   class="tui-progress is-mode-line is-size-md tgbl-hub__progress"
+                   style="--tui-progress-value:<?php echo (int) $setup['pct']; ?>;--tui-progress-max:100;--tui-progress-pct:<?php echo (int) $setup['pct']; ?>">
+                <div class="tui-progress__track"><div class="tui-progress__bar"></div></div>
+              </div>
+              <?php if (function_exists('tangible\\onboarding\\get_setup_url')) : ?>
+                <a class="<?php echo esc_attr(button_class('primary')); ?>" href="<?php echo esc_url(\tangible\onboarding\get_setup_url($row['plugin'])); ?>"><span><?php
+                  esc_html_e('Resume setup', 'tangible-framework'); ?></span><span class="tui-visually-hidden"> <?php echo esc_html($f['title']); ?></span></a>
+              <?php endif; ?>
+            </li>
+          <?php endforeach; ?>
+        </ul>
+      </div>
     </div>
-
-    <div class="tgbl-hub__account">
-      <span class="tui-visually-hidden"><?php echo esc_html($a['key']); ?>:</span>
-      <?php render_chip($a); ?>
-      <?php if ($a['sub'] !== '' || $a['action'] === 'connect') : ?>
-        <p class="tgbl-hub__meta"><?php echo esc_html($a['sub']); ?>
-          <?php if ($a['action'] === 'connect') connect_form(__('Connect', 'tangible-framework'), button_class('link')); ?></p>
-      <?php endif; ?>
-    </div>
-
-    <div class="tgbl-hub__actions">
-      <?php if ($setup && $setup['done']) : ?>
-        <span class="tgbl-hub__meta"><?php esc_html_e('Set up', 'tangible-framework'); ?></span>
-      <?php elseif ($setup) :
-        /* translators: %s: number of setup steps left */
-        $left = sprintf(_n('%s step left', '%s steps left', $setup['left'], 'tangible-framework'), number_format_i18n($setup['left'])); ?>
-        <div class="tgbl-hub__setup">
-          <div role="progressbar" aria-valuenow="<?php echo (int) $setup['pct']; ?>" aria-valuemin="0" aria-valuemax="100"
-               aria-label="<?php esc_attr_e('Setup', 'tangible-framework'); ?>"
-               class="tui-progress is-mode-line is-size-sm"
-               style="--tui-progress-value:<?php echo (int) $setup['pct']; ?>;--tui-progress-max:100;--tui-progress-pct:<?php echo (int) $setup['pct']; ?>">
-            <div class="tui-progress__track"><div class="tui-progress__bar"></div></div>
-          </div>
-          <span class="tgbl-hub__meta"><?php echo esc_html($left); ?></span>
-        </div>
-      <?php endif; ?>
-      <?php render_primary($plugin, $f, $s['primary'], $settings_url); ?>
-    </div>
-  </li>
+  </article>
   <?php
 }
 
-function render_primary($plugin, $f, $primary, $settings_url) {
-  switch ($primary) {
-    case 'resume':
-      if (function_exists('tangible\\onboarding\\get_setup_url')) {
-        echo '<a class="' . esc_attr(button_class('primary', 'sm')) . '" href="' . esc_url(\tangible\onboarding\get_setup_url($plugin)) . '"><span>'
-          . esc_html__('Resume setup', 'tangible-framework') . '</span></a>';
-      }
-      return;
+function render_plugins_card($rows, $updates, $attention, $client) {
+  $state = function_exists('tangible\\connect\\get_state') ? \tangible\connect\get_state() : [];
+  ?>
+  <article class="tui-card is-style-solid tgbl-hub__plugins" aria-labelledby="tgbl-hub-installed">
+    <div class="tui-card__inner">
+      <div class="tui-card__head">
+        <h2 id="tgbl-hub-installed"><?php esc_html_e('Your Tangible plugins', 'tangible-framework'); ?></h2>
+        <span class="tgbl-hub__small"><?php echo esc_html(installed_line(count($rows), $updates, $attention)); ?></span>
+        <?php if (current_user_can('update_plugins')) : ?>
+          <a class="<?php echo esc_attr(button_class('link')); ?> tgbl-hub__end" href="<?php echo esc_url(admin_url('update-core.php?force-check=1')); ?>"><span><?php
+            esc_html_e('Check for updates', 'tangible-framework'); ?></span></a>
+        <?php endif; ?>
+      </div>
+      <?php if ($client) : ?>
+        <p class="tgbl-hub__small tgbl-hub__client"><?php
+          $owner = (string) ($state['owner_email_masked'] ?? '');
+          echo esc_html($owner !== ''
+            /* translators: %s: the account owner's email address, partly masked */
+            ? sprintf(__('Licenses and renewals go to the account owner, %s, by email. They do not appear on this site.', 'tangible-framework'), $owner)
+            : __('Licenses and renewals go to the account owner by email. They do not appear on this site.', 'tangible-framework')); ?></p>
+      <?php endif; ?>
+      <?php if ($rows) : ?>
+        <table class="tgbl-hub__table">
+          <thead>
+            <tr>
+              <th scope="col"><?php esc_html_e('Plugin', 'tangible-framework'); ?></th>
+              <th scope="col"><?php esc_html_e('Version', 'tangible-framework'); ?></th>
+              <?php if (!$client) : ?><th scope="col"><?php esc_html_e('License', 'tangible-framework'); ?></th><?php endif; ?>
+              <th scope="col"><span class="tui-visually-hidden"><?php esc_html_e('Action', 'tangible-framework'); ?></span></th>
+            </tr>
+          </thead>
+          <tbody>
+            <?php foreach ($rows as $row) render_row($row['plugin'], $row['facts'], $row['state'], $client); ?>
+          </tbody>
+        </table>
+      <?php else : ?>
+        <div class="tui-card__body"><p><?php esc_html_e('No Tangible plugins registered on this site.', 'tangible-framework'); ?></p></div>
+      <?php endif; ?>
+    </div>
+  </article>
+  <?php
+}
+
+function render_row($plugin, $f, $s, $client) {
+  $a = $s['account'];
+  $settings_url = function_exists('tangible\\framework\\get_plugin_settings_page_url')
+    ? framework\get_plugin_settings_page_url($plugin) : '';
+  // A client's site shows no licence actions; an update is still the site's.
+  $action = $client && $s['action'] !== 'update' ? null : $s['action'];
+  ?>
+  <tr>
+    <th scope="row">
+      <div class="tgbl-hub__plugin">
+        <?php render_tile($f['icon']); ?>
+        <div class="tgbl-hub__text">
+          <span class="tgbl-hub__name"><?php echo esc_html($f['title']); ?></span>
+          <?php if ($settings_url || $f['release_notes'] !== '') : ?>
+            <span class="tgbl-hub__links"><?php
+              $links = [];
+              if ($settings_url) $links[] = '<a href="' . esc_url($settings_url) . '">' . esc_html__('Settings', 'tangible-framework')
+                . '<span class="tui-visually-hidden"> ' . esc_html($f['title']) . '</span></a>';
+              if ($f['release_notes'] !== '') $links[] = '<a href="' . esc_url($f['release_notes']) . '" target="_blank" rel="noopener">'
+                . esc_html__('Release notes', 'tangible-framework') . '<span class="tui-visually-hidden"> ' . esc_html($f['title'])
+                . ' ' . esc_html__('(opens in a new tab)', 'tangible-framework') . '</span></a>';
+              echo implode(' · ', $links); ?></span>
+          <?php endif; ?>
+        </div>
+      </div>
+    </th>
+    <td>
+      <span class="tgbl-hub__value"><?php echo esc_html($f['version']); ?></span>
+      <?php if ($f['update']) : ?>
+        <span class="tgbl-hub__small"><?php
+          /* translators: %s: version number */
+          echo esc_html(sprintf(__('%s available', 'tangible-framework'), $f['update'])); ?></span>
+      <?php endif; ?>
+    </td>
+    <?php if (!$client) : ?>
+      <td>
+        <?php render_chip($a); ?>
+        <?php if ($a['sub'] !== '') : ?><span class="tgbl-hub__small"><?php echo esc_html($a['sub']); ?></span><?php endif; ?>
+      </td>
+    <?php endif; ?>
+    <td class="tgbl-hub__action"><?php render_action($plugin, $f, $action); ?></td>
+  </tr>
+  <?php
+}
+
+/** The row's one action: what the plugin itself needs. Setup has its own card. */
+function render_action($plugin, $f, $action) {
+  $title = '<span class="tui-visually-hidden"> ' . esc_html($f['title']) . '</span>';
+  switch ($action) {
     case 'enter_key':
-      if ($settings_url) {
-        echo '<a class="' . esc_attr(button_class('primary', 'sm')) . '" href="' . esc_url(framework\get_plugin_settings_page_url($plugin, 'license')) . '"><span>'
-          . esc_html__('Enter key', 'tangible-framework') . '</span></a>';
+      if (function_exists('tangible\\framework\\get_plugin_settings_page_url')) {
+        echo '<a class="' . esc_attr(button_class('outline')) . '" href="' . esc_url(framework\get_plugin_settings_page_url($plugin, 'license')) . '"><span>'
+          . esc_html__('Enter key', 'tangible-framework') . '</span>' . $title . '</a>';
       }
       return;
     case 'renew':
-      echo '<a class="' . esc_attr(button_class('outline', 'sm')) . '" href="' . esc_url(app_url('/licensing')) . '" target="_blank" rel="noopener"><span>'
-        . esc_html__('Renew', 'tangible-framework') . '</span><span class="tui-visually-hidden"> ' . esc_html__('(opens in a new tab)', 'tangible-framework') . '</span></a>';
+      echo '<a class="' . esc_attr(button_class('outline')) . '" href="' . esc_url(app_url('/licensing')) . '" target="_blank" rel="noopener"><span>'
+        . esc_html__('Renew', 'tangible-framework') . ' <span aria-hidden="true">↗</span></span>' . $title
+        . '<span class="tui-visually-hidden"> ' . esc_html__('(opens in a new tab)', 'tangible-framework') . '</span></a>';
       return;
     case 'update':
       $url = update_url($plugin);
       if ($url) {
-        echo '<a class="' . esc_attr(button_class('outline', 'sm')) . '" href="' . esc_url($url) . '"><span>' . esc_html__('Update', 'tangible-framework') . '</span></a>';
-        return;
+        echo '<a class="' . esc_attr(button_class('outline')) . '" href="' . esc_url($url) . '"><span>' . esc_html__('Update', 'tangible-framework') . '</span>' . $title . '</a>';
       }
-      // fall through to Open when this user may not update plugins
-    default:
-      if ($settings_url) {
-        /* translators: %s: plugin name — completes the visible "Open" for screen readers */
-        echo '<a class="' . esc_attr(button_class('link', 'sm')) . '" href="' . esc_url($settings_url) . '"><span>' . esc_html__('Open', 'tangible-framework')
-          . '</span><span class="tui-visually-hidden"> ' . esc_html($f['title']) . '</span></a>';
-      }
+      return;
   }
 }
 
-/** The licence state as a TUI Chip; rows.php's five states onto TUI's themes. */
+/**
+ * The status chip: a TUI Chip with the design's dot. rows.php's states onto
+ * the design's tones — success active, warning needs a key, danger expired
+ * or invalid, info free and connected, neutral not asked or not applicable.
+ */
 function render_chip($c) {
   $theme = [
     'ok'   => 'success',
     'need' => 'warning',
     'bad'  => 'danger',
+    'info' => 'primary',
     'free' => 'primary',
     'off'  => 'secondary',
   ][ $c['chip'] ] ?? 'secondary';
-  echo '<span class="tui-chip is-size-sm is-theme-' . esc_attr($theme) . '"><span class="tui-chip__text">' . esc_html($c['text']) . '</span></span>';
+  echo '<span class="tui-chip is-size-sm is-theme-' . esc_attr($theme) . ' tgbl-hub__chip"><span class="tgbl-hub__dot" aria-hidden="true"></span>'
+    . '<span class="tui-chip__text">' . esc_html($c['text']) . '</span></span>';
 }
 
-function render_notifications($items) {
+/**
+ * Other Tangible products, for sites that do not have them. The catalogue is
+ * the filter's to fill — `tangible_hub_catalog`, a list of
+ * [ name, plugin (slug, to skip when installed), description, url, icon ] —
+ * and the card stays away while it is empty (no ghost UI), or once this admin
+ * dismissed it.
+ */
+function render_more_card($rows) {
+  if (get_user_meta(get_current_user_id(), MORE_DISMISSED_META, true)) return;
+  $installed = array_map(function ($row) { return $row['facts']['name']; }, $rows);
+  $catalog = array_values(array_filter((array) apply_filters('tangible_hub_catalog', []), function ($item) use ($installed) {
+    return is_array($item) && !empty($item['name']) && !empty($item['url'])
+      && !in_array($item['plugin'] ?? '', $installed, true);
+  }));
+  if (!$catalog) return;
+  ?>
+  <article class="tui-card is-style-solid" aria-labelledby="tgbl-hub-more">
+    <div class="tui-card__inner">
+      <div class="tui-card__head">
+        <h2 id="tgbl-hub-more"><?php esc_html_e('More from Tangible', 'tangible-framework'); ?></h2>
+        <?php dismiss_form('tangible_hub_more_dismiss', __('Dismiss More from Tangible', 'tangible-framework')); ?>
+      </div>
+      <div class="tui-card__body">
+        <ul class="tgbl-hub__more">
+          <?php foreach ($catalog as $item) : ?>
+            <li>
+              <?php render_tile($item['icon'] ?? ''); ?>
+              <div class="tgbl-hub__text">
+                <h3><?php echo esc_html($item['name']); ?></h3>
+                <?php if (!empty($item['description'])) : ?><p class="tgbl-hub__small"><?php echo esc_html($item['description']); ?></p><?php endif; ?>
+                <a class="tgbl-hub__small" href="<?php echo esc_url($item['url']); ?>" target="_blank" rel="noopener"><?php
+                  /* translators: %s: product name */
+                  echo esc_html(sprintf(__('See %s', 'tangible-framework'), $item['name'])); ?> <span aria-hidden="true">↗</span><span class="tui-visually-hidden"> <?php
+                  esc_html_e('(opens in a new tab)', 'tangible-framework'); ?></span></a>
+              </div>
+            </li>
+          <?php endforeach; ?>
+        </ul>
+      </div>
+    </div>
+  </article>
+  <?php
+}
+
+// ── the rail ──────────────────────────────────────────────────────────────
+
+/** Release notes and news only — never system prompts (the design's rule). */
+function render_notifications($items, $seen_at) {
+  $new = count(array_filter($items, function ($item) use ($seen_at) { return (int) $item['created'] > $seen_at; }));
   ?>
   <article class="tui-card is-style-solid" aria-labelledby="tgbl-hub-notifications">
     <div class="tui-card__inner">
       <div class="tui-card__head">
         <h2 id="tgbl-hub-notifications"><?php esc_html_e('Notifications', 'tangible-framework'); ?></h2>
-        <?php if ($items) : ?>
-          <span class="tui-chip is-size-sm is-theme-primary"><span class="tui-chip__text"><?php echo esc_html(number_format_i18n(count($items))); ?></span></span>
-          <?php post_form('tangible_hub_dismiss_all', __('Dismiss all', 'tangible-framework'), button_class('link', 'sm') . ' tgbl-hub__end'); ?>
+        <?php if ($new) : ?>
+          <span class="tui-chip is-size-sm is-theme-secondary"><span class="tui-chip__text"><?php
+            /* translators: %s: number of unread notifications */
+            echo esc_html(sprintf(_n('%s new', '%s new', $new, 'tangible-framework'), number_format_i18n($new))); ?></span></span>
         <?php endif; ?>
+        <?php if ($items) post_form('tangible_hub_dismiss_all', __('Dismiss all', 'tangible-framework'), button_class('link') . ' tgbl-hub__end'); ?>
       </div>
       <div class="tui-card__body">
         <?php if ($items) : ?>
           <ul class="tgbl-hub__notes">
-            <?php foreach ($items as $item) : ?>
-              <li class="tgbl-hub__note">
-                <h3><?php echo esc_html($item['title']); ?></h3>
-                <?php if (!empty($item['body']) || !empty($item['action']['url'])) : ?>
-                  <p><?php echo esc_html($item['body'] ?? ''); ?>
-                    <?php if (!empty($item['action']['url'])) : ?>
-                      <a href="<?php echo esc_url($item['action']['url']); ?>"><?php echo esc_html($item['action']['label'] ?? __('Open', 'tangible-framework')); ?></a>
-                    <?php endif; ?></p>
-                <?php endif; ?>
-                <p class="tgbl-hub__meta"><?php
-                  /* translators: 1: notification kind, e.g. "tip"; 2: how long ago, e.g. "3 days" */
-                  echo esc_html(sprintf(__('%1$s · %2$s ago', 'tangible-framework'), kind_label($item['kind']), human_time_diff((int) $item['created']))); ?></p>
-                <a class="<?php echo esc_attr(button_class('link', 'sm')); ?> tgbl-hub__dismiss"
-                   href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=tangible_hub_dismiss&item=' . rawurlencode($item['id'])), 'tangible_hub_dismiss')); ?>"><span><?php
-                  esc_html_e('Dismiss', 'tangible-framework'); ?></span><span class="tui-visually-hidden"> <?php echo esc_html($item['title']); ?></span></a>
+            <?php foreach ($items as $item) :
+              $unread = (int) $item['created'] > $seen_at; ?>
+              <li class="tgbl-hub__note<?php echo $unread ? ' is-unread' : ''; ?>">
+                <div class="tgbl-hub__text">
+                  <h3><?php if ($unread) : ?><span class="tui-visually-hidden"><?php esc_html_e('New:', 'tangible-framework'); ?> </span><?php endif;
+                    echo esc_html($item['title']); ?></h3>
+                  <?php if (!empty($item['body']) || !empty($item['action']['url'])) : ?>
+                    <p><?php echo esc_html($item['body'] ?? ''); ?>
+                      <?php if (!empty($item['action']['url'])) : ?>
+                        <a href="<?php echo esc_url($item['action']['url']); ?>"><?php echo esc_html($item['action']['label'] ?? __('Open', 'tangible-framework')); ?></a>
+                      <?php endif; ?></p>
+                  <?php endif; ?>
+                  <p class="tgbl-hub__small"><?php
+                    /* translators: 1: notification kind, e.g. "Release notes"; 2: how long ago, e.g. "3 days" */
+                    echo esc_html(sprintf(__('%1$s · %2$s ago', 'tangible-framework'), kind_label($item['kind']), human_time_diff((int) $item['created']))); ?></p>
+                </div>
+                <a class="tui-icon-button is-size-sm is-theme-secondary is-style-ghost"
+                   href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=tangible_hub_dismiss&item=' . rawurlencode($item['id'])), 'tangible_hub_dismiss')); ?>"
+                   aria-label="<?php
+                     /* translators: %s: notification title */
+                     echo esc_attr(sprintf(__('Dismiss %s', 'tangible-framework'), $item['title'])); ?>"><?php echo close_icon(); ?></a>
               </li>
             <?php endforeach; ?>
           </ul>
         <?php else : ?>
-          <p class="tgbl-hub__meta"><?php esc_html_e('Nothing new. Release notes and heads-ups land here — Tangible never posts admin notices.', 'tangible-framework'); ?></p>
+          <p class="tgbl-hub__small"><?php esc_html_e('Nothing new. Release notes and news from Tangible show up here, never as notices across your dashboard.', 'tangible-framework'); ?></p>
         <?php endif; ?>
       </div>
     </div>
@@ -267,56 +411,91 @@ function render_notifications($items) {
   // the platform serves one — not before (no ghost UI).
 }
 
-function render_site_block($steward, $connect) {
-  $state = function_exists('tangible\\connect\\get_state') ? \tangible\connect\get_state() : [];
+function render_site_block($steward) {
+  $client = $steward === 'client';
   ?>
   <article class="tui-card is-style-solid" id="tgbl-hub-site" aria-labelledby="tgbl-hub-site-title">
     <div class="tui-card__inner">
       <div class="tui-card__head"><h2 id="tgbl-hub-site-title"><?php esc_html_e('This site', 'tangible-framework'); ?></h2></div>
       <div class="tui-card__body">
-        <?php // The steward answer lives on this site only (never on tangible.one) and nothing acts on it yet
-        // (see is_client_managed_site), so the copy records the answer and promises no effect. ?>
-        <?php if ($steward === 'client') : ?>
-          <p><?php echo wp_kses(__('You told us this site is <b>built for a client</b>. One answer for every Tangible plugin here.', 'tangible-framework'), [ 'b' => [] ]); ?></p>
-          <p><?php post_form('tangible_hub_steward', __('Me or my team look after it', 'tangible-framework'), button_class('link'), [ 'steward' => 'team' ]); ?></p>
-        <?php elseif ($steward === 'team') : ?>
-          <p><?php echo wp_kses(__('You told us <b>you or your team</b> look after this site. One answer for every Tangible plugin here.', 'tangible-framework'), [ 'b' => [] ]); ?></p>
-          <p><?php post_form('tangible_hub_steward', __('I\'m building this for a client', 'tangible-framework'), button_class('link'), [ 'steward' => 'client' ]); ?></p>
-        <?php else : ?>
-          <p><?php esc_html_e('Who looks after this site? One answer for every Tangible plugin here.', 'tangible-framework'); ?></p>
-          <p class="tgbl-hub__inline">
-            <?php post_form('tangible_hub_steward', __('Me or my team', 'tangible-framework'), button_class('outline', 'sm'), [ 'steward' => 'team' ]); ?>
-            <?php post_form('tangible_hub_steward', __('A client', 'tangible-framework'), button_class('outline', 'sm'), [ 'steward' => 'client' ]); ?>
-          </p>
-        <?php endif; ?>
-        <?php // The per-site usage-data refusal (ADR-011 §3), one answer for every Tangible plugin here.
-        if (function_exists('tangible\\onboarding\\render_site_telemetry_setting')) {
-          \tangible\onboarding\render_site_telemetry_setting('tgbl-hub__telemetry', button_class('link'));
-        } ?>
+        <?php // The steward answer, as a switch: TUI's Switch DOM, its button the
+        // form's submit (no JS). It lives on this site only, never on tangible.one. ?>
+        <form class="tgbl-hub__toggle" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+          <?php hidden_fields('tangible_hub_steward', [ 'steward' => $client ? 'team' : 'client' ]); ?>
+          <label class="tui-switch">
+            <button type="submit" role="switch" aria-checked="<?php echo $client ? 'true' : 'false'; ?>" class="tui-switch__track"
+                    aria-describedby="tgbl-hub-steward-help"><span class="tui-switch__thumb"></span></button>
+            <span class="tui-switch__label"><?php esc_html_e('Built for a client', 'tangible-framework'); ?></span>
+          </label>
+          <p class="tgbl-hub__small" id="tgbl-hub-steward-help"><?php
+            esc_html_e('License and renewal news goes to the account owner by email instead of this dashboard. Covers every Tangible plugin on this site.', 'tangible-framework'); ?></p>
+        </form>
+        <hr class="tgbl-hub__divider" />
+        <?php render_usage_data(); ?>
       </div>
     </div>
   </article>
+  <?php
+}
 
+/** The per-site usage-data answer (ADR-011 §3), one for every Tangible plugin here. */
+function render_usage_data() {
+  if (!function_exists('tangible\\onboarding\\site_telemetry_state')) return;
+  $state = \tangible\onboarding\site_telemetry_state(
+    \tangible\onboarding\get_consent_answer('telemetry_extended'),
+    \tangible\onboarding\site_covered_by_terms()
+  );
+  $sending = in_array($state, ['granted', 'terms'], true);
+  $what = __('versions, theme, plugins, users and roles, content counts, hosting and page speed. Never your content, users or visitors.', 'tangible-framework');
+  $text = [
+    /* translators: %s: what usage data includes */
+    'terms'   => sprintf(__('Sent under your tangible.one terms: %s', 'tangible-framework'), $what),
+    /* translators: %s: what usage data includes */
+    'granted' => sprintf(__('Sent from this site: %s', 'tangible-framework'), $what),
+    'refused' => __('Not sent from this site, by any Tangible plugin.', 'tangible-framework'),
+    'none'    => __('Not sent from this site. Nobody here has been asked, and nothing is sent until someone says yes.', 'tangible-framework'),
+  ][ $state ];
+  ?>
+  <div class="tgbl-hub__usage">
+    <h3><?php esc_html_e('Usage data', 'tangible-framework'); ?></h3>
+    <p class="tgbl-hub__small"><?php echo esc_html($text); ?></p>
+    <form class="tgbl-hub__form" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+      <?php hidden_fields(\tangible\onboarding\SITE_TELEMETRY_ACTION, [ 'send' => $sending ? '0' : '1' ]); ?>
+      <button type="submit" class="<?php echo esc_attr(button_class('link')); ?>"><span><?php
+        echo esc_html($sending ? __('Stop sending usage data', 'tangible-framework') : __('Send usage data', 'tangible-framework')); ?></span></button>
+    </form>
+  </div>
+  <?php
+}
+
+function render_one_block($connect) {
+  $state = function_exists('tangible\\connect\\get_state') ? \tangible\connect\get_state() : [];
+  ?>
   <article class="tui-card is-style-solid" aria-labelledby="tgbl-hub-one">
     <div class="tui-card__inner">
       <div class="tui-card__head"><h2 id="tgbl-hub-one">tangible.one</h2></div>
       <div class="tui-card__body">
         <?php if ($connect === 'active') : ?>
-          <p><?php
-            $who = '<b>' . esc_html(($state['account_name'] ?? '') ?: __('your account', 'tangible-framework')) . '</b>';
-            if (!empty($state['owner_email_masked'])) $who .= ' (' . esc_html($state['owner_email_masked']) . ')';
-            /* translators: %s: the tangible.one account name, in bold, and its masked email */
-            echo sprintf(esc_html__('Connected as %s. Free Tangible plugins here take their setup answers from this account.', 'tangible-framework'), $who); ?></p>
-          <p class="tgbl-hub__inline">
-            <a class="<?php echo esc_attr(button_class('link')); ?>" href="<?php echo esc_url(app_url('/websites/connected')); ?>" target="_blank" rel="noopener"><span><?php
-              esc_html_e('Manage', 'tangible-framework'); ?></span><span class="tui-visually-hidden"> <?php esc_html_e('(opens in a new tab)', 'tangible-framework'); ?></span></a>
+          <h3><?php
+            /* translators: %s: the tangible.one account name */
+            echo esc_html(sprintf(__('Connected as %s', 'tangible-framework'), ($state['account_name'] ?? '') ?: __('your account', 'tangible-framework'))); ?></h3>
+          <p class="tgbl-hub__small"><?php
+            $masked = (string) ($state['owner_email_masked'] ?? '');
+            echo esc_html(($masked !== '' ? $masked . '. ' : '')
+              . __('Free Tangible plugins on this site take their setup answers from this account.', 'tangible-framework')); ?></p>
+          <p class="tgbl-hub__links">
+            <a href="<?php echo esc_url(app_url('/websites/connected')); ?>" target="_blank" rel="noopener"><?php
+              esc_html_e('Manage on tangible.one', 'tangible-framework'); ?> <span aria-hidden="true">↗</span><span class="tui-visually-hidden"> <?php
+              esc_html_e('(opens in a new tab)', 'tangible-framework'); ?></span></a>
             <?php post_form('tangible_connect_disconnect', __('Disconnect', 'tangible-framework'), button_class('link')); ?>
           </p>
         <?php elseif ($connect === 'pending') : ?>
-          <p><?php esc_html_e('Waiting for tangible.one to verify this site.', 'tangible-framework'); ?></p>
+          <h3><?php esc_html_e('Connecting', 'tangible-framework'); ?></h3>
+          <p class="tgbl-hub__small"><?php esc_html_e('Waiting for tangible.one to verify this site.', 'tangible-framework'); ?></p>
         <?php else : ?>
-          <p><?php esc_html_e('Not connected. Licensed plugins work through their keys either way.', 'tangible-framework'); ?></p>
-          <p><?php connect_form(__('Connect this site', 'tangible-framework'), button_class('link')); ?></p>
+          <h3><?php esc_html_e('Not connected', 'tangible-framework'); ?></h3>
+          <p class="tgbl-hub__small"><?php esc_html_e('Licensed plugins work through their keys either way. Connecting keeps your free plugins\' setup answers in your account.', 'tangible-framework'); ?></p>
+          <p class="tgbl-hub__links"><?php connect_form(__('Connect this site', 'tangible-framework'), button_class('link')); ?></p>
         <?php endif; ?>
       </div>
     </div>
@@ -326,19 +505,46 @@ function render_site_block($steward, $connect) {
 
 // ── small helpers ─────────────────────────────────────────────────────────
 
-/** A TUI Button's classes: primary (filled), outline, or link; md or sm. */
-function button_class($style, $size = 'md') {
-  return 'tui-button is-size-' . $size . ' is-theme-primary'
+/** A TUI Button's classes: primary (filled), outline, or link. */
+function button_class($style) {
+  return 'tui-button is-size-md is-theme-primary'
     . ($style === 'outline' ? ' is-style-outline' : ($style === 'link' ? ' is-style-link' : ''));
+}
+
+/** The 40px tile: the plugin's icon, or the generic plugin glyph. */
+function render_tile($icon) {
+  echo '<span class="tgbl-hub__tile" aria-hidden="true">';
+  if ($icon !== '') {
+    echo '<img src="' . esc_url(set_url_scheme($icon)) . '" alt="" width="24" height="24" />';
+  } else {
+    echo '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" focusable="false"><path fill-rule="evenodd" clip-rule="evenodd" d="M10.5 4v4h3V4H15v4h1.5a1 1 0 0 1 1 1v4l-3 4v2a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1v-2l-3-4V9a1 1 0 0 1 1-1H9V4h1.5ZM11 16.5v2h2v-2l3-4v-3H8v3l3 4Z"/></svg>';
+  }
+  echo '</span>';
+}
+
+function close_icon() {
+  return '<span class="tui-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" focusable="false"><path fill-rule="evenodd" d="m12 12.868-6.462 6.655-1.076-1.046 6.493-6.685-6.089-6.27 1.077-1.045L12 10.715l6.057-6.238 1.076 1.045-6.088 6.27 6.493 6.685-1.076 1.046z" clip-rule="evenodd"/></svg></span>';
+}
+
+/** An icon-only dismiss: a POST whose button is TUI's ghost IconButton. */
+function dismiss_form($action, $label) {
+  ?><form class="tgbl-hub__form tgbl-hub__end" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+    <?php hidden_fields($action); ?>
+    <button type="submit" class="tui-icon-button is-size-sm is-theme-secondary is-style-ghost" aria-label="<?php echo esc_attr($label); ?>"><?php echo close_icon(); ?></button>
+  </form><?php
+}
+
+function hidden_fields($action, $fields = []) {
+  ?><input type="hidden" name="action" value="<?php echo esc_attr($action); ?>" />
+  <?php foreach ($fields as $k => $v) : ?><input type="hidden" name="<?php echo esc_attr($k); ?>" value="<?php echo esc_attr($v); ?>" /><?php endforeach; ?>
+  <input type="hidden" name="_wpnonce" value="<?php echo esc_attr(wp_create_nonce($action)); ?>" />
+  <input type="hidden" name="_wp_http_referer" value="<?php echo esc_attr(wp_unslash($_SERVER['REQUEST_URI'] ?? '')); ?>" /><?php
 }
 
 /** A POST to admin-post.php, nonce'd by its own action name. */
 function post_form($action, $label, $class, $fields = []) {
   ?><form class="tgbl-hub__form" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
-    <input type="hidden" name="action" value="<?php echo esc_attr($action); ?>" />
-    <?php foreach ($fields as $k => $v) : ?><input type="hidden" name="<?php echo esc_attr($k); ?>" value="<?php echo esc_attr($v); ?>" /><?php endforeach; ?>
-    <input type="hidden" name="_wpnonce" value="<?php echo esc_attr(wp_create_nonce($action)); ?>" />
-    <input type="hidden" name="_wp_http_referer" value="<?php echo esc_attr(wp_unslash($_SERVER['REQUEST_URI'] ?? '')); ?>" />
+    <?php hidden_fields($action, $fields); ?>
     <button type="submit" class="<?php echo esc_attr($class); ?>"><span><?php echo esc_html($label); ?></span></button>
   </form><?php
 }
@@ -369,32 +575,21 @@ function update_url($plugin) {
   return wp_nonce_url(self_admin_url('update.php?action=upgrade-plugin&plugin=' . rawurlencode($basename)), 'upgrade-plugin_' . $basename);
 }
 
-/** The line under the heading: the site, who looks after it, the connection. */
-function site_line($steward, $connect) {
-  $host = '<b>' . esc_html(wp_parse_url(home_url(), PHP_URL_HOST)) . '</b>';
-  if ($steward === 'client') $who = __('a client', 'tangible-framework');
-  elseif ($steward === 'team') $who = __('you or your team', 'tangible-framework');
-  else $who = __('not answered yet', 'tangible-framework');
-  if ($connect === 'active') $line = __('Connected to tangible.one', 'tangible-framework');
-  elseif ($connect === 'pending') $line = __('Connecting to tangible.one', 'tangible-framework');
-  else $line = __('Not connected to tangible.one', 'tangible-framework');
-  /* translators: 1: this site's host name, in bold; 2: who looks after it, in bold; 3: connection state */
-  return sprintf(esc_html__('Site %1$s · Looked after by %2$s · %3$s', 'tangible-framework'),
-    $host, '<b>' . esc_html($who) . '</b>', esc_html($line));
-}
-
-function installed_line($count, $updates) {
+/** "4 installed · 1 update", or "· 2 need attention" when licences do. */
+function installed_line($count, $updates, $attention = 0) {
   /* translators: %s: number of installed Tangible plugins */
   $line = sprintf(_n('%s installed', '%s installed', $count, 'tangible-framework'), number_format_i18n($count));
+  /* translators: %s: number of plugins whose license needs attention */
+  if ($attention) $line .= ' · ' . sprintf(_n('%s needs attention', '%s need attention', $attention, 'tangible-framework'), number_format_i18n($attention));
   /* translators: %s: number of plugin updates available */
-  if ($updates) $line .= ' · ' . sprintf(_n('%s update', '%s updates', $updates, 'tangible-framework'), number_format_i18n($updates));
+  elseif ($updates) $line .= ' · ' . sprintf(_n('%s update', '%s updates', $updates, 'tangible-framework'), number_format_i18n($updates));
   return $line;
 }
 
 function kind_label($kind) {
   return [
-    'whats-new' => __('What\'s new', 'tangible-framework'),
+    'whats-new' => __('Release notes', 'tangible-framework'),
     'tip'       => __('Tip', 'tangible-framework'),
-    'notice'    => __('Notice', 'tangible-framework'),
+    'notice'    => __('News', 'tangible-framework'),
   ][ $kind ] ?? (string) $kind;
 }
