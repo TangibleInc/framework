@@ -857,6 +857,10 @@ function render_wizard($plugin) {
        under the hidden menu, which is the ~20px sliver on the launchpad (G-18). */
     body.wp-admin, #wpwrap, #wpcontent, #wpbody { background: #f0f0f0 !important; }
     #wpcontent, #wpbody-content { margin-left: 0 !important; padding: 0 !important; float: none; }
+    /* Below 783px WP gives #wpwrap overflow:auto, which makes it the sticky
+       bands' scroll container — one that never scrolls — so neither the
+       header nor the footer held. */
+    #wpwrap { overflow: visible !important; }
     #wpbody-content .tgbl-wizard { min-height: 100vh; }
 
     /* ------------------------------------------------------------------
