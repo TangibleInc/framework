@@ -87,27 +87,31 @@ function set_site_telemetry($send) {
 function render_site_telemetry_setting($text_class = 'tgbl-site-telemetry', $button_class = 'button-link') {
   $state = site_telemetry_state(get_consent_answer('telemetry_extended'), site_covered_by_terms());
   $sending = in_array($state, ['granted', 'terms'], true);
-  $what = 'performance timings, which features are used, content counts. Never content, users or visitors.';
+  $what = __('performance timings, which features are used, content counts. Never content, users or visitors.', 'tangible-framework');
   $text = [
-    'refused' => 'Usage data is <b>not sent</b> from this site, by any Tangible plugin.',
-    'none'    => 'Usage data is <b>not sent</b> from this site. Nobody has been asked yet.',
-    'granted' => 'Tangible plugins on this site send usage data — ' . $what,
-    'terms'   => 'Tangible plugins on this site send usage data under your tangible.one account\'s terms — ' . $what,
+    'refused' => __('Usage data is <b>not sent</b> from this site, by any Tangible plugin.', 'tangible-framework'),
+    'none'    => __('Usage data is <b>not sent</b> from this site. Nobody has been asked yet.', 'tangible-framework'),
+    /* translators: %s: what usage data includes */
+    'granted' => sprintf(__('Tangible plugins on this site send usage data — %s', 'tangible-framework'), $what),
+    /* translators: %s: what usage data includes */
+    'terms'   => sprintf(__('Tangible plugins on this site send usage data under your tangible.one account\'s terms — %s', 'tangible-framework'), $what),
   ][ $state ];
   ?>
-  <p class="<?php echo esc_attr($text_class); ?>"><?php echo $text; ?></p>
+  <p class="<?php echo esc_attr($text_class); ?>"><?php echo wp_kses($text, ['b' => []]); ?></p>
   <form class="inline" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
     <input type="hidden" name="action" value="<?php echo esc_attr(SITE_TELEMETRY_ACTION); ?>" />
     <input type="hidden" name="send" value="<?php echo $sending ? '0' : '1'; ?>" />
     <?php wp_nonce_field(SITE_TELEMETRY_ACTION); ?>
     <button type="submit" class="<?php echo esc_attr($button_class); ?>"><?php
-      echo esc_html($sending ? "Don't send usage data from this site" : 'Send usage data from this site'); ?></button>
+      echo esc_html($sending
+        ? __("Don't send usage data from this site", 'tangible-framework')
+        : __('Send usage data from this site', 'tangible-framework')); ?></button>
   </form>
   <?php
 }
 
 add_action('admin_post_' . SITE_TELEMETRY_ACTION, function () {
-  if (!current_user_can('manage_options')) wp_die('Nope', 403);
+  if (!current_user_can('manage_options')) wp_die(esc_html__('Nope', 'tangible-framework'), 403);
   check_admin_referer(SITE_TELEMETRY_ACTION);
   set_site_telemetry(($_POST['send'] ?? '') === '1');
   wp_safe_redirect(wp_get_referer() ?: admin_url());

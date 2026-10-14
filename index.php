@@ -28,6 +28,15 @@ require_once __DIR__ . '/utils/index.php';
     require_once __DIR__ . '/utils/index.php';
 
     framework::$state->url = framework\module_url(__FILE__);
+
+    // The framework's own strings (onboarding, Connect) are in the
+    // tangible-framework domain, translated in languages/. A site-level
+    // file in wp-content/languages/plugins/ still wins: WordPress loads it
+    // just in time, before this one is consulted.
+    $load_translations = function () {
+      load_textdomain('tangible-framework', __DIR__ . '/languages/tangible-framework-' . determine_locale() . '.mo');
+    };
+    did_action('init') ? $load_translations() : add_action('init', $load_translations, 0);
   
     require_once __DIR__ . '/admin/index.php';
     require_once __DIR__ . '/ajax/index.php';

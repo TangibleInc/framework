@@ -57,18 +57,19 @@
  */
 namespace tangible\onboarding;
 
-/** The Description line of the plugin header, tags stripped. */
+/** The Description line of the plugin header, tags stripped, in the plugin's own translation. */
 function plugin_description($plugin) {
   if (empty($plugin->file_path) || !is_readable($plugin->file_path)) return '';
   if (!function_exists('get_plugin_data')) require_once ABSPATH . 'wp-admin/includes/plugin.php';
-  $data = get_plugin_data($plugin->file_path, false, false);
+  $data = get_plugin_data($plugin->file_path, false, true);
   return trim(wp_strip_all_tags((string) ($data['Description'] ?? '')));
 }
 
 function welcome_config($plugin) {
   $title = $plugin->title ?? $plugin->name;
   $config = array_merge([
-    'heading'    => 'Welcome to ' . $title,
+    /* translators: %s: plugin name */
+    'heading'    => sprintf(__('Welcome to %s', 'tangible-framework'), $title),
     'intro'      => '',
     'logo'       => !empty($plugin->logo) ? $plugin->logo : '',
     'headline'   => '',
@@ -107,11 +108,11 @@ add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name =
 
   $steps[] = [
     'id'     => 'welcome',
-    'label'  => 'welcome',
+    'label'  => __('Welcome', 'tangible-framework'),
     'weight' => 5,
     'scope'  => 'plugin',
     'skippable' => false,
-    'submit_label' => 'Get started',
+    'submit_label' => __('Get started', 'tangible-framework'),
     // Until answered — except on a site that finished this plugin's setup
     // before Welcome existed: its Done record says so, and asking again would
     // turn every finished setup back into "1 step left".
@@ -119,7 +120,7 @@ add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name =
       $state = get_option(get_state_key($plugin_name, 'plugin'), []);
       return empty($state['done']);
     },
-    'skip_note' => 'set up',
+    'skip_note' => _x('set up', 'setup step state', 'tangible-framework'),
     'render' => function ($plugin) {
       render_welcome($plugin);
     },
@@ -170,15 +171,15 @@ function render_welcome($plugin) {
  */
 function render_steward_checkbox($paid) {
   $help = $paid
-    ? 'Keeps license and renewal news out of this dashboard and emails the account owner instead.'
-    : 'Keeps upgrade offers and account news out of this dashboard and emails the account owner instead.';
+    ? __('Keeps license and renewal news out of this dashboard and emails the account owner instead.', 'tangible-framework')
+    : __('Keeps upgrade offers and account news out of this dashboard and emails the account owner instead.', 'tangible-framework');
   ?>
   <label class="tgbl-check">
     <input type="checkbox" name="steward_client" value="1" <?php checked(get_steward() === 'client'); ?> />
     <span class="tgbl-check__body">
-      <span class="tgbl-check__title">I am installing this for a client</span>
-      <span class="tgbl-check__help"><?php echo esc_html($help); ?> Covers every Tangible plugin on this site.
-        You can change this later in Settings.</span>
+      <span class="tgbl-check__title"><?php esc_html_e('I am installing this for a client', 'tangible-framework'); ?></span>
+      <span class="tgbl-check__help"><?php echo esc_html($help); ?>
+        <?php esc_html_e('Covers every Tangible plugin on this site. You can change this later in Settings.', 'tangible-framework'); ?></span>
     </span>
   </label>
   <?php
@@ -220,7 +221,9 @@ function render_welcome_media($plugin, $config) {
           <?php render_inset($config['inset']); ?>
           <?php if ($media) : ?>
             <a class="tgbl-play" href="<?php echo esc_url($media['href']); ?>" target="_blank" rel="noopener"
-               aria-label="<?php echo esc_attr(media_label($media) . ' (opens in a new tab)'); ?>">
+               aria-label="<?php
+                 /* translators: %s: link text, e.g. "Watch the video" */
+                 echo esc_attr(sprintf(__('%s (opens in a new tab)', 'tangible-framework'), media_label($media))); ?>">
               <?php echo play_svg(); ?>
             </a>
           <?php endif; ?>
@@ -241,7 +244,9 @@ function render_welcome_media($plugin, $config) {
 /** The media's visible label: the plugin's, else one that names the kind. */
 function media_label($media) {
   if ($media['label'] !== '') return $media['label'];
-  return $media['kind'] === 'video' ? 'Watch the video' : 'Read more';
+  return $media['kind'] === 'video'
+    ? __('Watch the video', 'tangible-framework')
+    : __('Read more', 'tangible-framework');
 }
 
 function play_svg() {
@@ -266,7 +271,7 @@ function render_media_image($media) {
       </span>
       <span class="tgbl-media-link__label"><?php echo esc_html(media_label($media)); ?><span
         class="tgbl-media-link__ext" aria-hidden="true">↗</span><span
-        class="screen-reader-text"> (opens in a new tab)</span></span>
+        class="screen-reader-text"> <?php esc_html_e('(opens in a new tab)', 'tangible-framework'); ?></span></span>
     </a>
   <?php else : ?>
     <figure class="tgbl-hero__figure">
