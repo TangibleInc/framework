@@ -65,6 +65,19 @@ class Hub_Rows_TestCase extends \WP_UnitTestCase {
       [ $s['account']['chip'], $s['account']['text'], $s['account']['action'] ]);
   }
 
+  function test_a_build_without_the_updater_is_a_free_row() {
+    // A wordpress.org build: on the platform (cloud_id), never registered with the updater.
+    $plugin = \tangible\framework\register_plugin([ 'name' => 'hubwporg', 'title' => 'Hub WP.org', 'cloud_id' => 'hubwporg' ]);
+    $f = hub\gather_facts($plugin);
+    $this->assertTrue($f['free']);
+    $s = hub\row_state($f);
+    $this->assertSame(['Account', 'free', 'connect'], [ $s['account']['key'], $s['account']['chip'], $s['account']['action'] ]);
+
+    // A legacy build (no cloud_id, no wizard) is not declared free.
+    $legacy = \tangible\framework\register_plugin([ 'name' => 'hublegacy', 'title' => 'Hub Legacy' ]);
+    $this->assertNotTrue(hub\gather_facts($legacy)['free']);
+  }
+
   function test_free_connected_names_the_account() {
     $s = hub\row_state($this->free([ 'connect' => 'active', 'connect_account' => 'Oakhill' ]));
     $this->assertSame(['ok', 'Connected', 'Oakhill'], [ $s['account']['chip'], $s['account']['text'], $s['account']['sub'] ]);

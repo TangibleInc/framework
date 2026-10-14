@@ -58,9 +58,18 @@ function gather_facts($plugin) {
     }
   }
 
-  // Distribution — the server's verdict, cached by the updater from its update
-  // check. Unknown until that first answer (null).
-  if (function_exists('tangible\\updater\\is_free_distribution')) {
+  // Distribution — the onboarder's rule for plugins on the tangible.one platform
+  // (a cloud_id or a wizard): the server's verdict when cached, else free by
+  // construction for a build without the updater (wordpress.org), else unknown
+  // (null) while a registered plugin waits for its first answer. Legacy builds
+  // keep the updater-only read below, so they never turn into "Free".
+  $platform = !empty($plugin->cloud_id) || (function_exists('tangible\\onboarding\\registered_wizards')
+    && !empty(\tangible\onboarding\registered_wizards()[$name]));
+  if ($platform && function_exists('tangible\\onboarding\\is_free_distribution')) {
+    if (\tangible\onboarding\is_free_distribution($plugin))         $f['free'] = true;
+    elseif (\tangible\onboarding\is_licensed_distribution($plugin)) $f['free'] = false;
+    else                                                             $f['free'] = null;
+  } elseif (function_exists('tangible\\updater\\is_free_distribution')) {
     $known = function_exists('tangible\\updater\\is_distribution_known')
       ? \tangible\updater\is_distribution_known($plugin) : true;
     $f['free'] = $known ? (bool) \tangible\updater\is_free_distribution($plugin) : null;
