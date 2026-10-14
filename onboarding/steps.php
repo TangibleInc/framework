@@ -608,8 +608,8 @@ function marketing_consent_text($plugin) {
 }
 
 function release_notes_title($plugin) {
-  /* translators: %s: plugin name */
   $name = $plugin ? short_title($plugin) : '';
+  /* translators: %s: plugin name */
   return sprintf(__('Get release notes from the makers of %s', 'tangible-framework'),
     $name !== '' ? $name : __('this plugin', 'tangible-framework'));
 }
