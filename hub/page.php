@@ -66,9 +66,11 @@ function render_page() {
     </header>
     <div class="tgbl-hub__content">
 
-      <?php if ($flash) : ?>
-        <section class="tui-notice is-theme-success" role="status">
-          <div class="tui-notice__inner"><div class="tui-notice__body"><?php echo esc_html($flash); ?></div></div>
+      <?php // The round trip's outcome, in its own tone. "Pending" is left to the
+      // band, which says the same thing and offers the way on.
+      if ($flash && !($flash['key'] === 'pending' && $band && $band['status'] === 'pending')) : ?>
+        <section class="tui-notice is-theme-<?php echo esc_attr(flash_theme($flash['key'])); ?> tgbl-hub__flash" role="<?php echo in_array($flash['key'], ['error', 'revoked'], true) ? 'alert' : 'status'; ?>">
+          <div class="tui-notice__inner"><div class="tui-notice__body"><?php echo esc_html($flash['text']); ?></div></div>
         </section>
       <?php endif; ?>
       <?php if ($band) render_band($band); ?>
@@ -555,13 +557,25 @@ function connect_form($label, $class) {
   post_form('tangible_connect_start', $label, $class, [ 'return_to' => url() ]);
 }
 
+/** The Connect round trip's outcome, once: [ key, text ] or null. */
 function connect_flash() {
-  if (!function_exists('tangible\\connect\\notice_key')) return '';
+  if (!function_exists('tangible\\connect\\notice_key')) return null;
   $key = \tangible\connect\notice_key(get_current_user_id());
   $notice = get_transient($key);
-  if (!$notice) return '';
+  if (!$notice) return null;
   delete_transient($key);
-  return \tangible\connect\notice_copy($notice);
+  return [ 'key' => (string) $notice, 'text' => \tangible\connect\notice_copy($notice) ];
+}
+
+function flash_theme($key) {
+  return [
+    'connected'    => 'success',
+    'disconnected' => 'success',
+    'pending'      => 'warning',
+    'denied'       => 'neutral',
+    'error'        => 'danger',
+    'revoked'      => 'danger',
+  ][ $key ] ?? 'neutral';
 }
 
 function app_url($path) {

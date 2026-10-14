@@ -62,6 +62,11 @@ hr.tgbl-hub-notices ~ .notice { margin: 8px 8px 8px 0; }
   padding: 24px 24px 16px; }
 .tgbl-hub .tui-card__body { padding: 0 24px 24px; }
 
+/* The Connect round trip's outcome: shaped like the band, in its own tone. */
+.tgbl-hub .tgbl-hub__flash { margin: 0 0 24px; border: 0; border-radius: 8px; }
+.tgbl-hub .tgbl-hub__flash .tui-notice__inner { padding: 16px 24px; }
+.tgbl-hub .tgbl-hub__flash .tui-notice__body { padding: 0; font-size: 13px; line-height: 20px; }
+
 /* The Connect band. */
 .tgbl-hub .tgbl-hub__band { margin: 0 0 24px; border: 0; border-radius: 8px; }
 .tgbl-hub .tgbl-hub__band .tui-notice__inner { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 16px 32px; padding: 24px; }
