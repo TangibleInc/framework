@@ -20,6 +20,22 @@
  *           marked done. Reads $_POST, saves. Return false (or throw) to
  *           keep the step open — validation failure is not completion.
  *
+ * Layout keys (layout-rules.md, Cristian 2026-10-14):
+ *
+ *   width          'narrow' — the 720 column, for a single card or a list —
+ *                  or 'wide' (default) — 1200, for things side by side.
+ *                  The default stays wide so plugin steps written before
+ *                  the rules keep the column they were laid out in.
+ *   align          'center' centres the heading block (Done).
+ *   actions        [ answer => [ 'label' => …, 'style' => 'primary'|'outline' ] ]
+ *                  The footer's right side as answer buttons instead of
+ *                  Skip/Continue. Each posts do=answer:<answer>, which the
+ *                  shell runs as Continue with $_POST['answer'] set. A body
+ *                  button may post the same shape (Connect, Disconnect).
+ *   submit_in_body true when the step prints its own Continue (Done's
+ *                  "Finish Setup" sits inside the email band), so the
+ *                  footer keeps only Back.
+ *
  * v1 is server-rendered on purpose: no JS framework rides along until the
  * TUI-on-preact question is settled. The markup carries the House idioms
  * (tile mark, mono labels, dashed skip) so a hydration layer can land on
@@ -84,10 +100,6 @@ function build_facts($plugin_name) {
   return apply_filters('tangible_onboarding_facts', $facts, $plugin_name);
 }
 
-/**
- * Wire the shell for one plugin. Call at plugins_loaded, after
- * framework\register_plugin().
- */
 /**
  * Which plugins have a wizard. The shell's own steps (licence, consent)
  * attach only to these — a bare resolve_plan() for a name that never
@@ -253,9 +265,32 @@ function pending_redirect($url = null) {
   return $pending;
 }
 
-function register_wizard($plugin) {
+/**
+ * What a plugin told register_wizard() about its own screens — today the
+ * Welcome media (see welcome.php). Kept beside the registry rather than in
+ * it, so registered_wizards() stays the plain name => true map its callers
+ * (and the hub) read.
+ */
+function wizard_args($plugin_name, $args = null) {
+  static $all = [];
+  if ($args !== null) $all[$plugin_name] = (array) $args;
+  return $all[$plugin_name] ?? [];
+}
+
+/**
+ * Wire the shell for one plugin. Call at plugins_loaded, after
+ * framework\register_plugin().
+ *
+ * $args (optional):
+ *   welcome   the Welcome step's media card — headline, accent, bullets,
+ *             stats, inset, video; see welcome_config() in welcome.php.
+ *             The `tangible_onboarding_welcome` filter can supply or
+ *             reshape the same array.
+ */
+function register_wizard($plugin, $args = []) {
   $name = $plugin->name;
   registered_wizards($name);
+  if ($args) wizard_args($name, $args);
   $redirect_flag = 'tangible_onboarding_redirect__' . $name;
 
   // Activation → one-shot redirect flag. The flag pattern (not a direct
@@ -396,7 +431,18 @@ function notice_is_sticky($plugin, $facts) {
  */
 function handle_step_submission($plugin_name, $post) {
   $step_id = sanitize_text_field($post['step'] ?? '');
-  $do = $post['do'] ?? '';
+  $do = (string) ($post['do'] ?? '');
+
+  // An answer button — "Don't share" / "Share usage data", or "Connect to
+  // tangible.one" inside a card — is a Continue that carries its answer in
+  // the same field: a submit button has one name and one value, and `do`
+  // is the one the shell reads. The handler finds it in $_POST['answer'].
+  if (strpos($do, 'answer:') === 0) {
+    $answer = sanitize_key(substr($do, 7));
+    if ($answer === '') return null;
+    $_POST['answer'] = $answer;
+    $do = 'continue';
+  }
   if ($step_id === '' || !in_array($do, ['continue', 'skip', 'back'], true)) return null;
 
   $facts = build_facts($plugin_name);
@@ -533,6 +579,19 @@ function render_stepper($rail, $current_id) {
     </ol>
   </nav>
   <?php
+}
+
+/** The content column for one step: 720 or 1200, heading left or centred. */
+function page_classes($step) {
+  return 'tgbl-wizard__page'
+    . (($step['width'] ?? 'wide') === 'narrow' ? ' is-narrow' : '')
+    . (($step['align'] ?? '') === 'center' ? ' is-center' : '');
+}
+
+/** The design's check, at 1em — bullets, the connected box, option cards. */
+function check_svg($size = '1em') {
+  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="' . esc_attr($size)
+    . '" height="' . esc_attr($size) . '" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10.687 16.567 18.14 3.99l1.72 1.02-8.547 14.423-7.382-5.111 1.138-1.644z" clip-rule="evenodd"/></svg>';
 }
 
 /**
@@ -819,8 +878,10 @@ function render_wizard($plugin) {
       --tgbl-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
         "Helvetica Neue", Arial, sans-serif;
       --tgbl-font-data: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-      --tgbl-measure: 1200px;   /* the design's content column at 1440 */
-      --tgbl-gutter: 40px;      /* page + band side padding */
+      --tgbl-measure: 1200px;   /* side-by-side steps (layout rules §2) */
+      --tgbl-narrow: 720px;     /* every other step */
+      --tgbl-gutter: 32px;      /* bands' side padding, min page edge */
+      --tgbl-hairline: #cccccc; /* the bars' lines (§1) */
 
       /* ----------------------------------------------------------------
          Seven roles, and nothing outside them.
@@ -834,8 +895,8 @@ function render_wizard($plugin) {
          The base is 14px — the design's (Inter 14/19.6). Descriptions
          and buttons sit one step down at 13 (audit G-17).
          ---------------------------------------------------------------- */
-      --tgbl-display: 30px;    /* step heading            400 */
-      --tgbl-lede:    15px;    /* step subtitle           400 */
+      --tgbl-display: 32px;    /* step heading            400 (§6) */
+      --tgbl-lede:    13px;    /* step subtitle           400 (§6) */
       --tgbl-title:   14px;    /* row / card titles       500 */
       --tgbl-body:    14px;    /* everything else         400 */
       --tgbl-small:   13px;    /* descriptions, buttons   400 */
@@ -853,11 +914,12 @@ function render_wizard($plugin) {
     .tgbl-wizard *, .tgbl-wizard *::before, .tgbl-wizard *::after { box-sizing: border-box; }
 
     /* Top strip — the design's breadcrumb line, plus the exit affordance. */
+    /* Layout rules §1: 80px white bar, #CCCCCC line under it, logo 32 tall. */
     .tgbl-wizard__topbar { display:flex; align-items:center; gap:10px;
-      padding: 20px var(--tgbl-gutter); background: var(--tui-color-bg);
-      border-bottom: 1px solid var(--tui-color-divider); }
+      height: 80px; padding: 0 var(--tgbl-gutter); background: var(--tui-color-bg);
+      border-bottom: 1px solid var(--tgbl-hairline); }
     .tgbl-wizard__logo { display: block; height: 26px; width: auto; flex: none; }
-    .tgbl-wizard__logo.is-plugin { height: 34px; }
+    .tgbl-wizard__logo.is-plugin { height: 32px; }
     .tgbl-wizard__lockup { font-size: var(--tgbl-label); font-weight: 600;
       letter-spacing: .06em; text-transform: uppercase; }
     .tgbl-wizard__lockup span { color: var(--tui-color-fg-muted); font-weight: 600; }
@@ -867,9 +929,10 @@ function render_wizard($plugin) {
     .tgbl-wizard__exit:hover, .tgbl-wizard__exit:focus-visible { text-decoration: underline; text-underline-offset: 3px; }
 
     /* Stepper band — its own white strip under the top bar (G-2). */
+    /* §1: 68px, white, steps centred. */
     .tgbl-wizard__stepbar { background: var(--tui-color-bg);
-      border-bottom: 1px solid var(--tui-color-divider);
-      padding: 18px var(--tgbl-gutter); }
+      min-height: 68px; display: flex; align-items: center; justify-content: center;
+      padding: 0 var(--tgbl-gutter); }
 
     /* The form is the flex spine between the bands: page grows, footer sits
        at the bottom of the viewport (G-3). */
@@ -877,9 +940,17 @@ function render_wizard($plugin) {
 
     /* The page: the grey ground runs edge to edge, content sits directly on
        it in a centred column at the design's measure. No card (G-1). */
-    .tgbl-wizard__well { flex: 1; padding: 56px var(--tgbl-gutter) 64px; }
+    /* §5: 64px above the heading and below the last block. §2: 720 unless
+       the step puts things side by side; below 1100 everything is 720. */
+    .tgbl-wizard__well { flex: 1; padding: 64px var(--tgbl-gutter); }
     .tgbl-wizard__page { width: 100%; max-width: var(--tgbl-measure); margin: 0 auto;
-      display: flex; flex-direction: column; gap: 24px; }
+      display: flex; flex-direction: column; gap: 32px; }
+    .tgbl-wizard__page.is-narrow { max-width: var(--tgbl-narrow); }
+    .tgbl-wizard__page.is-center .tgbl-wizard__body > h2,
+    .tgbl-wizard__page.is-center .tgbl-wizard__body > .step-intro { text-align: center; }
+    @media (max-width: 1100px) {
+      .tgbl-wizard__page { max-width: var(--tgbl-narrow); }
+    }
     /* Steps author their own markup with a margin-bottom convention, so the
        body is a block with a default flow rhythm rather than a flex gap —
        a gap would stack on top of those margins and pull the heading block
@@ -889,9 +960,8 @@ function render_wizard($plugin) {
        its own tight 8px, in one-column and two-column steps alike. */
     .tgbl-wizard__body > * + *:not(.step-intro),
     .tgbl-wizard .tgbl-cols > .main > * + *:not(.step-intro),
-    .tgbl-wizard .tgbl-flow > * + *:not(.step-intro) { margin-top: 24px; }
-    /* The heading block and the first control block are separated by more
-       air than blocks among themselves (Figma: 32 vs 24). */
+    .tgbl-wizard .tgbl-flow > * + *:not(.step-intro) { margin-top: 32px; }
+    /* §5: 32px between blocks, and from the heading block to the first. */
     .tgbl-wizard__body > .step-intro + *, .tgbl-wizard__body > h2 + *:not(.step-intro) { margin-top: 32px; }
     /* A trailing note after a card group is a caption for it, not a new
        block — but it still needs air, or it reads as card overflow. */
@@ -972,15 +1042,19 @@ function render_wizard($plugin) {
 
     /* Footer: a full-width white band at the bottom of the viewport (G-3).
        Left slot is where the design puts Back; empty until the flow can. */
-    .tgbl-wizard__footer { display: flex; align-items: center; gap: 24px;
-      padding: 20px var(--tgbl-gutter); background: var(--tui-color-bg);
-      border-top: 1px solid var(--tui-color-divider); }
+    /* §1: 80px, #CCCCCC line above, held at the bottom of the window. */
+    .tgbl-wizard__footer { display: flex; align-items: center; gap: 16px;
+      position: sticky; bottom: 0; z-index: 2;
+      height: 80px; padding: 0 var(--tgbl-gutter); background: var(--tui-color-bg);
+      border-top: 1px solid var(--tgbl-hairline); }
 
     /* Cards: white, radius 8, soft shadow, no border — the grey ground
        provides the contrast (G-10). Selected keeps tint + 1px primary. */
-    .tgbl-wizard { --tgbl-card-shadow: 0 1px 2px rgba(0,0,0,.06), 0 1px 6px rgba(0,0,0,.04); }
+    /* §3: the four-layer card shadow, 12px corners. */
+    .tgbl-wizard { --tgbl-card-shadow: 0 4px 4px rgba(0,0,0,.01), 0 3px 3px rgba(0,0,0,.02),
+      0 1px 2px rgba(0,0,0,.02), 0 1px 1px rgba(0,0,0,.03); --tgbl-card-radius: 12px; }
     .tgbl-wizard .tui-option-card { --tui-option-card-padding: 20px 24px;
-      --tui-option-card-radius: 8px; --tui-option-card-border: transparent;
+      --tui-option-card-radius: var(--tgbl-card-radius); --tui-option-card-border: transparent;
       --_control-size: 20px; box-shadow: var(--tgbl-card-shadow); }
     .tgbl-wizard .tui-option-card.is-row { --tui-option-card-padding: 16px 20px; }
     .tgbl-wizard .tui-option-card.is-selected { box-shadow: var(--tgbl-card-shadow), inset 0 0 0 1px var(--tui-theme-primary-base); }
@@ -1025,10 +1099,12 @@ function render_wizard($plugin) {
     .tgbl-wizard .tui-option-card__content input, .tgbl-wizard .tui-option-card__content select { margin: 0; font-weight: 400; color: var(--tui-color-fg); }
 
     /* A white card that carries a section title and its controls (C-2). */
-    .tgbl-card { background: var(--tui-color-bg); border-radius: 8px; padding: 28px 32px 32px;
+    .tgbl-card { background: var(--tui-color-bg); border-radius: var(--tgbl-card-radius); padding: 32px;
       box-shadow: var(--tgbl-card-shadow); }
     .tgbl-card > .lbl:first-child, .tgbl-card > .eyebrow:first-child { margin-top: 0; }
     .tgbl-card > * + *:not(.step-intro) { margin-top: 16px; }
+    /* The core steps' patterns (Welcome, Usage data, Done) live in
+       onboarding/patterns.css, linked after this block. */
 
     /* "Here is what we will set up" — a flat info panel with a title line (C-8). */
     .tgbl-summary { padding: 20px 24px; border-radius: 6px;
@@ -1224,6 +1300,7 @@ function render_wizard($plugin) {
         padding-left: 0; padding-top: 16px; width: 100%; }
     }
   </style>
+  <link rel="stylesheet" href="<?php echo esc_url(str_replace('wizard.css', 'patterns.css', $css_url)); ?>" />
   <div class="tui-interface tgbl-wizard">
     <header class="tgbl-wizard__topbar">
       <?php render_lockup($plugin); ?>
@@ -1256,9 +1333,14 @@ function render_wizard($plugin) {
         <input type="hidden" name="action" value="tangible_onboarding_step" />
         <input type="hidden" name="plugin" value="<?php echo esc_attr($name); ?>" />
         <input type="hidden" name="step" value="<?php echo esc_attr($step['id']); ?>" />
+        <?php if (empty($step['actions']) && empty($step['submit_in_body'])) : ?>
+          <?php // Enter in a field submits with the form's FIRST button — which
+                // would be Back, or a button inside a card. Make it Continue. ?>
+          <button type="submit" name="do" value="continue" class="tui-visually-hidden" tabindex="-1" aria-hidden="true"></button>
+        <?php endif; ?>
 
         <main class="tgbl-wizard__well">
-          <div class="tgbl-wizard__page">
+          <div class="<?php echo esc_attr(page_classes($step)); ?>">
             <?php $error = get_transient(step_error_key($name));
             if ($error) { delete_transient(step_error_key($name)); } ?>
             <?php if ($error) : ?>
@@ -1284,14 +1366,26 @@ function render_wizard($plugin) {
         </main>
         <footer class="tgbl-wizard__footer">
           <?php if ($back) : ?>
-            <button class="tgbl-skip tgbl-back" type="submit" name="do" value="back" formnovalidate>Back</button>
+            <button class="tui-button is-style-outline tgbl-back" type="submit" name="do" value="back" formnovalidate>Back</button>
           <?php endif; ?>
           <span style="flex:1"></span>
-          <?php if ($step['skippable']) : ?>
-            <button class="tgbl-skip" type="submit" name="do" value="skip">Skip this step</button>
+          <?php if (!empty($step['actions']) && is_array($step['actions'])) :
+            // Answer buttons: equal standing, nothing preselected — each one
+            // is a complete answer (the Wordfence shape, now in the footer).
+            foreach ($step['actions'] as $answer => $action) :
+              $style = ($action['style'] ?? 'outline') === 'primary' ? 'is-theme-primary' : 'is-style-outline'; ?>
+              <button class="tui-button <?php echo esc_attr($style); ?>" type="submit" name="do"
+                      value="answer:<?php echo esc_attr($answer); ?>"><?php echo esc_html($action['label'] ?? $answer); ?></button>
+            <?php endforeach;
+          else : ?>
+            <?php if ($step['skippable']) : ?>
+              <button class="tgbl-skip" type="submit" name="do" value="skip">Skip this step</button>
+            <?php endif; ?>
+            <?php if (empty($step['submit_in_body'])) : ?>
+              <button class="tui-button is-theme-primary" type="submit" name="do" value="continue"><?php
+                echo esc_html($step['submit_label'] ?? 'Continue'); ?></button>
+            <?php endif; ?>
           <?php endif; ?>
-          <button class="tui-button is-theme-primary" type="submit" name="do" value="continue"><?php
-            echo esc_html($step['submit_label'] ?? 'Continue'); ?></button>
         </footer>
       </form>
     <?php endif; ?>
