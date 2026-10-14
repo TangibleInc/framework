@@ -447,12 +447,14 @@ new class {
 
     $key = get_password_reset_key( $user_data );
 
-    $message  = __( 'Someone requested that the password be reset for the following account:' ) . "\r\n\r\n";
+    // Strings WordPress core still uses take its translations (the 'default'
+    // domain); core has since reworded the other two.
+    $message  = __( 'Someone requested that the password be reset for the following account:', 'tangible-framework' ) . "\r\n\r\n";
     $message .= network_home_url( '/' ) . "\r\n\r\n";
     // translators: %s is the users login name.
-    $message .= sprintf( __( 'Username: %s' ), $user_login ) . "\r\n\r\n";
-    $message .= __( 'If this was a mistake, just ignore this email and nothing will happen.' ) . "\r\n\r\n";
-    $message .= __( 'To reset your password, visit the following address:' ) . "\r\n\r\n";
+    $message .= sprintf( __( 'Username: %s', 'default' ), $user_login ) . "\r\n\r\n";
+    $message .= __( 'If this was a mistake, just ignore this email and nothing will happen.', 'tangible-framework' ) . "\r\n\r\n";
+    $message .= __( 'To reset your password, visit the following address:', 'default' ) . "\r\n\r\n";
     $message .= '<' . network_site_url( "wp-login.php?action=rp&key=$key&login=" . rawurlencode( $user_login ), 'login' ) . ">\r\n";
 
     if ( is_multisite() ) {
@@ -463,7 +465,7 @@ new class {
       $blogname = wp_specialchars_decode( get_option( 'blogname' ), ENT_QUOTES );
     }
     // translators: %s is the sites name (blogname)
-    $title = sprintf( __( '[%s] Password Reset' ), $blogname );
+    $title = sprintf( __( '[%s] Password Reset', 'default' ), $blogname );
 
     $title   = apply_filters( 'retrieve_password_title', $title );
     $message = apply_filters( 'retrieve_password_message', $message, $key );

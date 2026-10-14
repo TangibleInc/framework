@@ -618,7 +618,8 @@ class BackgroundQueue {
 
     $schedules[ $this->cron_interval_identifier ] = [
       'interval' => $interval,
-      'display'  => sprintf( __( 'Every %d Seconds' ), $interval ),
+      /* translators: %d: number of seconds */
+      'display'  => sprintf( _n( 'Every %d Second', 'Every %d Seconds', $interval, 'tangible-framework' ), $interval ),
     ];
 
     return $schedules;
