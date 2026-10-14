@@ -50,7 +50,9 @@
  *   ]);
  *
  * The hero's right-hand column holds the media image when there is one,
- * else the inset (with the video's play button on its corner).
+ * else the inset (with the video's play button on its corner). A media
+ * image with no headline and no inset IS the hero: it fills the card edge
+ * to edge — the shape for a designed image with its copy drawn in.
  *
  * Without any of it, the card falls back to the plugin's logo and the
  * description from its plugin header — honest, if plain.
@@ -191,6 +193,13 @@ function render_welcome_media($plugin, $config) {
   $rich = $config['headline'] !== '';
   $media = $config['media'];
   $image = $media && $media['image'] !== '';
+  if ($image && !$rich && !$config['inset']) {
+    ?><section class="tgbl-media"><?php
+    render_media_hero($media);
+    render_welcome_stats($config['stats']);
+    ?></section><?php
+    return;
+  }
   $aside = $image || $config['inset'] || $media;
   $classes = 'tgbl-hero' . ($rich ? '' : ' is-plain') . ($aside ? ' has-aside' : '');
   ?>
@@ -230,14 +239,45 @@ function render_welcome_media($plugin, $config) {
         </div>
       <?php endif; ?>
     </div>
-    <?php if ($config['stats']) : ?>
-      <dl class="tgbl-stats">
-        <?php foreach ((array) $config['stats'] as $s) : ?>
-          <div class="tgbl-stats__item"><dt><?php echo esc_html($s['value'] ?? ''); ?></dt><dd><?php echo esc_html($s['label'] ?? ''); ?></dd></div>
-        <?php endforeach; ?>
-      </dl>
-    <?php endif; ?>
+    <?php render_welcome_stats($config['stats']); ?>
   </section>
+  <?php
+}
+
+function render_welcome_stats($stats) {
+  if (!$stats) return; ?>
+  <dl class="tgbl-stats">
+    <?php foreach ((array) $stats as $s) : ?>
+      <div class="tgbl-stats__item"><dt><?php echo esc_html($s['value'] ?? ''); ?></dt><dd><?php echo esc_html($s['label'] ?? ''); ?></dd></div>
+    <?php endforeach; ?>
+  </dl>
+  <?php
+}
+
+/**
+ * The media image as the whole hero. Linked, the image is the link: its
+ * name is the label (kept for screen readers — the design draws no
+ * caption), announced as opening a new tab, with a badge in the corner
+ * that says what clicking does (play, or ↗ for a post). Unlinked, the
+ * image's alt is all there is to say.
+ */
+function render_media_hero($media) {
+  $src = set_url_scheme($media['image']);
+  if ($media['href'] === '') : ?>
+    <div class="tgbl-hero is-image">
+      <img src="<?php echo esc_url($src); ?>" alt="<?php echo esc_attr($media['alt']); ?>" />
+    </div>
+    <?php return;
+  endif; ?>
+  <a class="tgbl-hero is-image tgbl-media-link" href="<?php echo esc_url($media['href']); ?>" target="_blank" rel="noopener">
+    <img src="<?php echo esc_url($src); ?>" alt="<?php echo esc_attr($media['alt']); ?>" />
+    <span class="tgbl-hero__badge" aria-hidden="true"><?php
+      echo $media['kind'] === 'video' ? play_svg()
+        : '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false"><path d="M7 17 17 7M9 7h8v8"/></svg>'; ?></span>
+    <span class="screen-reader-text"><?php
+      /* translators: %s: link text, e.g. "Watch the video" */
+      echo esc_html(sprintf(__('%s (opens in a new tab)', 'tangible-framework'), media_label($media))); ?></span>
+  </a>
   <?php
 }
 

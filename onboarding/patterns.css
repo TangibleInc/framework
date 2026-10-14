@@ -85,6 +85,20 @@
   background: #fff; color: #5a2fc2; box-shadow: 0 4px 14px rgba(0,0,0,.25); text-decoration: none; }
 .tgbl-wizard .tgbl-play:hover, .tgbl-wizard .tgbl-play:focus-visible { color: #2b1a6b; }
 
+/* The media image as the whole hero: edge to edge, no padding, the
+   badge where the design puts the play button (bottom right). */
+.tgbl-wizard .tgbl-hero.is-image { display: block; position: relative; padding: 0; background: #27144c; }
+.tgbl-wizard .tgbl-hero.is-image img { display: block; width: 100%; height: auto; }
+.tgbl-wizard .tgbl-hero__badge { position: absolute; right: 24px; bottom: 24px; display: flex;
+  align-items: center; justify-content: center; width: 48px; height: 48px; border-radius: 50%;
+  background: #fff; color: #1e1e1e; box-shadow: 0 4px 14px rgba(0,0,0,.25); }
+.tgbl-wizard a.tgbl-hero.is-image:hover .tgbl-hero__badge { transform: scale(1.06); }
+.tgbl-wizard a.tgbl-hero.is-image:focus { box-shadow: none; }
+.tgbl-wizard a.tgbl-hero.is-image:focus-visible { outline: 3px solid #3858e9; outline-offset: -3px; }
+@media (prefers-reduced-motion: no-preference) {
+  .tgbl-wizard .tgbl-hero__badge { transition: transform .15s ease; }
+}
+
 /* The media image: a framed picture with its label beneath, the whole a
    link when it has one. The label carries the hero's text colour, so it
    reads on the gradient and on the plain ground alike. */

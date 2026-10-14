@@ -63,6 +63,19 @@ class Welcome_I18n_TestCase extends \WP_UnitTestCase {
     $this->assertStringEndsWith('(telemetry v2, site answer, wizard v3)', onboarding\telemetry_consent_text([ 'Theme' => 'x' ]));
   }
 
+  function test_an_image_with_no_headline_is_the_whole_hero() {
+    ob_start();
+    onboarding\render_welcome_media((object) [ 'name' => 'x', 'title' => 'X' ], [
+      'logo' => '', 'background' => '', 'headline' => '', 'accent' => '', 'bullets' => [], 'inset' => null, 'stats' => [],
+      'media' => onboarding\normalize_media([ 'image' => 'https://example.com/hero.webp', 'href' => 'https://example.com/tour', 'kind' => 'video', 'label' => 'Watch the tour' ]),
+    ]);
+    $html = ob_get_clean();
+    $this->assertStringContainsString('class="tgbl-hero is-image tgbl-media-link"', $html);
+    $this->assertStringContainsString('Watch the tour (opens in a new tab)', $html);
+    // No title or copy column is drawn around a designed image.
+    $this->assertStringNotContainsString('tgbl-hero__copy', $html);
+  }
+
   function test_a_plugins_own_usage_row_keeps_its_label() {
     $this->assertSame('Indexed records', onboarding\usage_row_label('Indexed records'));
   }
