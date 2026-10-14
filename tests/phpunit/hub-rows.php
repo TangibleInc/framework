@@ -96,7 +96,7 @@ class Hub_Rows_TestCase extends \WP_UnitTestCase {
 
     // A legacy build that never talks to tangible.one will never answer.
     $legacy = hub\row_state([ 'licence_managed' => true, 'cloud' => false, 'free' => null ]);
-    $this->assertSame('No licence info', $legacy['account']['text']);
+    $this->assertSame('No license info', $legacy['account']['text']);
   }
 
   function test_setup_left_outranks_every_other_action() {

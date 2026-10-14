@@ -41,6 +41,8 @@ function render_page() {
   <div class="wrap tui-interface tgbl-hub">
     <h1><?php esc_html_e('Tangible Hub', 'tangible-framework'); ?></h1>
     <p class="tgbl-hub__site"><?php echo wp_kses(site_line($steward, $connect), [ 'b' => [] ]); ?></p>
+    <?php // Core moves admin notices to after this marker, not between <h1> and the site line. ?>
+    <hr class="wp-header-end" />
 
     <?php if ($flash) : ?>
       <section class="tui-notice is-theme-success" role="status">

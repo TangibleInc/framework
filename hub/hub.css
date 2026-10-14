@@ -7,7 +7,10 @@
  * theme's muted grey (#949494) is 3:1 on white, under 4.5:1 for text.
  */
 
-.tgbl-hub { max-width: 1200px; }
+.tgbl-hub { max-width: 1200px;
+  /* Cards are white on wp-admin's grey, as core's postboxes are: the admin
+     theme's --tui-color-bg is the page grey, which TUI cards default to. */
+  --tui-card-bg: var(--tui-color-bg-surface); }
 .tgbl-hub .tgbl-hub__site { margin: 4px 0 20px; color: var(--tui-color-fg-secondary); }
 
 .tgbl-hub .tui-notice { margin: 0 0 20px; }
