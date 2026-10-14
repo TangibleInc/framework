@@ -477,7 +477,7 @@ function render_one_block($connect) {
       <div class="tui-card__body">
         <?php if ($connect === 'active') : ?>
           <h3><?php
-            /* translators: %s: the tangible.one account name */
+            /* translators: %s: tangible.one account name */
             echo esc_html(sprintf(__('Connected as %s', 'tangible-framework'), ($state['account_name'] ?? '') ?: __('your account', 'tangible-framework'))); ?></h3>
           <p class="tgbl-hub__small"><?php
             $masked = (string) ($state['owner_email_masked'] ?? '');

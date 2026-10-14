@@ -9,7 +9,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-10-14T20:00:20+00:00\n"
+"POT-Creation-Date: 2026-10-14T20:00:39+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: tangible-framework\n"
@@ -78,7 +78,6 @@ msgid "Connect this site to tangible.one"
 msgstr ""
 
 #. translators: %s: tangible.one account name
-#. translators: %s: the tangible.one account name
 #: connect/step.php:55
 #: hub/page.php:481
 #, php-format
@@ -375,7 +374,7 @@ msgstr ""
 msgid "Send usage data"
 msgstr ""
 
-#. translators: %s: the tangible.one account name
+#. translators: %s: tangible.one account name
 #: hub/page.php:481
 msgid "your account"
 msgstr ""
