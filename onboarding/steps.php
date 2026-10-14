@@ -727,7 +727,7 @@ add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name =
     'summary' => '',
     'notices' => [],
     'links_label' => __('What people usually do next', 'tangible-framework'),
-    'primary' => [ 'label' => __('Go to Tangible Home', 'tangible-framework'), 'url' => admin_url('admin.php?page=tangible-home') ],
+    'primary' => [ 'label' => __('Go to Tangible Hub', 'tangible-framework'), 'url' => \tangible\hub\url() ],
     'links'   => [],
   ], $plugin);
   $ask_marketing = is_object($facts) && ($facts->ask['marketing'] ?? null) === 'ask';
@@ -745,7 +745,7 @@ add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name =
     'align'  => 'center',
     'submit_in_body' => $ask_marketing,
     'submit_label' => __('Finish setup', 'tangible-framework'),
-    'redirect_to'  => $done['primary']['url'] ?? admin_url('admin.php?page=tangible-home'),
+    'redirect_to'  => $done['primary']['url'] ?? \tangible\hub\url(),
     'render' => function ($plugin) use ($done, $ask_marketing) {
       render_done($plugin, $done, $ask_marketing);
     },

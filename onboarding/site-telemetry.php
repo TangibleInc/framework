@@ -9,7 +9,7 @@
  * keyed and connected sites report it as the site's exclusion for the account,
  * an anonymous site as evidence.
  *
- * Surfaces: the "This site" block in Tangible Home, and any plugin's own
+ * Surfaces: the "This site" block in Tangible Hub, and any plugin's own
  * settings through `render_site_telemetry_setting()` — the refusal must be as
  * easy to find as the plugin's settings.
  */
@@ -80,7 +80,7 @@ function set_site_telemetry($send) {
 }
 
 /**
- * The setting, for a plugin's settings page or Tangible Home: one line of
+ * The setting, for a plugin's settings page or Tangible Hub: one line of
  * state and one button that flips it. Posts to admin-post.php and returns to
  * the page it was rendered on.
  */

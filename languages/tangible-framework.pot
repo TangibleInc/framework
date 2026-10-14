@@ -9,7 +9,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-10-14T18:16:54+00:00\n"
+"POT-Creation-Date: 2026-10-14T19:39:48+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: tangible-framework\n"
@@ -270,144 +270,144 @@ msgstr ""
 msgid "Share usage data from this site? Exactly what would be sent: %s."
 msgstr ""
 
-#. translators: %s: plugin name
-#: onboarding/steps.php:612
+#: onboarding/steps.php:613
 #, php-format
 msgid "Get release notes from the makers of %s"
 msgstr ""
 
-#: onboarding/steps.php:613
+#: onboarding/steps.php:614
 msgid "this plugin"
 msgstr ""
 
-#: onboarding/steps.php:633
+#: onboarding/steps.php:634
 msgid "Usage data"
 msgstr ""
 
-#: onboarding/steps.php:642
+#: onboarding/steps.php:643
 msgctxt "setup step state"
 msgid "on file"
 msgstr ""
 
-#: onboarding/steps.php:644
+#: onboarding/steps.php:645
 msgid "Don't share"
 msgstr ""
 
-#: onboarding/steps.php:645
+#: onboarding/steps.php:646
 msgid "Share usage data"
 msgstr ""
 
-#: onboarding/steps.php:650
+#: onboarding/steps.php:651
 msgid "Share usage data from this site?"
 msgstr ""
 
 #. translators: %s: plugin's short name
-#: onboarding/steps.php:653
+#: onboarding/steps.php:654
 #, php-format
 msgid "Optional. %s works exactly the same either way, so No is a complete answer."
 msgstr ""
 
-#: onboarding/steps.php:655
+#: onboarding/steps.php:656
 msgid "Exactly what would be sent"
 msgstr ""
 
 #. translators: %s: plugin name
-#: onboarding/steps.php:725
+#: onboarding/steps.php:726
 #, php-format
 msgid "%s is ready"
 msgstr ""
 
-#: onboarding/steps.php:728
-#: onboarding/steps.php:782
+#: onboarding/steps.php:729
+#: onboarding/steps.php:783
 msgid "What people usually do next"
 msgstr ""
 
-#: onboarding/steps.php:729
-#: onboarding/wizard.php:1383
-msgid "Go to Tangible Home"
+#: onboarding/steps.php:730
+#: onboarding/wizard.php:1379
+msgid "Go to Tangible Hub"
 msgstr ""
 
-#: onboarding/steps.php:736
+#: onboarding/steps.php:737
 msgid "Done"
 msgstr ""
 
-#: onboarding/steps.php:746
+#: onboarding/steps.php:747
 msgid "Finish setup"
 msgstr ""
 
-#: onboarding/steps.php:760
+#: onboarding/steps.php:761
 msgid "Enter an email address for the release notes."
 msgstr ""
 
-#: onboarding/steps.php:805
-#: onboarding/steps.php:809
+#: onboarding/steps.php:806
+#: onboarding/steps.php:810
 msgid "Send to"
 msgstr ""
 
 #. translators: %s: the account's email address, partly masked
-#: onboarding/steps.php:814
+#: onboarding/steps.php:815
 #, php-format
 msgid "%s, your tangible.one account email"
 msgstr ""
 
-#: onboarding/steps.php:815
+#: onboarding/steps.php:816
 msgid "The email on your tangible.one account"
 msgstr ""
 
-#: onboarding/steps.php:817
+#: onboarding/steps.php:818
 msgid "Finish Setup"
 msgstr ""
 
 #. translators: %s: plugin name
-#: onboarding/welcome.php:72
+#: onboarding/welcome.php:74
 #, php-format
 msgid "Welcome to %s"
 msgstr ""
 
-#: onboarding/welcome.php:111
+#: onboarding/welcome.php:113
 msgid "Welcome"
 msgstr ""
 
-#: onboarding/welcome.php:115
+#: onboarding/welcome.php:117
 msgid "Get started"
 msgstr ""
 
-#: onboarding/welcome.php:123
+#: onboarding/welcome.php:125
 msgctxt "setup step state"
 msgid "set up"
 msgstr ""
 
-#: onboarding/welcome.php:174
+#: onboarding/welcome.php:176
 msgid "Keeps license and renewal news out of this dashboard and emails the account owner instead."
 msgstr ""
 
-#: onboarding/welcome.php:175
+#: onboarding/welcome.php:177
 msgid "Keeps upgrade offers and account news out of this dashboard and emails the account owner instead."
 msgstr ""
 
-#: onboarding/welcome.php:180
+#: onboarding/welcome.php:182
 msgid "I am installing this for a client"
 msgstr ""
 
-#: onboarding/welcome.php:182
+#: onboarding/welcome.php:184
 msgid "Covers every Tangible plugin on this site. You can change this later in Settings."
 msgstr ""
 
 #. translators: %s: link text, e.g. "Watch the video"
-#: onboarding/welcome.php:226
+#: onboarding/welcome.php:235
+#: onboarding/welcome.php:279
 #, php-format
 msgid "%s (opens in a new tab)"
 msgstr ""
 
-#: onboarding/welcome.php:248
+#: onboarding/welcome.php:288
 msgid "Watch the video"
 msgstr ""
 
-#: onboarding/welcome.php:249
+#: onboarding/welcome.php:289
 msgid "Read more"
 msgstr ""
 
-#: onboarding/welcome.php:274
+#: onboarding/welcome.php:314
 msgid "(opens in a new tab)"
 msgstr ""
 
@@ -464,23 +464,23 @@ msgstr ""
 msgid "Exit setup"
 msgstr ""
 
-#: onboarding/wizard.php:1375
+#: onboarding/wizard.php:1376
 msgid "Nothing left to ask."
 msgstr ""
 
-#: onboarding/wizard.php:1376
+#: onboarding/wizard.php:1377
 msgid "Everything is either configured or already on file."
 msgstr ""
 
-#: onboarding/wizard.php:1425
+#: onboarding/wizard.php:1428
 msgid "Back"
 msgstr ""
 
-#: onboarding/wizard.php:1438
+#: onboarding/wizard.php:1441
 msgid "Skip this step"
 msgstr ""
 
-#: onboarding/wizard.php:1442
+#: onboarding/wizard.php:1445
 msgid "Continue"
 msgstr ""
 
