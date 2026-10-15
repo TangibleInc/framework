@@ -232,7 +232,9 @@ function render_row($plugin, $f, $s, $client) {
   $settings_url = function_exists('tangible\\framework\\get_plugin_settings_page_url')
     ? framework\get_plugin_settings_page_url($plugin) : '';
   // A client's site shows no licence actions; an update is still the site's.
-  $action = $client && $s['action'] !== 'update' ? null : $s['action'];
+  // row_state ranks a licence action above an update, so on a client's site
+  // an expired plugin with a pending update falls back to its Update.
+  $action = $client && $s['action'] !== 'update' ? ($f['update'] ? 'update' : null) : $s['action'];
   ?>
   <tr>
     <th scope="row">
@@ -517,7 +519,8 @@ function button_class($style) {
 /** The 40px tile: the plugin's icon, or the generic plugin glyph. */
 function render_tile($icon) {
   echo '<span class="tgbl-hub__tile" aria-hidden="true">';
-  if ($icon !== '') {
+  // The catalog filter can hand over null or false.
+  if (is_string($icon) && $icon !== '') {
     echo '<img src="' . esc_url(set_url_scheme($icon)) . '" alt="" width="24" height="24" />';
   } else {
     echo '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" focusable="false"><path fill-rule="evenodd" clip-rule="evenodd" d="M10.5 4v4h3V4H15v4h1.5a1 1 0 0 1 1 1v4l-3 4v2a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1v-2l-3-4V9a1 1 0 0 1 1-1H9V4h1.5ZM11 16.5v2h2v-2l3-4v-3H8v3l3 4Z"/></svg>';
