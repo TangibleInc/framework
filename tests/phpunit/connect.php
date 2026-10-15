@@ -42,11 +42,6 @@ class Connect_TestCase extends \WP_UnitTestCase {
     wp_set_current_user($this->admin);
   }
 
-  private function as_public_site() {
-    // wp-env's test site is localhost; most tests here are about a public one.
-    add_filter('tangible_connect_is_local_site', '__return_false');
-  }
-
   function tearDown(): void {
     connect\clear();
     delete_option(connect\SITE_ID_OPTION);
@@ -67,6 +62,11 @@ class Connect_TestCase extends \WP_UnitTestCase {
       }
       return new \WP_Error('http', 'no route ' . $url);
     }, 10, 3);
+  }
+
+  private function as_public_site() {
+    // wp-env's test site is localhost; most tests here are about a public one.
+    add_filter('tangible_connect_is_local_site', '__return_false');
   }
 
   private function start() {
