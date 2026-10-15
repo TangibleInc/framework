@@ -863,6 +863,13 @@ function render_wizard($plugin) {
        under the hidden menu, which is the ~20px sliver on the launchpad (G-18). */
     body.wp-admin, #wpwrap, #wpcontent, #wpbody { background: #f0f0f0 !important; }
     #wpcontent, #wpbody-content { margin-left: 0 !important; padding: 0 !important; float: none; }
+    /* Below 783px WP gives #wpwrap overflow:auto, which makes it the sticky
+       bands' scroll container — one that never scrolls — so neither the
+       header nor the footer held. */
+    #wpwrap { overflow: visible !important; }
+    /* Below 601px WP pads #wpbody 46px for the admin bar, which the
+       takeover hides: the gap would sit above the wizard. */
+    #wpbody { padding-top: 0 !important; }
     #wpbody-content .tgbl-wizard { min-height: 100vh; }
 
     /* ------------------------------------------------------------------
@@ -987,6 +994,15 @@ function render_wizard($plugin) {
     .tgbl-wizard__stepbar { background: var(--tui-color-bg);
       min-height: 68px; display: flex; align-items: center; justify-content: center;
       padding: 0 var(--tgbl-gutter); }
+
+    /* The header bands stay in view while a long step scrolls, as the
+       footer does: the stepper always, the top bar (and Exit setup) too
+       when the window is tall enough to spare 148px of header. */
+    .tgbl-wizard__stepbar { position: sticky; top: 0; z-index: 2; }
+    @media (min-height: 700px) {
+      .tgbl-wizard__topbar { position: sticky; top: 0; z-index: 3; }
+      .tgbl-wizard__stepbar { top: 80px; }
+    }
 
     /* The form is the flex spine between the bands: page grows, footer sits
        at the bottom of the viewport (G-3). */
