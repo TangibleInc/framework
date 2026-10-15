@@ -60,11 +60,10 @@
 /* The fallback (no media described): a light ground, because a plugin's
    own logo is usually drawn for white and vanishes on the gradient. */
 .tgbl-wizard .tgbl-hero.is-plain { grid-template-columns: 1fr; background: #f6f4fe; color: var(--tui-color-fg); }
+.tgbl-wizard .tgbl-hero.is-plain.has-aside { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 .tgbl-wizard .tgbl-hero.is-plain .tgbl-hero__headline { color: var(--tui-color-fg); }
 @media (max-width: 700px) {
-  .tgbl-wizard .tgbl-hero { grid-template-columns: 1fr; padding: 24px; }
-  .tgbl-wizard .tgbl-stats { grid-auto-flow: row; gap: 16px; }
-  .tgbl-wizard .tgbl-stats__item + .tgbl-stats__item { border-left: 0; }
+  .tgbl-wizard .tgbl-hero, .tgbl-wizard .tgbl-hero.is-plain.has-aside { grid-template-columns: 1fr; padding: 24px; }
 }
 .tgbl-wizard .tgbl-hero__logo { display: block; height: 32px; width: auto; margin-bottom: 24px; }
 .tgbl-wizard .tgbl-hero__headline { margin: 0; font-size: 28px; font-weight: 400; line-height: 1.2;
@@ -83,6 +82,41 @@
   align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 50%;
   background: #fff; color: #5a2fc2; box-shadow: 0 4px 14px rgba(0,0,0,.25); text-decoration: none; }
 .tgbl-wizard .tgbl-play:hover, .tgbl-wizard .tgbl-play:focus-visible { color: #2b1a6b; }
+
+/* The media image as the whole hero: edge to edge, no padding, the
+   badge where the design puts the play button (bottom right). */
+.tgbl-wizard .tgbl-hero.is-image { display: block; position: relative; padding: 0; background: #27144c; }
+.tgbl-wizard .tgbl-hero.is-image img { display: block; width: 100%; height: auto; }
+.tgbl-wizard .tgbl-hero__badge { position: absolute; right: 24px; bottom: 24px; display: flex;
+  align-items: center; justify-content: center; width: 48px; height: 48px; border-radius: 50%;
+  background: #fff; color: #1e1e1e; box-shadow: 0 4px 14px rgba(0,0,0,.25); }
+.tgbl-wizard a.tgbl-hero.is-image:hover .tgbl-hero__badge { transform: scale(1.06); }
+.tgbl-wizard a.tgbl-hero.is-image:focus { box-shadow: none; }
+.tgbl-wizard a.tgbl-hero.is-image:focus-visible { outline: 3px solid #3858e9; outline-offset: -3px; }
+@media (prefers-reduced-motion: no-preference) {
+  .tgbl-wizard .tgbl-hero__badge { transition: transform .15s ease; }
+}
+
+/* The media image: a framed picture with its label beneath, the whole a
+   link when it has one. The label carries the hero's text colour, so it
+   reads on the gradient and on the plain ground alike. */
+.tgbl-wizard .tgbl-hero__figure { display: flex; flex-direction: column; gap: 12px; margin: 0;
+  color: inherit; text-decoration: none; }
+.tgbl-wizard .tgbl-media-link__frame { position: relative; display: block; overflow: hidden;
+  border-radius: 12px; box-shadow: 0 12px 32px rgba(18, 8, 60, .35); }
+.tgbl-wizard .tgbl-hero.is-plain .tgbl-media-link__frame { box-shadow: 0 8px 24px rgba(18, 8, 60, .12); }
+.tgbl-wizard .tgbl-media-link__frame img { display: block; width: 100%; height: auto; }
+.tgbl-wizard .tgbl-media-link__play { position: absolute; inset: 0; margin: auto; display: flex;
+  align-items: center; justify-content: center; width: 52px; height: 52px; border-radius: 50%;
+  background: #fff; color: #5a2fc2; box-shadow: 0 4px 14px rgba(0,0,0,.25); }
+.tgbl-wizard .tgbl-media-link__label { font-size: 14px; line-height: 1.4; }
+.tgbl-wizard .tgbl-media-link .tgbl-media-link__label { text-decoration: underline;
+  text-underline-offset: 3px; }
+.tgbl-wizard .tgbl-media-link__ext { margin-left: 4px; text-decoration: none; display: inline-block; }
+.tgbl-wizard .tgbl-media-link:hover .tgbl-media-link__label { text-decoration-thickness: 2px; }
+.tgbl-wizard .tgbl-media-link:focus { box-shadow: none; } /* WP admin's a:focus ring; ours is the outline */
+.tgbl-wizard .tgbl-media-link:focus-visible { outline: 2px solid currentColor; outline-offset: 4px;
+  border-radius: 12px; }
 
 .tgbl-wizard .tgbl-inset-features { list-style: none; margin: 0; padding: 0;
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
@@ -104,6 +138,15 @@
 .tgbl-wizard .tgbl-stats__item + .tgbl-stats__item { border-left: 1px solid var(--tui-color-divider); }
 .tgbl-wizard .tgbl-stats dt { font-size: 18px; font-weight: 600; line-height: 1.3; color: var(--tui-color-fg); }
 .tgbl-wizard .tgbl-stats dd { margin: 2px 0 0; font-size: 13px; color: var(--tui-color-fg-muted); }
+/* Narrow: one stat per row, rules between them turned horizontal. After
+   the base rules on purpose — the 700px block above them used to say
+   this and lost to source order, so three stats squeezed side by side. */
+@media (max-width: 500px) {
+  .tgbl-wizard .tgbl-stats { grid-auto-flow: row; padding: 8px 0; }
+  .tgbl-wizard .tgbl-stats__item { padding: 12px 24px; }
+  .tgbl-wizard .tgbl-stats__item + .tgbl-stats__item { border-left: 0;
+    border-top: 1px solid var(--tui-color-divider); }
+}
 
 /* Children carry their own top margins (title 0, text 8, field 16, button
    24, divider 24); the card's generic 16px rhythm does not apply here. */
@@ -151,14 +194,17 @@
 /* ── Done ───────────────────────────────────────────────────────────── */
 
 .tgbl-wizard .tgbl-next__label { margin: 0 0 12px; font-size: 14px; font-weight: 500; }
-.tgbl-wizard .tgbl-links { list-style: none; margin: 0; padding: 8px 32px; }
+/* Next steps (Figma "[Core] Pro 02 Done"): a 24px card, rows 12px apart
+   with no rules, underlined links in the accent, the kind as plain muted
+   text at the row's end. */
+.tgbl-wizard .tgbl-links { list-style: none; margin: 0; padding: 24px;
+  display: grid; gap: 12px; }
 .tgbl-wizard .tgbl-links__row { display: flex; align-items: center; justify-content: space-between;
-  gap: 16px; margin: 0; padding: 16px 0; }
-.tgbl-wizard .tgbl-links__row + .tgbl-links__row { border-top: 1px solid var(--tui-color-divider); }
-.tgbl-wizard .tgbl-links__row a { font-size: 14px; text-decoration: none; }
-.tgbl-wizard .tgbl-links__row a:hover { text-decoration: underline; text-underline-offset: 3px; }
-.tgbl-wizard .tgbl-tag { flex: none; padding: 2px 8px; border-radius: 4px; background: #f0f0f0;
-  font-size: 12px; color: var(--tui-color-fg-muted); }
+  gap: 8px; margin: 0; }
+.tgbl-wizard .tgbl-links__row a { font-size: 13px; line-height: 20px; color: var(--tui-theme-primary-base);
+  text-decoration: underline; text-underline-offset: 2px; }
+.tgbl-wizard .tgbl-links__row a:hover { text-decoration-thickness: 2px; }
+.tgbl-wizard .tgbl-tag { flex: none; font-size: 12px; line-height: 16px; color: var(--tui-color-fg-muted); }
 
 /* A band (§4): tinted, no shadow, after the step's main content. */
 .tgbl-wizard .tgbl-band { padding: 24px; border-radius: var(--tgbl-card-radius); background: #e2e9ff; }
@@ -186,3 +232,6 @@
 
 /* The centred Done heading keeps its blocks left-aligned (§6, §7). */
 .tgbl-wizard .tgbl-wizard__page.is-center .step-intro { max-width: 560px; margin-left: auto; margin-right: auto; }
+
+/* The return visit's inline way on, under its centred intro. */
+.tgbl-wizard .tgbl-all-done__next { margin: 24px 0 0; text-align: center; }

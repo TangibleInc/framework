@@ -113,7 +113,7 @@ function after_connected($plugin_name) {
  */
 function handle_return($user_id, $query) {
   $flow = get_transient(flow_key($user_id));
-  $fallback = [ 'status' => 'error', 'return_to' => admin_url('admin.php?page=tangible-home') ];
+  $fallback = [ 'status' => 'error', 'return_to' => \tangible\hub\url() ];
   // No flow for THIS user: expired, already used, or someone else started it.
   if (!is_array($flow) || empty($flow['state'])) return $fallback;
   $out = [ 'return_to' => $flow['return_to'] ?: $fallback['return_to'] ];
@@ -173,18 +173,18 @@ function notice_key($user_id) {
 // ── admin-post endpoints ─────────────────────────────────────────────────
 
 add_action('admin_post_tangible_connect_start', function () {
-  if (!current_user_can('manage_options')) wp_die('Nope', 403);
+  if (!current_user_can('manage_options')) wp_die(esc_html__('Nope', 'tangible-framework'), 403);
   check_admin_referer('tangible_connect_start');
   $return_to = wp_validate_redirect(
     wp_unslash($_POST['return_to'] ?? ''),
-    admin_url('admin.php?page=tangible-home')
+    \tangible\hub\url()
   );
   wp_redirect(start_flow(get_current_user_id(), $return_to));   // external, deliberate
   exit;
 });
 
 add_action('admin_post_tangible_connect_return', function () {
-  if (!current_user_can('manage_options')) wp_die('Nope', 403);
+  if (!current_user_can('manage_options')) wp_die(esc_html__('Nope', 'tangible-framework'), 403);
   check_admin_referer('tangible_connect_return');
   $result = handle_return(get_current_user_id(), wp_unslash($_GET));
   set_transient(notice_key(get_current_user_id()), $result['status'], 5 * MINUTE_IN_SECONDS);
@@ -193,21 +193,21 @@ add_action('admin_post_tangible_connect_return', function () {
 });
 
 add_action('admin_post_tangible_connect_confirm', function () {
-  if (!current_user_can('manage_options')) wp_die('Nope', 403);
+  if (!current_user_can('manage_options')) wp_die(esc_html__('Nope', 'tangible-framework'), 403);
   check_admin_referer('tangible_connect_confirm');
   $status = confirm();
   if ($status === 'active') after_connected('');
   set_transient(notice_key(get_current_user_id()), $status === 'active' ? 'connected' : $status, 5 * MINUTE_IN_SECONDS);
-  wp_safe_redirect(wp_get_referer() ?: admin_url('admin.php?page=tangible-home'));
+  wp_safe_redirect(wp_get_referer() ?: \tangible\hub\url());
   exit;
 });
 
 add_action('admin_post_tangible_connect_disconnect', function () {
-  if (!current_user_can('manage_options')) wp_die('Nope', 403);
+  if (!current_user_can('manage_options')) wp_die(esc_html__('Nope', 'tangible-framework'), 403);
   check_admin_referer('tangible_connect_disconnect');
   disconnect();
   set_transient(notice_key(get_current_user_id()), 'disconnected', 5 * MINUTE_IN_SECONDS);
-  wp_safe_redirect(wp_get_referer() ?: admin_url('admin.php?page=tangible-home'));
+  wp_safe_redirect(wp_get_referer() ?: \tangible\hub\url());
   exit;
 });
 

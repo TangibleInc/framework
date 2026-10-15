@@ -12,7 +12,7 @@
  *
  *   rows.php           facts → what each row says (pure, tested)
  *   page.php           the page, server-rendered
- *   hub.css            the hybrid skin
+ *   hub.css            layout; tui.css + wp-admin-theme.css carry the look
  *   notifications.php  the rail's store
  *
  * The Hub renders facts and stores nothing of its own, beyond dismissals
@@ -55,14 +55,23 @@ function is_client_managed_site() {
   return $value === 'client';
 }
 
+/**
+ * The Hub's URL. It lives under Settings, so links go through
+ * options-general.php: admin.php?page=… reaches the same page but leaves
+ * Settings → Tangible Hub unhighlighted in the menu.
+ */
+function url() {
+  return admin_url('options-general.php?page=' . PAGE);
+}
+
 // ── menu: Settings → Tangible Hub ─────────────────────────────────────────
 // For now the Hub is not the first item under the shared Tangible top-level;
 // it lives under Settings. The page slug is unchanged, so admin.php?page=… links keep working.
 add_action('admin_menu', function () {
   add_submenu_page(
     'options-general.php',
-    'Tangible Hub',
-    'Tangible Hub',
+    __('Tangible Hub', 'tangible-framework'),
+    __('Tangible Hub', 'tangible-framework'),
     'manage_options',
     PAGE,
     'tangible\\hub\\render_page'
@@ -97,7 +106,7 @@ add_action('admin_bar_menu', function ($bar) {
   $bar->add_node([
     'id'    => 'tangible-hub',
     'title' => $tiles . $pill,
-    'href'  => admin_url('admin.php?page=' . PAGE),
+    'href'  => url(),
     'meta'  => [ 'title' => 'Tangible' . ($count ? " — $count unread" : '') ],
   ]);
 }, 80);
@@ -121,7 +130,7 @@ add_action('wp_before_admin_bar_render', function () {
 
 // ── actions — every one manage_options + its own nonce ─────────────────────
 function back_to_hub() {
-  wp_safe_redirect(wp_get_referer() ?: admin_url('admin.php?page=' . PAGE));
+  wp_safe_redirect(wp_get_referer() ?: url());
   exit;
 }
 
@@ -153,5 +162,13 @@ add_action('admin_post_tangible_hub_connect_snooze', function () {
   if (!current_user_can('manage_options')) wp_die('Nope', 403);
   check_admin_referer('tangible_hub_connect_snooze');
   update_user_meta(get_current_user_id(), BAND_SNOOZE_META, time() + BAND_SNOOZE_DAYS * DAY_IN_SECONDS);
+  back_to_hub();
+});
+
+// "More from Tangible" stays dismissed for this admin.
+add_action('admin_post_tangible_hub_more_dismiss', function () {
+  if (!current_user_can('manage_options')) wp_die('Nope', 403);
+  check_admin_referer('tangible_hub_more_dismiss');
+  update_user_meta(get_current_user_id(), MORE_DISMISSED_META, 1);
   back_to_hub();
 });

@@ -117,7 +117,23 @@ add_action('tangible_connect_cleared', function () {
 
 // ── Hub pieces (the page itself is hub/page.php) ─────────────────────
 
-/** What the Hub says after a Connect round trip (the flow sets the key). */
+/**
+ * What the Hub says after a Connect round trip (the flow sets the key).
+ * NOTICE_COPY is the English source, kept for code that read it; the Hub
+ * shows notice_copy(), translated.
+ */
+function notice_copy($key) {
+  $copy = [
+    'connected'    => __('This site is connected to tangible.one.', 'tangible-framework'),
+    'pending'      => __('Connected, but tangible.one could not verify this site yet. Check that the REST API is reachable, then try again.', 'tangible-framework'),
+    'denied'       => __('Connection cancelled.', 'tangible-framework'),
+    'error'        => __('Connecting did not work. Start again.', 'tangible-framework'),
+    'revoked'      => __('The connection was revoked on tangible.one.', 'tangible-framework'),
+    'disconnected' => __('This site is no longer connected.', 'tangible-framework'),
+  ];
+  return $copy[$key] ?? '';
+}
+
 const NOTICE_COPY = [
   'connected'    => 'This site is connected to tangible.one.',
   'pending'      => 'Connected, but tangible.one could not verify this site yet. Check that the REST API is reachable, then try again.',

@@ -336,7 +336,10 @@ function register_wizard($plugin, $args = []) {
     add_filter('plugin_action_links_' . plugin_basename($plugin->file_path), function ($links) use ($plugin, $name) {
       if (!current_user_can('manage_options')) return $links;
       $left = steps_left($name);
-      $label = $left ? 'Setup (' . $left . ' step' . ($left === 1 ? '' : 's') . ' left)' : 'Setup';
+      $label = $left
+        /* translators: %s: number of setup steps left */
+        ? sprintf(_n('Setup (%s step left)', 'Setup (%s steps left)', $left, 'tangible-framework'), number_format_i18n($left))
+        : __('Setup', 'tangible-framework');
       array_unshift($links, '<a href="' . esc_url(get_setup_url($plugin)) . '">' . esc_html($label) . '</a>');
       return $links;
     });
@@ -354,13 +357,19 @@ function register_wizard($plugin, $args = []) {
     // sent later in the request. Supply the title before admin-header runs.
     if ($hook) {
       add_action('load-' . $hook, function () use ($plugin) {
-        $GLOBALS['title'] = ($plugin->title ?? $plugin->name) . ' setup';
+        /* translators: %s: plugin name */
+        $GLOBALS['title'] = sprintf(__('%s setup', 'tangible-framework'), $plugin->title ?? $plugin->name);
         // The wizard is a takeover: the CSS hides the admin bar, but WP still
         // emits its markup and a remote gravatar request for it. Inside
         // wp-admin the `show_admin_bar` filter is never consulted
         // (is_admin_bar_showing() returns true outright for is_admin()), so
         // the render action is what has to go.
         remove_action('in_admin_header', 'wp_admin_bar_render', 0);
+        // Screen Options is a float at the top of #wpbody-content, and the
+        // wizard is a new formatting context, so it narrows beside the
+        // float: a grey strip down the right of every step. Not emitting it
+        // is the fix; the help tab, if a plugin adds one, is hidden in CSS.
+        add_filter('screen_options_show_screen', '__return_false');
       });
     }
   });
@@ -390,6 +399,9 @@ function register_wizard($plugin, $args = []) {
 
   add_action('admin_init', function () use ($plugin, $name) {
     if (($_GET['page'] ?? '') === get_setup_slug($plugin)) return;
+    // The Hub shows pending setup itself (Finish setting up), so the notice
+    // would only repeat it there.
+    if (defined('tangible\\hub\\PAGE') && ($_GET['page'] ?? '') === \tangible\hub\PAGE) return;
     $notice = setup_notice($plugin);
     if (!$notice) return;
     framework\register_admin_notice(function () use ($plugin, $notice) {
@@ -401,11 +413,12 @@ function register_wizard($plugin, $args = []) {
       // When the licence is what's missing, say so: this notice is the only
       // licence message while setup is pending (the updater's yield below).
       $what = $notice['licence']
-        ? 'add your license key to finish setup.'
-        : "setup has $n step" . ($n === 1 ? '' : 's') . ' left.';
+        ? __('add your license key to finish setup.', 'tangible-framework')
+        /* translators: %s: number of setup steps left */
+        : sprintf(_n('setup has %s step left.', 'setup has %s steps left.', $n, 'tangible-framework'), number_format_i18n($n));
       echo "<div class=\"$class\" data-tangible-admin-notice=\"$key\">"
-         . "<p><strong>$title</strong> — $what "
-         . "<a href=\"$url\">Continue setup</a></p></div>";
+         . "<p><strong>$title</strong> — " . esc_html($what) . ' '
+         . "<a href=\"$url\">" . esc_html__('Continue setup', 'tangible-framework') . '</a></p></div>';
     });
   });
 
@@ -560,7 +573,7 @@ function step_error_key($plugin_name) {
 }
 
 add_action('admin_post_tangible_onboarding_step', function () {
-  if (!current_user_can('manage_options')) wp_die('Nope');
+  if (!current_user_can('manage_options')) wp_die(esc_html__('Nope', 'tangible-framework'));
   check_admin_referer('tangible_onboarding_step');
   $plugin_name = sanitize_text_field($_POST['plugin'] ?? '');
   handle_step_submission($plugin_name, $_POST);
@@ -615,11 +628,12 @@ add_action('admin_post_tangible_onboarding_step', function () {
  */
 function render_stepper($rail, $current_id) {
   ?>
-  <nav aria-label="Setup progress" class="tgbl-steps">
+  <nav aria-label="<?php esc_attr_e('Setup progress', 'tangible-framework'); ?>" class="tgbl-steps">
     <ol class="tgbl-steps__list">
       <?php foreach ($rail as $r) :
         $state = $r['state'];
-        $suffix = $state === 'done' ? 'complete' : ($state === 'skipped' ? 'skipped' : ''); ?>
+        $suffix = $state === 'done' ? _x('complete', 'setup step state', 'tangible-framework')
+          : ($state === 'skipped' ? _x('skipped', 'setup step state', 'tangible-framework') : ''); ?>
         <li class="tgbl-steps__step" data-state="<?php echo esc_attr($state); ?>"
             <?php if ($r['id'] === $current_id) echo 'aria-current="step"'; ?>>
           <span class="tgbl-steps__dot" aria-hidden="true"></span>
@@ -727,7 +741,9 @@ function render_lockup($plugin) {
   if ($logo) {
     ?>
     <img class="tgbl-wizard__logo is-plugin" src="<?php echo esc_url($logo); ?>"
-         alt="<?php echo esc_attr($plugin->title ?? $plugin->name); ?> setup" />
+         alt="<?php
+           /* translators: %s: plugin name */
+           echo esc_attr(sprintf(__('%s setup', 'tangible-framework'), $plugin->title ?? $plugin->name)); ?>" />
     <?php
     return;
   }
@@ -852,11 +868,19 @@ function render_wizard($plugin) {
     /* Full-screen takeover: the wizard owns the page (Figma: no admin chrome). */
     html.wp-toolbar { padding-top: 0 !important; }
     #wpadminbar, #adminmenumain, #adminmenuback, #adminmenuwrap, #adminmenu, #wpfooter,
+    #screen-meta, #screen-meta-links,
     .notice, .update-nag, .updated, .error:not(.tgbl-keep) { display: none !important; }
     /* The admin menu's dark column is also painted by body/#wpwrap backgrounds
        under the hidden menu, which is the ~20px sliver on the launchpad (G-18). */
     body.wp-admin, #wpwrap, #wpcontent, #wpbody { background: #f0f0f0 !important; }
     #wpcontent, #wpbody-content { margin-left: 0 !important; padding: 0 !important; float: none; }
+    /* Below 783px WP gives #wpwrap overflow:auto, which makes it the sticky
+       bands' scroll container — one that never scrolls — so neither the
+       header nor the footer held. */
+    #wpwrap { overflow: visible !important; }
+    /* Below 601px WP pads #wpbody 46px for the admin bar, which the
+       takeover hides: the gap would sit above the wizard. */
+    #wpbody { padding-top: 0 !important; }
     #wpbody-content .tgbl-wizard { min-height: 100vh; }
 
     /* ------------------------------------------------------------------
@@ -967,7 +991,7 @@ function render_wizard($plugin) {
       height: 80px; padding: 0 var(--tgbl-gutter); background: var(--tui-color-bg);
       border-bottom: 1px solid var(--tgbl-hairline); }
     .tgbl-wizard__logo { display: block; height: 26px; width: auto; flex: none; }
-    .tgbl-wizard__logo.is-plugin { height: 32px; }
+    .tgbl-wizard__logo.is-plugin { height: 48px; }
     .tgbl-wizard__lockup { font-size: var(--tgbl-label); font-weight: 600;
       letter-spacing: .06em; text-transform: uppercase; }
     .tgbl-wizard__lockup span { color: var(--tui-color-fg-muted); font-weight: 600; }
@@ -981,6 +1005,15 @@ function render_wizard($plugin) {
     .tgbl-wizard__stepbar { background: var(--tui-color-bg);
       min-height: 68px; display: flex; align-items: center; justify-content: center;
       padding: 0 var(--tgbl-gutter); }
+
+    /* The header bands stay in view while a long step scrolls, as the
+       footer does: the stepper always, the top bar (and Exit setup) too
+       when the window is tall enough to spare 148px of header. */
+    .tgbl-wizard__stepbar { position: sticky; top: 0; z-index: 2; }
+    @media (min-height: 700px) {
+      .tgbl-wizard__topbar { position: sticky; top: 0; z-index: 3; }
+      .tgbl-wizard__stepbar { top: 80px; }
+    }
 
     /* The form is the flex spine between the bands: page grows, footer sits
        at the bottom of the viewport (G-3). */
@@ -1353,7 +1386,7 @@ function render_wizard($plugin) {
     <header class="tgbl-wizard__topbar">
       <?php render_lockup($plugin); ?>
       <a class="tui-button is-style-ghost is-theme-primary tgbl-wizard__exit"
-         href="<?php echo esc_url(admin_url('admin.php?page=tangible-home')); ?>">Exit setup</a>
+         href="<?php echo esc_url(\tangible\hub\url()); ?>"><?php esc_html_e('Exit setup', 'tangible-framework'); ?></a>
     </header>
     <div class="tgbl-wizard__stepbar">
       <?php render_stepper($plan['rail'], $plan['current']); ?>
@@ -1362,18 +1395,16 @@ function render_wizard($plugin) {
     <?php if ($all_done) : ?>
       <form>
         <main class="tgbl-wizard__well">
-          <div class="tgbl-wizard__page">
+          <?php // Centred like Done, which this is on a return visit. ?>
+          <div class="<?php echo esc_attr(page_classes([ 'width' => 'narrow', 'align' => 'center' ])); ?>">
             <div class="tgbl-wizard__body">
-              <h2>Nothing left to ask.</h2>
-              <p class="step-intro">Everything is either configured or already on file.</p>
+              <h2><?php esc_html_e('Nothing left to ask.', 'tangible-framework'); ?></h2>
+              <p class="step-intro"><?php esc_html_e('Everything is either configured or already on file.', 'tangible-framework'); ?></p>
+              <p class="tgbl-all-done__next"><a class="tui-button is-style-outline"
+                 href="<?php echo esc_url(\tangible\hub\url()); ?>"><?php esc_html_e('Go to Tangible Hub', 'tangible-framework'); ?></a></p>
             </div>
           </div>
         </main>
-        <footer class="tgbl-wizard__footer">
-          <span style="flex:1"></span>
-          <a class="tui-button is-theme-primary"
-             href="<?php echo esc_url(admin_url('admin.php?page=tangible-home')); ?>">Go to Tangible Home</a>
-        </footer>
       </form>
     <?php else : ?>
       <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
@@ -1412,12 +1443,17 @@ function render_wizard($plugin) {
             </div>
           </div>
         </main>
+        <?php
+        // The footer only when it holds something: Done with its button in
+        // the body, and no Back, would otherwise be an empty white band.
+        $has_actions = !empty($step['actions']) && is_array($step['actions']);
+        if ($back || $has_actions || $step['skippable'] || empty($step['submit_in_body'])) : ?>
         <footer class="tgbl-wizard__footer">
           <?php if ($back) : ?>
-            <button class="tui-button is-style-outline tgbl-back" type="submit" name="do" value="back" formnovalidate>Back</button>
+            <button class="tui-button is-style-outline tgbl-back" type="submit" name="do" value="back" formnovalidate><?php esc_html_e('Back', 'tangible-framework'); ?></button>
           <?php endif; ?>
           <span style="flex:1"></span>
-          <?php if (!empty($step['actions']) && is_array($step['actions'])) :
+          <?php if ($has_actions) :
             // Answer buttons: equal standing, nothing preselected — each one
             // is a complete answer (the Wordfence shape, now in the footer).
             foreach ($step['actions'] as $answer => $action) :
@@ -1427,14 +1463,15 @@ function render_wizard($plugin) {
             <?php endforeach;
           else : ?>
             <?php if ($step['skippable']) : ?>
-              <button class="tgbl-skip" type="submit" name="do" value="skip">Skip this step</button>
+              <button class="tgbl-skip" type="submit" name="do" value="skip"><?php esc_html_e('Skip this step', 'tangible-framework'); ?></button>
             <?php endif; ?>
             <?php if (empty($step['submit_in_body'])) : ?>
               <button class="tui-button is-theme-primary" type="submit" name="do" value="continue"><?php
-                echo esc_html($step['submit_label'] ?? 'Continue'); ?></button>
+                echo esc_html($step['submit_label'] ?? __('Continue', 'tangible-framework')); ?></button>
             <?php endif; ?>
           <?php endif; ?>
         </footer>
+        <?php endif; ?>
       </form>
     <?php endif; ?>
   </div>

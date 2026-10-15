@@ -371,7 +371,7 @@ function licence_info($plugin) {
  */
 function activate_licence($plugin, $key) {
   if (!function_exists('tangible\\updater\\cloud_endpoint')) {
-    return new \WP_Error('tangible_onboarding', 'The updater module is not available on this site.');
+    return new \WP_Error('tangible_onboarding', __('The updater module is not available on this site.', 'tangible-framework'));
   }
 
   // A different key can mean a different ACCOUNT: stale decisions from the
@@ -399,10 +399,11 @@ function activate_licence($plugin, $key) {
 
   if ($code === 403 || empty($body->success)) {
     \tangible\updater\set_license_status($plugin, $body->license ?? 'invalid');
+    $failed = __('License validation failed.', 'tangible-framework');
     $message = $code === 403
-      ? ($body->error ?? 'License validation failed.')
+      ? ($body->error ?? $failed)
       : \tangible\updater\check_license_response($body, $plugin);
-    return new \WP_Error('tangible_onboarding', is_string($message) ? $message : 'License validation failed.');
+    return new \WP_Error('tangible_onboarding', is_string($message) ? $message : $failed);
   }
 
   \tangible\updater\set_license_status($plugin, $body->license ?? 'valid');
@@ -437,7 +438,7 @@ function handle_licence_field($plugin) {
   if (licence_is_active($plugin) && ($key === '' || $key === $existing)) return true;
   if ($key === '') {
     return new \WP_Error('tangible_onboarding',
-      'Enter your license key to continue. You can find it in your tangible.one account.');
+      __('Enter your license key to continue. You can find it in your tangible.one account.', 'tangible-framework'));
   }
   return activate_licence($plugin, $key);
 }
@@ -449,25 +450,31 @@ function render_licence_field($plugin) {
     ? (string) \tangible\updater\get_license_status($plugin) : '';
   $info = licence_info($plugin);
   ?>
-  <h3 class="tgbl-card__title">Your license key</h3>
-  <p class="tgbl-card__text">Find it in your <a href="https://tangible.one/licensing" target="_blank" rel="noopener">tangible.one account</a>.
-     It activates this site and unlocks updates.</p>
-  <label class="tui-visually-hidden" for="tgbl-license-key">License key</label>
+  <h3 class="tgbl-card__title"><?php esc_html_e('Your license key', 'tangible-framework'); ?></h3>
+  <p class="tgbl-card__text"><?php
+    printf(
+      /* translators: %s: link to the customer's tangible.one account, "tangible.one account" */
+      esc_html__('Find it in your %s. It activates this site and unlocks updates.', 'tangible-framework'),
+      '<a href="https://tangible.one/licensing" target="_blank" rel="noopener">' . esc_html__('tangible.one account', 'tangible-framework') . '</a>'
+    ); ?></p>
+  <label class="tui-visually-hidden" for="tgbl-license-key"><?php esc_html_e('License key', 'tangible-framework'); ?></label>
   <input type="text" id="tgbl-license-key" name="license_key" class="tgbl-input code" autocomplete="off"
          spellcheck="false" value="<?php echo esc_attr($existing); ?>" placeholder="TGBL-XXXX-XXXX-XXXX" />
   <?php
   if (licence_is_active($plugin)) {
-    $line = 'Your license is valid.';
+    $line = __('Your license is valid.', 'tangible-framework');
     $item = $info['item'] ?? ($plugin->title ?? '');
     $expires = $info['expires'] ?? '';
-    if ($expires === 'lifetime') $line .= ' ' . $item . ', lifetime.';
-    elseif ($expires !== '' && strtotime($expires)) $line .= ' ' . $item . ', renews ' . date_i18n('j F Y', strtotime($expires)) . '.';
+    /* translators: %s: product name on the licence */
+    if ($expires === 'lifetime') $line .= ' ' . sprintf(__('%s, lifetime.', 'tangible-framework'), $item);
+    /* translators: 1: product name on the licence, 2: renewal date */
+    elseif ($expires !== '' && strtotime($expires)) $line .= ' ' . sprintf(__('%1$s, renews %2$s.', 'tangible-framework'), $item, date_i18n('j F Y', strtotime($expires)));
     echo '<p class="tgbl-status is-ok">' . check_svg() . '<span>' . esc_html($line) . '</span></p>';
     // A licensed site is never asked about usage data (the Terms are the
     // grant, ADR-011), so this is where it is told (Figma "[Core] Pro 01").
-    if (!site_telemetry_refused()) echo '<p class="tgbl-status">' . esc_html(TERMS_USAGE_DISCLOSURE) . '</p>';
+    if (!site_telemetry_refused()) echo '<p class="tgbl-status">' . esc_html(terms_usage_disclosure()) . '</p>';
   } elseif ($status === 'pending' && $existing !== '') {
-    echo '<p class="tgbl-status">Saved. tangible.one could not be reached to confirm it, so it will be checked again shortly.</p>';
+    echo '<p class="tgbl-status">' . esc_html__('Saved. tangible.one could not be reached to confirm it, so it will be checked again shortly.', 'tangible-framework') . '</p>';
   }
 }
 
@@ -495,28 +502,49 @@ function usage_rows($plugin) {
   }, ARRAY_FILTER_USE_BOTH));
   $theme = wp_get_theme();
 
+  // The framework's own key stays English, so a filter can address it on
+  // any locale; it is translated only when shown.
   $counts = (array) apply_filters('tangible_onboarding_content_counts', [
     'posts and pages' => (int) ($posts->publish ?? 0) + (int) ($pages->publish ?? 0),
   ], $plugin);
   $content = [];
-  foreach ($counts as $label => $n) $content[] = number_format_i18n((int) $n) . ' ' . $label;
+  foreach ($counts as $label => $n) {
+    if ($label === 'posts and pages') $label = __('posts and pages', 'tangible-framework');
+    $content[] = number_format_i18n((int) $n) . ' ' . $label;
+  }
 
   // One row per group of what a check-in sends, each with this site's value
-  // (Cristian's copy, Plugin Wizard Figma "Free 02"). The keys are the wording
-  // the consent records (telemetry_consent_text), so renaming one is a new
-  // consent wording.
+  // (Cristian's copy, Plugin Wizard Figma "Free 02"). The keys stay English —
+  // they are what `tangible_onboarding_usage_rows` filters address — and are
+  // shown, and recorded in the consent wording, through usage_row_label().
+  // Renaming one is a new consent wording.
   $rows = [
     'WordPress and PHP versions' => $wp_version . ' · PHP ' . implode('.', array_slice(explode('.', PHP_VERSION), 0, 2)),
     'Theme'                      => $theme->exists() ? $theme->get('Name') : '—',
     'Active plugins'             => number_format_i18n(count((array) get_option('active_plugins', []))),
-    'Users and roles'            => sprintf('%s users · %s roles',
+    /* translators: 1: number of users, 2: number of roles */
+    'Users and roles'            => sprintf(__('%1$s users · %2$s roles', 'tangible-framework'),
       number_format_i18n((int) ($users['total_users'] ?? 0)), number_format_i18n($roles)),
     'Published content'          => implode(' · ', $content),
-    'Hosting provider'           => detect_host() ?: 'Not detected',
-    'Page speed'                 => 'Weekly averages, measured on this site',
+    'Hosting provider'           => detect_host() ?: __('Not detected', 'tangible-framework'),
+    'Page speed'                 => __('Weekly averages, measured on this site', 'tangible-framework'),
   ];
   $rows = apply_filters('tangible_onboarding_usage_rows', $rows, $plugin);
   return is_array($rows) ? $rows : [];
+}
+
+/** A usage row's label as shown: the core rows translated, a plugin's own as given. */
+function usage_row_label($key) {
+  $labels = [
+    'WordPress and PHP versions' => __('WordPress and PHP versions', 'tangible-framework'),
+    'Theme'                      => __('Theme', 'tangible-framework'),
+    'Active plugins'             => __('Active plugins', 'tangible-framework'),
+    'Users and roles'            => __('Users and roles', 'tangible-framework'),
+    'Published content'          => __('Published content', 'tangible-framework'),
+    'Hosting provider'           => __('Hosting provider', 'tangible-framework'),
+    'Page speed'                 => __('Page speed', 'tangible-framework'),
+  ];
+  return $labels[$key] ?? (string) $key;
 }
 
 /**
@@ -546,23 +574,49 @@ function detect_host() {
   return (string) apply_filters('tangible_onboarding_host', $found);
 }
 
-/** Told to licensed and connected sites, who are never asked (Cristian's copy, Plugin Wizard Figma). */
+/**
+ * Told to licensed and connected sites, who are never asked (Cristian's copy,
+ * Plugin Wizard Figma). The constants are the English source, kept for code
+ * that read them; what is shown comes from the functions, translated.
+ */
 const TERMS_USAGE_DISCLOSURE = 'Usage data from this site is now shared under your tangible.one terms. '
   . 'You can turn it off in Settings → Tangible Plugins.';
 
 const USAGE_NOTE ='Never your content, your users or your visitors. One answer covers every Tangible plugin '
   . 'on this site, and you can change it any time in Settings.';
 
-/** The exact wording shown, row labels included — provable later. */
-function telemetry_consent_text($rows) {
-  return 'Share usage data from this site? Exactly what would be sent: ' . implode(', ', array_keys($rows))
-    . '. ' . USAGE_NOTE . ' (telemetry v2, site answer, wizard v3)';
+function terms_usage_disclosure() {
+  return __('Usage data from this site is now shared under your tangible.one terms. You can turn it off in Settings → Tangible Plugins.', 'tangible-framework');
 }
 
-/** The release-notes band's wording, per plugin. */
+function usage_note() {
+  return __('Never your content, your users or your visitors. One answer covers every Tangible plugin on this site, and you can change it any time in Settings.', 'tangible-framework');
+}
+
+/**
+ * The exact wording shown, row labels included — provable later. Recorded in
+ * the language it was shown in; the version tag stays English so the record
+ * is identifiable whatever the language. In English it is byte-identical to
+ * the wording recorded before translation existed.
+ */
+function telemetry_consent_text($rows) {
+  /* translators: %s: comma-separated list of what would be sent */
+  return sprintf(__('Share usage data from this site? Exactly what would be sent: %s.', 'tangible-framework'),
+      implode(', ', array_map(__NAMESPACE__ . '\\usage_row_label', array_keys($rows))))
+    . ' ' . usage_note() . ' (telemetry v2, site answer, wizard v3)';
+}
+
+/** The release-notes band's wording, per plugin; the note after it is the record's, not shown. */
 function marketing_consent_text($plugin) {
-  return 'Get release notes from the makers of ' . ($plugin->title ?? $plugin->name ?? 'this plugin')
+  return release_notes_title($plugin)
     . '. Recorded when Finish Setup is pressed with this box shown. (plugin wizard opt-in v2, Done band)';
+}
+
+function release_notes_title($plugin) {
+  $name = $plugin ? short_title($plugin) : '';
+  /* translators: %s: plugin name */
+  return sprintf(__('Get release notes from the makers of %s', 'tangible-framework'),
+    $name !== '' ? $name : __('this plugin', 'tangible-framework'));
 }
 
 add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name = '') {
@@ -582,7 +636,7 @@ add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name =
 
   $steps[] = [
     'id'     => 'usage',
-    'label'  => 'usage data',
+    'label'  => __('Usage data', 'tangible-framework'),
     'weight' => 20,
     // Recorded per plugin so the rail keeps it as done for THIS setup; the
     // answer itself is the site-wide outbox entry every plugin reads.
@@ -591,25 +645,26 @@ add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name =
     'skippable' => false,   // "Don't share" is a complete answer, so there is no skip
     'hidden_when_skipped' => true,
     'needed' => function () use ($ask_telemetry) { return $ask_telemetry; },
-    'skip_note' => 'on file',
+    'skip_note' => _x('on file', 'setup step state', 'tangible-framework'),
     'actions' => [
-      'declined' => [ 'label' => "Don't share", 'style' => 'outline' ],
-      'granted'  => [ 'label' => 'Share usage data', 'style' => 'primary' ],
+      'declined' => [ 'label' => __("Don't share", 'tangible-framework'), 'style' => 'outline' ],
+      'granted'  => [ 'label' => __('Share usage data', 'tangible-framework'), 'style' => 'primary' ],
     ],
     'render' => function ($plugin) {
       $rows = usage_rows($plugin);
       ?>
-      <h2>Share usage data from this site?</h2>
-      <p class="step-intro">Optional. <?php echo esc_html(short_title($plugin)); ?> works exactly the same
-         either way, so No is a complete answer.</p>
+      <h2><?php esc_html_e('Share usage data from this site?', 'tangible-framework'); ?></h2>
+      <p class="step-intro"><?php
+        /* translators: %s: plugin's short name */
+        echo esc_html(sprintf(__('Optional. %s works exactly the same either way, so No is a complete answer.', 'tangible-framework'), short_title($plugin))); ?></p>
       <section class="tgbl-card">
-        <h3 class="tgbl-card__title">Exactly what would be sent</h3>
+        <h3 class="tgbl-card__title"><?php esc_html_e('Exactly what would be sent', 'tangible-framework'); ?></h3>
         <dl class="tgbl-facts">
           <?php foreach ($rows as $label => $value) : ?>
-            <div class="tgbl-facts__row"><dt><?php echo esc_html($label); ?></dt><dd><?php echo esc_html($value); ?></dd></div>
+            <div class="tgbl-facts__row"><dt><?php echo esc_html(usage_row_label($label)); ?></dt><dd><?php echo esc_html($value); ?></dd></div>
           <?php endforeach; ?>
         </dl>
-        <p class="tgbl-card__note"><?php echo esc_html(USAGE_NOTE); ?></p>
+        <p class="tgbl-card__note"><?php echo esc_html(usage_note()); ?></p>
       </section>
       <?php
     },
@@ -672,18 +727,19 @@ add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name =
     ? framework\get_plugin($plugin_name) : null;
   $title = $plugin->title ?? $plugin_name;
   $done = apply_filters('tangible_onboarding_done', [
-    'heading' => $title . ' is ready',
+    /* translators: %s: plugin name */
+    'heading' => sprintf(__('%s is ready', 'tangible-framework'), $plugin ? short_title($plugin) : $title),
     'summary' => '',
     'notices' => [],
-    'links_label' => 'What people usually do next',
-    'primary' => [ 'label' => 'Go to Tangible Home', 'url' => admin_url('admin.php?page=tangible-home') ],
+    'links_label' => __('What people usually do next', 'tangible-framework'),
+    'primary' => [ 'label' => __('Go to Tangible Hub', 'tangible-framework'), 'url' => \tangible\hub\url() ],
     'links'   => [],
   ], $plugin);
   $ask_marketing = is_object($facts) && ($facts->ask['marketing'] ?? null) === 'ask';
 
   $steps[] = [
     'id'     => 'done',
-    'label'  => 'done',
+    'label'  => __('Done', 'tangible-framework'),
     'weight' => 1000,
     // Terminal: never a reason on its own to redirect, notify, or count as
     // "steps left" — it only closes a wizard that asked something.
@@ -693,8 +749,8 @@ add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name =
     'width'  => 'narrow',
     'align'  => 'center',
     'submit_in_body' => $ask_marketing,
-    'submit_label' => 'Finish setup',
-    'redirect_to'  => $done['primary']['url'] ?? admin_url('admin.php?page=tangible-home'),
+    'submit_label' => __('Finish setup', 'tangible-framework'),
+    'redirect_to'  => $done['primary']['url'] ?? \tangible\hub\url(),
     'render' => function ($plugin) use ($done, $ask_marketing) {
       render_done($plugin, $done, $ask_marketing);
     },
@@ -707,7 +763,7 @@ add_filter('tangible_onboarding_steps', function ($steps, $facts, $plugin_name =
       if (!has_account_identity($plugin)) {
         $email = sanitize_email(wp_unslash($_POST['marketing_email'] ?? ''));
         if (!is_email($email)) {
-          return new \WP_Error('tangible_onboarding', 'Enter an email address for the release notes.');
+          return new \WP_Error('tangible_onboarding', __('Enter an email address for the release notes.', 'tangible-framework'));
         }
       }
       record_consent_answer('marketing', 'granted', marketing_consent_text($plugin), $email);
@@ -729,7 +785,7 @@ function render_done($plugin, $done, $ask_marketing) {
 
   <?php if (!empty($done['links'])) : ?>
     <section class="tgbl-next">
-      <p class="tgbl-next__label"><?php echo esc_html($done['links_label'] ?? 'What people usually do next'); ?></p>
+      <p class="tgbl-next__label"><?php echo esc_html($done['links_label'] ?? __('What people usually do next', 'tangible-framework')); ?></p>
       <ul class="tgbl-card tgbl-links">
         <?php foreach ($done['links'] as $link) : ?>
           <li class="tgbl-links__row">
@@ -750,18 +806,21 @@ function render_done($plugin, $done, $ask_marketing) {
     $connect_state = !$keyed && function_exists('tangible\\connect\\get_state') ? \tangible\connect\get_state() : [];
     ?>
     <section class="tgbl-band tgbl-optin">
-      <h3 class="tgbl-band__title">Get release notes from the makers of <?php echo esc_html($plugin->title ?? $plugin->name); ?></h3>
+      <h3 class="tgbl-band__title"><?php echo esc_html(release_notes_title($plugin)); ?></h3>
       <?php if ($typed) : ?>
-        <label class="tgbl-band__label" for="tgbl-marketing-email">Send to</label>
+        <label class="tgbl-band__label" for="tgbl-marketing-email"><?php esc_html_e('Send to', 'tangible-framework'); ?></label>
         <input type="email" id="tgbl-marketing-email" name="marketing_email" class="tgbl-input" required
                value="<?php echo esc_attr(wp_get_current_user()->user_email ?? ''); ?>" />
       <?php else : ?>
-        <p class="tgbl-band__label">Send to</p>
+        <p class="tgbl-band__label"><?php esc_html_e('Send to', 'tangible-framework'); ?></p>
         <p class="tgbl-band__value"><?php
           $masked = (string) ($connect_state['owner_email_masked'] ?? '');
-          echo esc_html($masked !== '' ? $masked . ', your tangible.one account email' : 'The email on your tangible.one account'); ?></p>
+          echo esc_html($masked !== ''
+            /* translators: %s: the account's email address, partly masked */
+            ? sprintf(__('%s, your tangible.one account email', 'tangible-framework'), $masked)
+            : __('The email on your tangible.one account', 'tangible-framework')); ?></p>
       <?php endif; ?>
-      <button class="tui-button is-theme-primary tgbl-band__submit" type="submit" name="do" value="continue">Finish Setup 🎉</button>
+      <button class="tui-button is-theme-primary tgbl-band__submit" type="submit" name="do" value="continue"><?php esc_html_e('Finish Setup', 'tangible-framework'); ?> 🎉</button>
     </section>
   <?php endif;
 }
