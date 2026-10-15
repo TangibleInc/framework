@@ -74,6 +74,7 @@ function confirm($context_slug = '') {
     clear();
     return 'revoked';
   }
+  if ($code === 200 && in_array($status, ['unverified', 'active'], true)) cache_onboarding_from_response($body);
   return set_status($code === 200 && $status === 'active' ? 'active' : 'unverified',
     $body['reason'] ?? $body['error'] ?? '');
 }
@@ -108,7 +109,8 @@ add_action(REFRESH_EVENT, function () {
  */
 function after_connected($plugin_name) {
   // The update check is cached ~12h; refresh soon so the onboarding block
-  // arrives — in cron, not in this request (which is already waiting on the
+  // stays current (exchange/confirm already carried it, when the platform
+  // could build it) — in cron, not in this request (which is already waiting on the
   // platform's callback into this site).
   if (!wp_next_scheduled(REFRESH_EVENT)) wp_schedule_single_event(time() + 5, REFRESH_EVENT);
   do_action('tangible_connect_connected');
@@ -167,6 +169,10 @@ function handle_return($user_id, $query) {
     'connected_at'       => time(),
     'connected_by'       => (int) $user_id,
   ]);
+  // The account's answers, for every free plugin on the site, before the
+  // admin lands back in the wizard — so its next render does not ask again.
+  // The scheduled update check refreshes them later.
+  cache_onboarding_from_response($body);
 
   if ($status === 'unverified' && !is_local_site()
     && confirm($flow['plugin'] ?? '') === 'revoked') {
