@@ -53,6 +53,7 @@ class Connect_TestCase extends \WP_UnitTestCase {
     connect\clear();
     delete_option(connect\SITE_ID_OPTION);
     remove_all_filters('pre_http_request');
+    remove_all_filters('tangible_connect_is_local_site');
     $this->requests = [];
     parent::tearDown();
   }
@@ -68,6 +69,11 @@ class Connect_TestCase extends \WP_UnitTestCase {
       }
       return new \WP_Error('http', 'no route ' . $url);
     }, 10, 3);
+  }
+
+  private function as_public_site() {
+    // wp-env's test site is localhost; most tests here are about a public one.
+    add_filter('tangible_connect_is_local_site', '__return_false');
   }
 
   private function start() {
@@ -103,6 +109,7 @@ class Connect_TestCase extends \WP_UnitTestCase {
   }
 
   function test_a_full_return_exchanges_server_side_stores_the_token_and_confirms() {
+    $this->as_public_site();
     [, $q] = $this->start();
     $this->fake_platform([
       '/api/v1/connect/exchange' => [200, [ 'status' => 'pending', 'token' => self::TOKEN,
@@ -112,11 +119,13 @@ class Connect_TestCase extends \WP_UnitTestCase {
     $result = connect\handle_return($this->admin, [ 'state' => $q['state'], 'code' => self::CODE ]);
     $this->assertSame('connected', $result['status']);
     $this->assertTrue(connect\is_connected());
+    $this->assertTrue(connect\is_verified());
     $this->assertSame('Acme', connect\get_state()['account_name']);
 
     [$exchange, $confirm] = $this->requests;
     $sent = json_decode($exchange['args']['body'], true);
     $this->assertSame(self::CODE, $sent['code']);
+    $this->assertSame(wp_get_environment_type(), $sent['environment_type']);
     $this->assertSame($q['redirect_uri'], $sent['redirect_uri']);
     $this->assertSame(connect\pkce_challenge($sent['code_verifier']), $q['code_challenge']);
     // Verified TLS, and the token only ever in a header.
@@ -129,15 +138,18 @@ class Connect_TestCase extends \WP_UnitTestCase {
     $this->assertSame('error', connect\handle_return($this->admin, [ 'state' => $q['state'], 'code' => self::CODE ])['status']);
   }
 
-  function test_an_unverified_site_stays_pending_and_a_denial_stores_nothing() {
+  function test_an_unverified_site_is_connected_and_a_denial_stores_nothing() {
+    $this->as_public_site();
     [, $q] = $this->start();
     $this->fake_platform([
-      '/api/v1/connect/exchange' => [200, [ 'status' => 'pending', 'token' => self::TOKEN ]],
-      '/api/v1/connect/confirm'  => [200, [ 'status' => 'pending', 'error' => 'verification_failed', 'reason' => 'unreachable' ]],
+      '/api/v1/connect/exchange' => [200, [ 'status' => 'unverified', 'token' => self::TOKEN ]],
+      '/api/v1/connect/confirm'  => [200, [ 'status' => 'unverified', 'error' => 'verification_failed', 'reason' => 'unreachable' ]],
     ]);
-    $this->assertSame('pending', connect\handle_return($this->admin, [ 'state' => $q['state'], 'code' => self::CODE ])['status']);
-    $this->assertFalse(connect\is_connected());
-    $this->assertSame('', connect\get_active_token());
+    $this->assertSame('connected', connect\handle_return($this->admin, [ 'state' => $q['state'], 'code' => self::CODE ])['status']);
+    $this->assertTrue(connect\is_connected());
+    $this->assertFalse(connect\is_verified());
+    $this->assertSame(self::TOKEN, connect\get_active_token());
+    $this->assertSame('unreachable', connect\get_state()['verify_error']);
 
     connect\clear();
     [, $q2] = $this->start();
@@ -145,10 +157,41 @@ class Connect_TestCase extends \WP_UnitTestCase {
     $this->assertSame('', connect\get_token());
   }
 
-  function test_verify_endpoint_answers_only_while_pending_with_the_hmac_proof() {
+  function test_a_local_site_is_connected_without_ever_asking_to_verify() {
+    add_filter('tangible_connect_is_local_site', '__return_true');
+    [, $q] = $this->start();
+    // An older server's `pending` reads as unverified.
+    $this->fake_platform([ '/api/v1/connect/exchange' => [200, [ 'status' => 'pending', 'token' => self::TOKEN ]] ]);
+    $this->assertSame('connected', connect\handle_return($this->admin, [ 'state' => $q['state'], 'code' => self::CODE ])['status']);
+    $this->assertCount(1, $this->requests, 'no confirm call');
+    $this->assertSame('unverified', connect\get_state()['status']);
+    $this->assertSame(self::TOKEN, connect\get_active_token());
+  }
+
+  function test_connected_means_unverified_or_active_including_a_legacy_pending_state() {
+    foreach ([ 'pending' => [true, false], 'unverified' => [true, false], 'active' => [true, true], 'revoked' => [false, false], '' => [false, false] ] as $status => [$connected, $verified]) {
+      connect\save_state([ 'token' => self::TOKEN, 'status' => $status ]);
+      $this->assertSame([$connected, $verified], [ connect\is_connected(), connect\is_verified() ], "status '$status'");
+      $this->assertSame($connected ? self::TOKEN : '', connect\get_active_token());
+    }
+  }
+
+  function test_local_hosts() {
+    foreach (['localhost', 'shop.local', 'site.test', 'a.localhost', 'box.internal', 'nas.lan', 'pi.home.arpa', 'x.ddev.site',
+      '127.0.0.1', '10.1.2.3', '192.168.0.10', '172.16.0.1', '169.254.1.1', '[::1]', 'fe80::1', 'fd00::1'] as $host) {
+      $this->assertTrue(connect\is_local_host($host), $host);
+    }
+    foreach (['example.com', 'tangible.one', 'local.example.com', 'testsite.com', '8.8.8.8', '2606:4700::1', ''] as $host) {
+      $this->assertFalse(connect\is_local_host($host), $host);
+    }
+  }
+
+  function test_verify_endpoint_answers_only_while_unverified_with_the_hmac_proof() {
     connect\save_state([ 'token' => self::TOKEN, 'status' => 'pending' ]);
     $request = new \WP_REST_Request('POST', '/tangible/v1/connect/verify');
     $request->set_param('challenge', 'ChallengeChallenge42');
+    $this->assertSame(200, connect\rest_verify($request)->get_status(), 'legacy pending');
+    connect\save_state([ 'token' => self::TOKEN, 'status' => 'unverified' ]);
     $response = connect\rest_verify($request);
     $this->assertSame(200, $response->get_status());
     $this->assertSame(hash_hmac('sha256', 'ChallengeChallenge42', hash('sha256', self::TOKEN)), $response->get_data()['proof']);
@@ -165,14 +208,16 @@ class Connect_TestCase extends \WP_UnitTestCase {
     $this->assertArrayHasKey('/tangible/v1/connect/verify', rest_get_server()->get_routes());
   }
 
-  function test_update_checks_carry_the_header_only_when_active_keyless_and_to_the_api_host() {
+  function test_update_checks_carry_the_header_only_when_connected_keyless_and_to_the_api_host() {
     $plugin = \tangible\framework\register_plugin([ 'name' => 'freeplug', 'title' => 'F', 'cloud_id' => 'freeplug', 'setting_prefix' => 'freeplug' ]);
     $plugin->updater_url = connect\api_base() . '/api/edd';
     $legacy = \tangible\framework\register_plugin([ 'name' => 'legacyplug', 'title' => 'L', 'setting_prefix' => 'legacyplug' ]);
     $legacy->updater_url = 'https://updater.tangible.one';
     $this->assertArrayNotHasKey('headers', connect\with_token_header([], 'freeplug'));
-    connect\save_state([ 'token' => self::TOKEN, 'status' => 'pending' ]);
+    connect\save_state([ 'token' => self::TOKEN, 'status' => 'revoked' ]);
     $this->assertArrayNotHasKey(connect\HEADER, connect\with_token_header([ 'headers' => [] ], 'freeplug')['headers']);
+    connect\save_state([ 'token' => self::TOKEN, 'status' => 'unverified' ]);
+    $this->assertSame(self::TOKEN, connect\with_token_header([ 'headers' => [] ], 'freeplug')['headers'][connect\HEADER]);
     connect\save_state([ 'token' => self::TOKEN, 'status' => 'active' ]);
     $opts = connect\with_token_header([ 'headers' => [ 'Accept' => 'application/json' ] ], 'freeplug');
     $this->assertSame(self::TOKEN, $opts['headers'][connect\HEADER]);
@@ -182,10 +227,16 @@ class Connect_TestCase extends \WP_UnitTestCase {
   }
 
   function test_metadata_results_cache_the_block_and_a_revoke_drops_the_token() {
-    connect\save_state([ 'token' => self::TOKEN, 'status' => 'active' ]);
+    connect\save_state([ 'token' => self::TOKEN, 'status' => 'unverified' ]);
     $block = [ 'accountId' => 'a1', 'accountName' => 'Acme', 'ask' => [ 'telemetry_extended' => 'skip', 'marketing' => 'ask' ] ];
-    connect\read_metadata_result('freeplug', [ 'body' => wp_json_encode([ 'connection' => 'active', 'onboarding' => $block ]) ]);
+    // The server says `active` for any working token and flags verification separately.
+    connect\read_metadata_result('freeplug', [ 'body' => wp_json_encode([ 'connection' => 'active', 'verified' => false, 'onboarding' => $block ]) ]);
     $this->assertSame('skip', onboarding\build_facts('freeplug')->ask['telemetry_extended']);
+    $this->assertTrue(connect\is_connected());
+    $this->assertFalse(connect\is_verified());
+    // Verified in the background: the next update check says so.
+    connect\read_metadata_result('freeplug', [ 'body' => wp_json_encode([ 'connection' => 'active', 'verified' => true ]) ]);
+    $this->assertTrue(connect\is_verified());
 
     connect\read_metadata_result('freeplug', [ 'body' => wp_json_encode([ 'connection' => 'revoked' ]) ]);
     $this->assertSame('', connect\get_token());
@@ -396,28 +447,27 @@ class Connect_Step_TestCase extends \WP_UnitTestCase {
     $this->assertContains('welcome', $ids);
   }
 
-  function test_pending_shows_why_and_check_again_stays_on_welcome_until_verified() {
-    wp_set_current_user(self::factory()->user->create([ 'role' => 'administrator' ]));
-    connect\save_state([ 'token' => Connect_TestCase::TOKEN, 'status' => 'pending', 'account_name' => 'Acme' ]);
-    $html = $this->welcome_html();
-    $this->assertStringContainsString('Waiting for tangible.one to verify', $html);
-    $this->assertStringContainsString('answer:connect_check', $html);
-
-    add_filter('pre_http_request', function () {
-      return [ 'response' => [ 'code' => 200 ], 'body' => wp_json_encode([ 'status' => 'pending' ]) ];
-    });
-    $this->assertNull(onboarding\handle_step_submission('freeconnect', [ 'step' => 'welcome', 'do' => 'answer:connect_check' ]));
-    $this->assertStringStartsWith('Still waiting', (string) get_transient(onboarding\step_error_key('freeconnect')));
-    remove_all_filters('pre_http_request');
-    add_filter('pre_http_request', function () {
-      return [ 'response' => [ 'code' => 200 ], 'body' => wp_json_encode([ 'status' => 'active' ]) ];
-    });
-    $this->assertNull(onboarding\handle_step_submission('freeconnect', [ 'step' => 'welcome', 'do' => 'answer:connect_check' ]));
-    $this->assertTrue(connect\is_connected());
-    // Still on Welcome, now showing the connected box.
-    $this->assertSame('welcome', $this->ids()[0]);
-    $this->assertStringContainsString('Connected as Acme', $this->welcome_html());
-    unset($_POST['answer']);
+  function test_unverified_shows_the_connected_box_with_one_plain_line() {
+    // Spec §4 (amended 2026-10-14): one connected state; no reasons, no Check again.
+    connect\save_state([ 'token' => Connect_TestCase::TOKEN, 'status' => 'unverified', 'account_name' => 'Acme' ]);
+    $lines = [
+      'public' => 'We&#039;ll finish linking this site once it&#039;s online.',
+      'local'  => 'This is a local site, so it&#039;s linked to your account without the online check.',
+    ];
+    foreach ($lines as $kind => $line) {
+      add_filter('tangible_connect_is_local_site', $kind === 'local' ? '__return_true' : '__return_false');
+      $html = $this->welcome_html();
+      remove_all_filters('tangible_connect_is_local_site');
+      $this->assertStringContainsString('Connected as Acme', $html);
+      $this->assertStringContainsString('answer:disconnect', $html);
+      $this->assertStringContainsString($line, $html);
+      $this->assertStringNotContainsString($lines[$kind === 'local' ? 'public' : 'local'], $html);
+      $this->assertStringNotContainsString('connect_check', $html);
+      $this->assertStringNotContainsString('wp-json', $html);
+    }
+    // Verified: the line goes away.
+    connect\save_state([ 'token' => Connect_TestCase::TOKEN, 'status' => 'active', 'account_name' => 'Acme' ]);
+    $this->assertStringNotContainsString('finish linking', $this->welcome_html());
   }
 
   function test_get_started_with_a_pending_connection_moves_on() {

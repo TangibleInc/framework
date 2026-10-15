@@ -43,6 +43,11 @@ function gather_facts($plugin) {
   $f['title']   = $plugin->title ?? $name;
   $f['version'] = (string) ($plugin->version ?? '');
   $f['cloud']   = !empty($plugin->cloud_id);
+  // Optional plugin config: a 24px icon (URL) for the row's tile, and where
+  // its release notes live. Without them the tile shows a generic plugin
+  // glyph and the row links to Settings only.
+  $f['icon']          = (string) ($plugin->icon ?? '');
+  $f['release_notes'] = (string) ($plugin->release_notes_url ?? '');
 
   // Licence — the updater's, when present and managing this plugin.
   $has_updater = class_exists('tangible\\updater') && isset(\tangible\updater::$instance->update_checkers);
@@ -56,6 +61,10 @@ function gather_facts($plugin) {
     if (function_exists('tangible\\updater\\get_license_status')) {
       $f['licence_status'] = (string) \tangible\updater\get_license_status($plugin);
     }
+  }
+  // Expiry, as the last activation reported it (the onboarder keeps it).
+  if (function_exists('tangible\\onboarding\\licence_info')) {
+    $f['expires'] = (string) (\tangible\onboarding\licence_info($plugin)['expires'] ?? '');
   }
 
   // Distribution — the onboarder's rule for plugins on the tangible.one platform
@@ -100,6 +109,9 @@ function gather_facts($plugin) {
     }));
     $f['steps_total'] = count($asking);
     $f['steps_left']  = count(\tangible\onboarding\pending_questions($plan));
+    foreach ($plan['rail'] as $r) {
+      if ($r['id'] === ($plan['current'] ?? null)) $f['next_step'] = (string) $r['label'];
+    }
   }
 
   // Pending update — core's transient, which the updater's checker hydrates.
@@ -122,12 +134,16 @@ function default_facts() {
     'has_key'           => false,
     'licence_status'    => '',
     'free'              => false,   // true | false | null (server has not said yet)
-    'connect'           => 'none',  // none | pending | active — the SITE's connection
+    'connect'           => 'none',  // none | unverified | active — the SITE's connection
     'connect_account'   => '',
     'account_name'      => '',
     'has_wizard'        => false,
     'steps_left'        => 0,
     'steps_total'       => 0,
+    'next_step'         => '',      // the current step's label, while setup is pending
+    'expires'           => '',      // licence expiry: a date, 'lifetime', or unknown
+    'icon'              => '',
+    'release_notes'     => '',
     'update'            => null,
   ];
 }
@@ -135,11 +151,13 @@ function default_facts() {
 /**
  * The row, decided. Returns:
  *
- *   account  [ key: 'Licence'|'Account', chip, text, sub, action ]
+ *   account  [ key: 'License'|'Account' (translated), chip, text, sub, action ]
  *   setup    null (no wizard) | [ done, left, pct ]
  *   primary  resume | enter_key | renew | update | open
+ *   action   the row's own action, setup aside (setup has its own card):
+ *            enter_key | renew | update | null
  *
- * chip is one of ok | free | need | bad | off.
+ * chip is one of ok | info | free | need | bad | off.
  * action (account) is null | connect | enter_key | renew.
  */
 function row_state($f) {
@@ -148,35 +166,34 @@ function row_state($f) {
 
   // ── account / licence ──────────────────────────────────────────────────
   if ($keyless_free) {
-    $key = 'Account';
-    if ($f['connect'] === 'active') {
-      $account = chip('ok', 'Connected', $f['connect_account'] !== '' ? $f['connect_account'] : 'Uses this site\'s connection');
-    } elseif ($f['connect'] === 'pending') {
-      $account = chip('need', 'Connecting', 'Waiting for tangible.one to verify this site');
+    $key = __('Account', 'tangible-framework');
+    // Verified or not, a connected site is connected (spec §4, amended 2026-10-14).
+    if (in_array($f['connect'], ['active', 'unverified'], true)) {
+      $account = chip('info', __('Free', 'tangible-framework'), __('Via your tangible.one connection', 'tangible-framework'));
     } else {
-      $account = chip('free', 'Free · not connected', 'Works without an account', 'connect');
+      $account = chip('off', __('Not connected', 'tangible-framework'), __('Free', 'tangible-framework'), 'connect');
     }
   } else {
-    $key = 'Licence';
+    $key = __('License', 'tangible-framework');
     $status = strtolower($f['licence_status']);
     if (!$f['licence_managed'] || ($f['free'] === null && !$f['cloud'] && !$f['has_key'])) {
       // Not something this site's updater reports on (or a legacy build that
       // never talks to tangible.one) — say nothing rather than "no licence needed".
-      $account = chip('off', 'No licence info', '');
+      $account = chip('off', __('No license info', 'tangible-framework'), '');
     } elseif ($f['free'] === null && !$f['has_key']) {
       // Neither free nor paid is known yet — a nag here would be wrong for
       // every free plugin (same rule the updater's own notices follow).
-      $account = chip('off', 'Checking', 'Known after the first update check');
+      $account = chip('off', __('Checking', 'tangible-framework'), __('Known after the first update check', 'tangible-framework'));
     } elseif (!$f['has_key']) {
-      $account = chip('need', 'Key not entered', 'Paid features stay locked until it is activated', 'enter_key');
+      $account = chip('need', __('Key not entered', 'tangible-framework'), __('Paid features stay locked until it is activated', 'tangible-framework'), 'enter_key');
     } elseif (in_array($status, LICENCE_OK, true)) {
-      $account = chip('ok', 'Active', $f['account_name']);
+      $account = chip('ok', __('Active', 'tangible-framework'), renews_line($f['expires'], $f['account_name']));
     } elseif (in_array($status, LICENCE_EXPIRED, true)) {
-      $account = chip('bad', 'Expired', 'Keeps working · no updates', 'renew');
+      $account = chip('bad', __('Expired', 'tangible-framework'), expired_line($f['expires']), 'renew');
     } elseif (in_array($status, LICENCE_INVALID, true)) {
-      $account = chip('bad', 'Key not valid', 'Check the key on the licence page', 'enter_key');
+      $account = chip('bad', __('Invalid key', 'tangible-framework'), __('Check the key on the license page', 'tangible-framework'), 'enter_key');
     } else {
-      $account = chip('need', 'Not activated', 'Key entered, not active on this site', 'enter_key');
+      $account = chip('need', __('Not activated', 'tangible-framework'), __('Key entered, not active on this site', 'tangible-framework'), 'enter_key');
     }
   }
   $account['key'] = $key;
@@ -200,7 +217,26 @@ function row_state($f) {
   elseif ($f['update'])                           $primary = 'update';
   else                                            $primary = 'open';
 
-  return [ 'account' => $account, 'setup' => $setup, 'primary' => $primary ];
+  if (in_array($account['action'], ['enter_key', 'renew'], true)) $action = $account['action'];
+  elseif ($f['update'])                                           $action = 'update';
+  else                                                            $action = null;
+
+  return [ 'account' => $account, 'setup' => $setup, 'primary' => $primary, 'action' => $action ];
+}
+
+/** "Renews 12 Mar 2027", "Lifetime license", or the account name when the date is not known. */
+function renews_line($expires, $fallback = '') {
+  if ($expires === 'lifetime') return __('Lifetime license', 'tangible-framework');
+  $time = $expires !== '' ? strtotime($expires) : false;
+  /* translators: %s: renewal date */
+  return $time ? sprintf(__('Renews %s', 'tangible-framework'), date_i18n('j M Y', $time)) : (string) $fallback;
+}
+
+function expired_line($expires) {
+  $time = $expires !== '' && $expires !== 'lifetime' ? strtotime($expires) : false;
+  /* translators: %s: expiry date */
+  return $time ? sprintf(__('Expired %s. Updates are paused', 'tangible-framework'), date_i18n('j M Y', $time))
+    : __('Updates are paused', 'tangible-framework');
 }
 
 function chip($chip, $text, $sub, $action = null) {
@@ -209,10 +245,10 @@ function chip($chip, $text, $sub, $action = null) {
 
 // ── the site's connection (Connect module, when loaded) ──────────────────
 
+/** none | unverified | active */
 function connect_status() {
-  if (!function_exists('tangible\\connect\\get_token')) return 'none';
-  if (\tangible\connect\get_token() === '') return 'none';
-  return (\tangible\connect\get_state()['status'] ?? '') === 'active' ? 'active' : 'pending';
+  if (!function_exists('tangible\\connect\\is_connected') || !\tangible\connect\is_connected()) return 'none';
+  return \tangible\connect\is_verified() ? 'active' : 'unverified';
 }
 
 function connect_account_name() {
@@ -223,13 +259,13 @@ function connect_account_name() {
 /**
  * The Connect band: shown while the site is not connected — with or without
  * a free plugin installed (the pitch changes) — unless this admin said
- * "Not now" in the last 30 days.
+ * "Not now" in the last 30 days. An unverified connection is connected: no band.
  *
- *   null | [ status: none|pending, has_free: bool ]
+ *   null | [ status: none, has_free: bool ]
  */
 function band_state($connect, $has_free, $snoozed_until, $now) {
-  if ($connect === 'active') return null;
-  if ($connect === 'none' && $snoozed_until > $now) return null;
+  if ($connect !== 'none') return null;
+  if ($snoozed_until > $now) return null;
   return [ 'status' => $connect, 'has_free' => (bool) $has_free ];
 }
 

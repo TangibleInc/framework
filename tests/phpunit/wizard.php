@@ -605,6 +605,33 @@ class Shell_Rules_TestCase extends \WP_UnitTestCase {
     delete_option('tangible_onboarding_state__yieldtest2');
   }
 
+  function test_usage_rows_name_every_group_a_check_in_sends() {
+    $plugin = (object) [ 'name' => 'rowstest' ];
+    $rows = onboarding\usage_rows($plugin);
+    $this->assertSame([
+      'WordPress and PHP versions', 'Theme', 'Active plugins', 'Users and roles',
+      'Published content', 'Hosting provider', 'Page speed',
+    ], array_keys($rows));
+    $this->assertStringContainsString('PHP ', $rows['WordPress and PHP versions']);
+
+    // Plugins add their own content to the one row.
+    $courses = function ($counts) { $counts['courses and lessons'] = 38; return $counts; };
+    add_filter('tangible_onboarding_content_counts', $courses);
+    $this->assertStringEndsWith(' posts and pages · 38 courses and lessons', onboarding\usage_rows($plugin)['Published content']);
+    remove_filter('tangible_onboarding_content_counts', $courses);
+    $this->assertStringContainsString('users', $rows['Users and roles']);
+
+    $named = function () { return 'Kinsta'; };
+    add_filter('tangible_onboarding_host', $named);
+    $this->assertSame('Kinsta', onboarding\usage_rows($plugin)['Hosting provider']);
+    remove_filter('tangible_onboarding_host', $named);
+
+    $none = function () { return ''; };
+    add_filter('tangible_onboarding_host', $none);
+    $this->assertSame('Not detected', onboarding\usage_rows($plugin)['Hosting provider']);
+    remove_filter('tangible_onboarding_host', $none);
+  }
+
   function test_the_onboarded_marker_is_set_once() {
     $this->assertFalse(onboarding\was_onboarded('ruletest'));
     onboarding\mark_onboarded('ruletest');

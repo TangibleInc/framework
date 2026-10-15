@@ -24,7 +24,7 @@ class Hub_Rows_TestCase extends \WP_UnitTestCase {
 
   function test_paid_without_a_key_asks_for_it_and_never_offers_connect() {
     $s = hub\row_state($this->paid());
-    $this->assertSame('Licence', $s['account']['key']);
+    $this->assertSame('License', $s['account']['key']);
     $this->assertSame(['need', 'Key not entered', 'enter_key'],
       [ $s['account']['chip'], $s['account']['text'], $s['account']['action'] ]);
     $this->assertSame('enter_key', $s['primary']);
@@ -52,7 +52,7 @@ class Hub_Rows_TestCase extends \WP_UnitTestCase {
     $this->assertSame(['bad', 'Expired', 'renew'], [ $expired['account']['chip'], $expired['account']['text'], $expired['primary'] ]);
 
     $invalid = hub\row_state($this->paid([ 'has_key' => true, 'licence_status' => 'invalid' ]));
-    $this->assertSame('Key not valid', $invalid['account']['text']);
+    $this->assertSame('Invalid key', $invalid['account']['text']);
 
     $inactive = hub\row_state($this->paid([ 'has_key' => true, 'licence_status' => 'site_inactive' ]));
     $this->assertSame('Not activated', $inactive['account']['text']);
@@ -61,8 +61,8 @@ class Hub_Rows_TestCase extends \WP_UnitTestCase {
   function test_free_unconnected_offers_connect() {
     $s = hub\row_state($this->free());
     $this->assertSame('Account', $s['account']['key']);
-    $this->assertSame(['free', 'Free · not connected', 'connect'],
-      [ $s['account']['chip'], $s['account']['text'], $s['account']['action'] ]);
+    $this->assertSame(['off', 'Not connected', 'Free', 'connect'],
+      [ $s['account']['chip'], $s['account']['text'], $s['account']['sub'], $s['account']['action'] ]);
   }
 
   function test_a_build_without_the_updater_is_a_free_row() {
@@ -71,21 +71,45 @@ class Hub_Rows_TestCase extends \WP_UnitTestCase {
     $f = hub\gather_facts($plugin);
     $this->assertTrue($f['free']);
     $s = hub\row_state($f);
-    $this->assertSame(['Account', 'free', 'connect'], [ $s['account']['key'], $s['account']['chip'], $s['account']['action'] ]);
+    $this->assertSame(['Account', 'off', 'connect'], [ $s['account']['key'], $s['account']['chip'], $s['account']['action'] ]);
 
     // A legacy build (no cloud_id, no wizard) is not declared free.
     $legacy = \tangible\framework\register_plugin([ 'name' => 'hublegacy', 'title' => 'Hub Legacy' ]);
     $this->assertNotTrue(hub\gather_facts($legacy)['free']);
   }
 
-  function test_free_connected_names_the_account() {
-    $s = hub\row_state($this->free([ 'connect' => 'active', 'connect_account' => 'Oakhill' ]));
-    $this->assertSame(['ok', 'Connected', 'Oakhill'], [ $s['account']['chip'], $s['account']['text'], $s['account']['sub'] ]);
+  function test_free_connected_says_where_it_comes_from() {
+    // Verified or not, the row is the same (spec §4, amended 2026-10-14).
+    foreach (['active', 'unverified'] as $connect) {
+      $s = hub\row_state($this->free([ 'connect' => $connect, 'connect_account' => 'Oakhill' ]));
+      $this->assertSame(['info', 'Free', 'Via your tangible.one connection', null],
+        [ $s['account']['chip'], $s['account']['text'], $s['account']['sub'], $s['account']['action'] ]);
+    }
+  }
+
+  function test_active_licence_names_its_renewal() {
+    $s = hub\row_state($this->paid([ 'has_key' => true, 'licence_status' => 'valid', 'expires' => '2027-03-12 23:59:59' ]));
+    $this->assertSame('Renews 12 Mar 2027', $s['account']['sub']);
+    $life = hub\row_state($this->paid([ 'has_key' => true, 'licence_status' => 'valid', 'expires' => 'lifetime' ]));
+    $this->assertSame('Lifetime license', $life['account']['sub']);
+    $expired = hub\row_state($this->paid([ 'has_key' => true, 'licence_status' => 'expired', 'expires' => '2026-10-02' ]));
+    $this->assertSame('Expired 2 Oct 2026. Updates are paused', $expired['account']['sub']);
+  }
+
+  function test_the_row_action_leaves_setup_to_its_own_card() {
+    $setup_pending = [ 'has_wizard' => true, 'steps_left' => 2, 'steps_total' => 3 ];
+    $s = hub\row_state($this->paid($setup_pending + [ 'has_key' => true, 'licence_status' => 'valid', 'update' => '2.5.0' ]));
+    $this->assertSame('resume', $s['primary']);
+    $this->assertSame('update', $s['action']);
+    $key = hub\row_state($this->paid($setup_pending));
+    $this->assertSame('enter_key', $key['action'], 'the licence outranks an update');
+    $none = hub\row_state($this->paid([ 'has_key' => true, 'licence_status' => 'valid' ]));
+    $this->assertNull($none['action']);
   }
 
   function test_a_key_wins_over_a_free_build() {
     $s = hub\row_state($this->free([ 'has_key' => true, 'licence_status' => 'active' ]));
-    $this->assertSame('Licence', $s['account']['key']);
+    $this->assertSame('License', $s['account']['key']);
     $this->assertSame('Active', $s['account']['text']);
   }
 
@@ -96,7 +120,7 @@ class Hub_Rows_TestCase extends \WP_UnitTestCase {
 
     // A legacy build that never talks to tangible.one will never answer.
     $legacy = hub\row_state([ 'licence_managed' => true, 'cloud' => false, 'free' => null ]);
-    $this->assertSame('No licence info', $legacy['account']['text']);
+    $this->assertSame('No license info', $legacy['account']['text']);
   }
 
   function test_setup_left_outranks_every_other_action() {
@@ -117,7 +141,6 @@ class Hub_Rows_TestCase extends \WP_UnitTestCase {
     $this->assertNull(hub\band_state('none', true, $now + 1, $now), 'Not now hides it');
     $this->assertSame([ 'status' => 'none', 'has_free' => false ], hub\band_state('none', false, 0, $now),
       'shown with no free plugin installed too');
-    $this->assertSame('pending', hub\band_state('pending', true, $now + 1, $now)['status'],
-      'a half-finished connection is not snoozable');
+    $this->assertNull(hub\band_state('unverified', true, 0, $now), 'an unverified connection is connected');
   }
 }
