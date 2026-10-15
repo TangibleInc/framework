@@ -1,6 +1,6 @@
 <?php
 /**
- * Tangible Home — the page. Server-rendered, no JS; every control is a link
+ * Tangible Hub — the page. Server-rendered, no JS; every control is a link
  * or a POST form to admin-post.php. What each row says is decided in
  * rows.php; this file only draws it.
  */
@@ -292,7 +292,7 @@ function post_form($action, $label, $class, $fields = []) {
 
 /** Connect's own start action (connect/flow.php), returning here. */
 function connect_form($label, $class) {
-  post_form('tangible_connect_start', $label, $class, [ 'return_to' => admin_url('admin.php?page=' . PAGE) ]);
+  post_form('tangible_connect_start', $label, $class, [ 'return_to' => url() ]);
 }
 
 function connect_flash() {

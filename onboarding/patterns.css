@@ -232,3 +232,6 @@
 
 /* The centred Done heading keeps its blocks left-aligned (§6, §7). */
 .tgbl-wizard .tgbl-wizard__page.is-center .step-intro { max-width: 560px; margin-left: auto; margin-right: auto; }
+
+/* The return visit's inline way on, under its centred intro. */
+.tgbl-wizard .tgbl-all-done__next { margin: 24px 0 0; text-align: center; }

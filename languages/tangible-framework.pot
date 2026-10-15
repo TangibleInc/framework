@@ -9,7 +9,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-10-14T19:52:21+00:00\n"
+"POT-Creation-Date: 2026-10-14T19:52:38+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: tangible-framework\n"
@@ -323,8 +323,8 @@ msgid "What people usually do next"
 msgstr ""
 
 #: onboarding/steps.php:730
-#: onboarding/wizard.php:1383
-msgid "Go to Tangible Home"
+#: onboarding/wizard.php:1379
+msgid "Go to Tangible Hub"
 msgstr ""
 
 #: onboarding/steps.php:737
@@ -465,23 +465,23 @@ msgstr ""
 msgid "Exit setup"
 msgstr ""
 
-#: onboarding/wizard.php:1375
+#: onboarding/wizard.php:1376
 msgid "Nothing left to ask."
 msgstr ""
 
-#: onboarding/wizard.php:1376
+#: onboarding/wizard.php:1377
 msgid "Everything is either configured or already on file."
 msgstr ""
 
-#: onboarding/wizard.php:1425
+#: onboarding/wizard.php:1428
 msgid "Back"
 msgstr ""
 
-#: onboarding/wizard.php:1438
+#: onboarding/wizard.php:1441
 msgid "Skip this step"
 msgstr ""
 
-#: onboarding/wizard.php:1442
+#: onboarding/wizard.php:1445
 msgid "Continue"
 msgstr ""
 

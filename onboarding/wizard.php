@@ -1383,7 +1383,7 @@ function render_wizard($plugin) {
     <header class="tgbl-wizard__topbar">
       <?php render_lockup($plugin); ?>
       <a class="tgbl-wizard__exit"
-         href="<?php echo esc_url(admin_url('admin.php?page=tangible-home')); ?>"><?php esc_html_e('Exit setup', 'tangible-framework'); ?></a>
+         href="<?php echo esc_url(\tangible\hub\url()); ?>"><?php esc_html_e('Exit setup', 'tangible-framework'); ?></a>
     </header>
     <div class="tgbl-wizard__stepbar">
       <?php render_stepper($plan['rail'], $plan['current']); ?>
@@ -1392,18 +1392,16 @@ function render_wizard($plugin) {
     <?php if ($all_done) : ?>
       <form>
         <main class="tgbl-wizard__well">
-          <div class="tgbl-wizard__page">
+          <?php // Centred like Done, which this is on a return visit. ?>
+          <div class="<?php echo esc_attr(page_classes([ 'width' => 'narrow', 'align' => 'center' ])); ?>">
             <div class="tgbl-wizard__body">
               <h2><?php esc_html_e('Nothing left to ask.', 'tangible-framework'); ?></h2>
               <p class="step-intro"><?php esc_html_e('Everything is either configured or already on file.', 'tangible-framework'); ?></p>
+              <p class="tgbl-all-done__next"><a class="tui-button is-style-outline"
+                 href="<?php echo esc_url(\tangible\hub\url()); ?>"><?php esc_html_e('Go to Tangible Hub', 'tangible-framework'); ?></a></p>
             </div>
           </div>
         </main>
-        <footer class="tgbl-wizard__footer">
-          <span style="flex:1"></span>
-          <a class="tui-button is-theme-primary"
-             href="<?php echo esc_url(admin_url('admin.php?page=tangible-home')); ?>"><?php esc_html_e('Go to Tangible Home', 'tangible-framework'); ?></a>
-        </footer>
       </form>
     <?php else : ?>
       <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
@@ -1442,12 +1440,17 @@ function render_wizard($plugin) {
             </div>
           </div>
         </main>
+        <?php
+        // The footer only when it holds something: Done with its button in
+        // the body, and no Back, would otherwise be an empty white band.
+        $has_actions = !empty($step['actions']) && is_array($step['actions']);
+        if ($back || $has_actions || $step['skippable'] || empty($step['submit_in_body'])) : ?>
         <footer class="tgbl-wizard__footer">
           <?php if ($back) : ?>
             <button class="tui-button is-style-outline tgbl-back" type="submit" name="do" value="back" formnovalidate><?php esc_html_e('Back', 'tangible-framework'); ?></button>
           <?php endif; ?>
           <span style="flex:1"></span>
-          <?php if (!empty($step['actions']) && is_array($step['actions'])) :
+          <?php if ($has_actions) :
             // Answer buttons: equal standing, nothing preselected — each one
             // is a complete answer (the Wordfence shape, now in the footer).
             foreach ($step['actions'] as $answer => $action) :
@@ -1465,6 +1468,7 @@ function render_wizard($plugin) {
             <?php endif; ?>
           <?php endif; ?>
         </footer>
+        <?php endif; ?>
       </form>
     <?php endif; ?>
   </div>

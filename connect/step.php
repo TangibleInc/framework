@@ -99,7 +99,7 @@ function handle_welcome_answer($plugin, $answer) {
 
   if ($answer === 'connect') {
     $return_to = function_exists('tangible\\onboarding\\get_setup_url') && $plugin
-      ? onboarding\get_setup_url($plugin) : admin_url('admin.php?page=tangible-home');
+      ? onboarding\get_setup_url($plugin) : \tangible\hub\url();
     onboarding\pending_redirect(start_flow(get_current_user_id(), $return_to, $plugin_name));
     return false;
   }
