@@ -134,7 +134,7 @@ function default_facts() {
     'has_key'           => false,
     'licence_status'    => '',
     'free'              => false,   // true | false | null (server has not said yet)
-    'connect'           => 'none',  // none | pending | active — the SITE's connection
+    'connect'           => 'none',  // none | unverified | active — the SITE's connection
     'connect_account'   => '',
     'account_name'      => '',
     'has_wizard'        => false,
@@ -167,10 +167,9 @@ function row_state($f) {
   // ── account / licence ──────────────────────────────────────────────────
   if ($keyless_free) {
     $key = __('Account', 'tangible-framework');
-    if ($f['connect'] === 'active') {
+    // Verified or not, a connected site is connected (spec §4, amended 2026-10-14).
+    if (in_array($f['connect'], ['active', 'unverified'], true)) {
       $account = chip('info', __('Free', 'tangible-framework'), __('Via your tangible.one connection', 'tangible-framework'));
-    } elseif ($f['connect'] === 'pending') {
-      $account = chip('need', __('Connecting', 'tangible-framework'), __('Waiting for tangible.one to verify this site', 'tangible-framework'));
     } else {
       $account = chip('off', __('Not connected', 'tangible-framework'), __('Free', 'tangible-framework'), 'connect');
     }
@@ -246,10 +245,10 @@ function chip($chip, $text, $sub, $action = null) {
 
 // ── the site's connection (Connect module, when loaded) ──────────────────
 
+/** none | unverified | active */
 function connect_status() {
-  if (!function_exists('tangible\\connect\\get_token')) return 'none';
-  if (\tangible\connect\get_token() === '') return 'none';
-  return (\tangible\connect\get_state()['status'] ?? '') === 'active' ? 'active' : 'pending';
+  if (!function_exists('tangible\\connect\\is_connected') || !\tangible\connect\is_connected()) return 'none';
+  return \tangible\connect\is_verified() ? 'active' : 'unverified';
 }
 
 function connect_account_name() {
@@ -260,13 +259,13 @@ function connect_account_name() {
 /**
  * The Connect band: shown while the site is not connected — with or without
  * a free plugin installed (the pitch changes) — unless this admin said
- * "Not now" in the last 30 days.
+ * "Not now" in the last 30 days. An unverified connection is connected: no band.
  *
- *   null | [ status: none|pending, has_free: bool ]
+ *   null | [ status: none, has_free: bool ]
  */
 function band_state($connect, $has_free, $snoozed_until, $now) {
-  if ($connect === 'active') return null;
-  if ($connect === 'none' && $snoozed_until > $now) return null;
+  if ($connect !== 'none') return null;
+  if ($snoozed_until > $now) return null;
   return [ 'status' => $connect, 'has_free' => (bool) $has_free ];
 }
 

@@ -55,8 +55,10 @@ function start_flow($user_id, $return_to, $plugin_name = '') {
 }
 
 /**
- * Ask the platform to verify the site. Returns 'active' | 'pending' |
- * 'revoked'; a revoked or host-mismatched token is dropped locally.
+ * Ask the platform to verify the site, and store the status it answers.
+ * Returns 'active' | 'unverified' | 'revoked'; a revoked or host-mismatched
+ * token is dropped locally. Never called for a local site (is_local_site()):
+ * tangible.one cannot reach it, and it works unverified anyway.
  */
 function confirm($context_slug = '') {
   $token = get_token();
@@ -65,23 +67,29 @@ function confirm($context_slug = '') {
     'site_url' => site_address(),
     'slug'     => $context_slug,
   ]), $token);
-  if (is_wp_error($result)) return 'pending';
+  if (is_wp_error($result)) return is_verified() ? 'active' : 'unverified';
   [$code, $body] = $result;
-  if ($code === 401 || $code === 403) {
+  $status = normalize_status($body['status'] ?? '');
+  if ($code === 401 || $code === 403 || $status === 'revoked') {
     clear();
     return 'revoked';
   }
+  return set_status($code === 200 && $status === 'active' ? 'active' : 'unverified',
+    $body['reason'] ?? $body['error'] ?? '');
+}
+
+/** Store a connection's status (unverified|active) as the platform last said it. */
+function set_status($status, $reason = '') {
   $state = get_state();
-  if ($code === 200 && ($body['status'] ?? '') === 'active') {
-    $state['status'] = 'active';
-    $state['verified_at'] = time();
+  $state['status'] = $status;
+  if ($status === 'active') {
+    if (empty($state['verified_at'])) $state['verified_at'] = time();
     unset($state['verify_error']);
-    save_state($state);
-    return 'active';
+  } elseif ($reason !== '') {
+    $state['verify_error'] = sanitize_key($reason);
   }
-  $state['verify_error'] = sanitize_key($body['reason'] ?? $body['error'] ?? 'unknown');
   save_state($state);
-  return 'pending';
+  return $status;
 }
 
 const REFRESH_EVENT = 'tangible_connect_refresh_updates';
@@ -109,7 +117,11 @@ function after_connected($plugin_name) {
 /**
  * The return leg, without HTTP. $query is the redirect's query args. The
  * caller has checked the capability and the nonce. Returns
- * [ 'status' => connected|pending|denied|error, 'return_to' => url ].
+ * [ 'status' => connected|denied|error, 'return_to' => url ].
+ *
+ * A successful exchange connects the site whether the platform says
+ * `active` or `unverified` (spec §4, amended 2026-10-14). A public site is
+ * then asked to verify once, best-effort; a local site never is.
  */
 function handle_return($user_id, $query) {
   $flow = get_transient(flow_key($user_id));
@@ -133,18 +145,22 @@ function handle_return($user_id, $query) {
     'install_id'    => get_site_id(),
     'redirect_uri'  => $flow['redirect_uri'],
     'slug'          => $flow['plugin'] ?? '',
+    // Lets the platform skip the callback for a local/development site.
+    'environment_type' => wp_get_environment_type(),
   ]));
   if (is_wp_error($result)) return $out + [ 'status' => 'error' ];
-  [$status, $body] = $result;
+  [$code, $body] = $result;
   $token = (string) ($body['token'] ?? '');
-  if ($status !== 200 || !preg_match('/^tgo_site_[A-Za-z0-9]{43}$/', $token)) {
+  $status = normalize_status($body['status'] ?? 'unverified');
+  if ($code !== 200 || !preg_match('/^tgo_site_[A-Za-z0-9]{43}$/', $token)
+    || !in_array($status, ['unverified', 'active'], true)) {
     return $out + [ 'status' => 'error' ];
   }
 
   // Stored before confirm: the platform's verify callback needs it.
   save_state([
     'token'              => $token,
-    'status'             => 'pending',
+    'status'             => $status,
     'site_url'           => site_address(),
     'account_name'       => sanitize_text_field($body['account']['name'] ?? ''),
     'owner_email_masked' => sanitize_text_field($body['account']['owner_email_masked'] ?? ''),
@@ -152,7 +168,10 @@ function handle_return($user_id, $query) {
     'connected_by'       => (int) $user_id,
   ]);
 
-  if (confirm($flow['plugin'] ?? '') !== 'active') return $out + [ 'status' => 'pending' ];
+  if ($status === 'unverified' && !is_local_site()
+    && confirm($flow['plugin'] ?? '') === 'revoked') {
+    return $out + [ 'status' => 'error' ];
+  }
   after_connected((string) ($flow['plugin'] ?? ''));
   return $out + [ 'status' => 'connected' ];
 }
@@ -195,9 +214,11 @@ add_action('admin_post_tangible_connect_return', function () {
 add_action('admin_post_tangible_connect_confirm', function () {
   if (!current_user_can('manage_options')) wp_die(esc_html__('Nope', 'tangible-framework'), 403);
   check_admin_referer('tangible_connect_confirm');
-  $status = confirm();
-  if ($status === 'active') after_connected('');
-  set_transient(notice_key(get_current_user_id()), $status === 'active' ? 'connected' : $status, 5 * MINUTE_IN_SECONDS);
+  // The Hub's "Check again": only an unverified public site has anything to check.
+  if (is_connected() && !is_verified() && !is_local_site()) {
+    $status = confirm();
+    set_transient(notice_key(get_current_user_id()), $status === 'active' ? 'verified' : $status, 5 * MINUTE_IN_SECONDS);
+  }
   wp_safe_redirect(wp_get_referer() ?: \tangible\hub\url());
   exit;
 });

@@ -84,13 +84,64 @@ function get_token() {
   return is_string($token) && preg_match('/^tgo_site_[A-Za-z0-9]{43}$/', $token) ? $token : '';
 }
 
+/**
+ * The platform's word for a connection, as this site stores it:
+ * `unverified` (usable, the address not proven yet), `active` (verified) or
+ * `revoked`; '' for anything else. Servers before 2026-10-14 said `pending`
+ * for what is now `unverified`.
+ */
+function normalize_status($status) {
+  $status = (string) $status;
+  if ($status === 'pending') return 'unverified';
+  return in_array($status, ['unverified', 'active', 'revoked'], true) ? $status : '';
+}
+
+/**
+ * Connected: a token whose connection is unverified or active (spec §4,
+ * amended 2026-10-14 — a connection works before it is verified). A state
+ * stored as `pending` by an older framework counts as unverified.
+ */
 function is_connected() {
+  return get_token() !== ''
+    && in_array(normalize_status(get_state()['status'] ?? ''), ['unverified', 'active'], true);
+}
+
+/** Connected AND tangible.one has verified this site's address. */
+function is_verified() {
   return get_token() !== '' && (get_state()['status'] ?? '') === 'active';
 }
 
-/** The token only while the connection is active — what plugin requests send. */
+/** The token while connected (verified or not) — what plugin requests send. */
 function get_active_token() {
   return is_connected() ? get_token() : '';
+}
+
+/**
+ * A host only a developer's machine or a private network resolves:
+ * localhost, the reserved local suffixes, the common local-dev domains, or a
+ * private, loopback or link-local IP literal. The one host rule — the
+ * onboarder's is_dev_site() uses it too.
+ */
+function is_local_host($host) {
+  $host = strtolower(trim((string) $host, '[] .'));
+  if ($host === '') return false;
+  if ($host === 'localhost') return true;
+  if (preg_match('/\.(local|test|localhost|internal|lan|home\.arpa|ddev\.site|lndo\.site)$/', $host)) return true;
+  if (filter_var($host, FILTER_VALIDATE_IP) === false) return false;
+  // Older PHP misses some IPv6 reserved ranges, so loopback and link-local are named.
+  if ($host === '::1' || strpos($host, 'fe80:') === 0) return true;
+  return filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false;
+}
+
+/**
+ * A site tangible.one can never reach to verify: a local host (above), or
+ * WordPress's environment type says local or development. Such a site is
+ * never asked to verify; it stays `unverified` and works anyway.
+ */
+function is_local_site() {
+  $local = in_array(wp_get_environment_type(), ['local', 'development'], true)
+    || is_local_host(wp_parse_url(site_address(), PHP_URL_HOST));
+  return (bool) apply_filters('tangible_connect_is_local_site', $local);
 }
 
 function save_state($state) {

@@ -285,9 +285,8 @@ function is_licensed_distribution($plugin) {
 function is_dev_site() {
   $dev = in_array(wp_get_environment_type(), ['local', 'development'], true);
   if (!$dev) {
-    $host = strtolower((string) wp_parse_url(home_url(), PHP_URL_HOST));
-    $dev = in_array($host, ['localhost', '127.0.0.1', '[::1]'], true)
-      || (bool) preg_match('/\.(local|test|localhost|ddev\.site|lndo\.site)$/', $host);
+    // One host rule, shared with Connect's is_local_site().
+    $dev = \tangible\connect\is_local_host(wp_parse_url(home_url(), PHP_URL_HOST));
   }
   return (bool) apply_filters('tangible_onboarding_is_dev_site', $dev);
 }

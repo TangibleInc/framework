@@ -4,12 +4,15 @@
  *
  *   REST  POST tangible/v1/connect/verify — the platform's site-verification
  *         callback. Public by necessity (tangible.one calls it); it answers
- *         only while a connection is PENDING, and only with an HMAC proof
+ *         only while a connection is UNVERIFIED, and only with an HMAC proof
  *         derived from the token, never the token.
  *   PUC   the updater's get_metadata carries the token in a request header on
  *         keyless checks, and the connected `onboarding` block is cached from
- *         the response as the wizard's facts. A `connection: revoked` answer
- *         drops the token (fall back to Anonymous).
+ *         the response as the wizard's facts. The response's `connection`
+ *         keeps the stored status current, which is how a site verified in
+ *         the background (the platform retries) learns it — no cron of our
+ *         own. A `connection: revoked` answer drops the token (fall back to
+ *         Anonymous).
  *   Hub   the round-trip notice copy; hub/page.php draws the band and the
  *         site block and posts to flow.php's actions.
  */
@@ -25,7 +28,7 @@ function rest_verify($request) {
     return new \WP_REST_Response([ 'error' => 'invalid_challenge' ], 400);
   }
   $token = get_token();
-  if ($token === '' || (get_state()['status'] ?? '') !== 'pending') {
+  if ($token === '' || normalize_status(get_state()['status'] ?? '') !== 'unverified') {
     return new \WP_REST_Response([ 'error' => 'not_pending' ], 404);
   }
   return new \WP_REST_Response([ 'proof' => verification_proof($token, $challenge) ], 200);
@@ -80,7 +83,10 @@ function read_metadata_result($name, $result) {
     clear();
     return;
   }
-  if ($connection === 'active' && isset($body['onboarding']) && is_array($body['onboarding'])) {
+  $status = normalize_status($connection);
+  if (!in_array($status, ['unverified', 'active'], true)) return;
+  if ($status !== normalize_status(get_state()['status'] ?? '')) set_status($status);
+  if (isset($body['onboarding']) && is_array($body['onboarding'])) {
     update_option('tangible_onboarding_facts_cache__' . $name,
       [ 'at' => time(), 'data' => $body['onboarding'], 'source' => 'connect' ], false);
   }
@@ -125,7 +131,8 @@ add_action('tangible_connect_cleared', function () {
 function notice_copy($key) {
   $copy = [
     'connected'    => __('This site is connected to tangible.one.', 'tangible-framework'),
-    'pending'      => __('Connected, but tangible.one could not verify this site yet. Check that the REST API is reachable, then try again.', 'tangible-framework'),
+    'verified'     => __('tangible.one has verified this site.', 'tangible-framework'),
+    'unverified'   => __('tangible.one still could not reach this site. It keeps trying, and the connection works in the meantime.', 'tangible-framework'),
     'denied'       => __('Connection cancelled.', 'tangible-framework'),
     'error'        => __('Connecting did not work. Start again.', 'tangible-framework'),
     'revoked'      => __('The connection was revoked on tangible.one.', 'tangible-framework'),
@@ -136,9 +143,32 @@ function notice_copy($key) {
 
 const NOTICE_COPY = [
   'connected'    => 'This site is connected to tangible.one.',
-  'pending'      => 'Connected, but tangible.one could not verify this site yet. Check that the REST API is reachable, then try again.',
+  'verified'     => 'tangible.one has verified this site.',
+  'unverified'   => 'tangible.one still could not reach this site. It keeps trying, and the connection works in the meantime.',
   'denied'       => 'Connection cancelled.',
   'error'        => 'Connecting did not work. Start again.',
   'revoked'      => 'The connection was revoked on tangible.one.',
   'disconnected' => 'This site is no longer connected.',
 ];
+
+/**
+ * The one plain line a connected-but-unverified site adds under
+ * "Connected as …", in the wizard and the Hub alike; '' once verified.
+ */
+function unverified_note() {
+  if (!is_connected() || is_verified()) return '';
+  return is_local_site()
+    ? __('This is a local site, so it\'s linked to your account without the online check.', 'tangible-framework')
+    : __('We\'ll finish linking this site once it\'s online.', 'tangible-framework');
+}
+
+/** The Hub's "Why?": the technical reason, never shown in the wizard. */
+function unverified_reason() {
+  $host = strtolower((string) wp_parse_url(site_address(), PHP_URL_HOST));
+  if (is_local_site()) {
+    /* translators: %s: this site's host name */
+    return sprintf(__('%s is a local site, which tangible.one cannot reach from the internet, so it skips the online check. Everything the connection does for your free plugins works without it.', 'tangible-framework'), $host);
+  }
+  /* translators: %s: this site's host name */
+  return sprintf(__('tangible.one could not reach %s/wp-json/ to verify that this site is yours. Check that the site is public and its REST API is not blocked (Tangible Site Gate lets the check through automatically). tangible.one keeps trying; you can also check again now.', 'tangible-framework'), $host);
+}
