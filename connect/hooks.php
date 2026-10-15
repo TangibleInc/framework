@@ -84,6 +84,10 @@ function read_metadata_result($name, $result) {
     return;
   }
   $status = normalize_status($connection);
+  // The server answers `connection: active` for every working token (older
+  // plugins only cache onboarding data on 'active') and says whether it is
+  // verified in a separate `verified` flag.
+  if ($status === 'active' && ($body['verified'] ?? true) === false) $status = 'unverified';
   if (!in_array($status, ['unverified', 'active'], true)) return;
   if ($status !== normalize_status(get_state()['status'] ?? '')) set_status($status);
   if (isset($body['onboarding']) && is_array($body['onboarding'])) {

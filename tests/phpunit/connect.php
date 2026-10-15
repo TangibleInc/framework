@@ -222,11 +222,13 @@ class Connect_TestCase extends \WP_UnitTestCase {
   function test_metadata_results_cache_the_block_and_a_revoke_drops_the_token() {
     connect\save_state([ 'token' => self::TOKEN, 'status' => 'unverified' ]);
     $block = [ 'accountId' => 'a1', 'accountName' => 'Acme', 'ask' => [ 'telemetry_extended' => 'skip', 'marketing' => 'ask' ] ];
-    connect\read_metadata_result('freeplug', [ 'body' => wp_json_encode([ 'connection' => 'unverified', 'onboarding' => $block ]) ]);
+    // The server says `active` for any working token and flags verification separately.
+    connect\read_metadata_result('freeplug', [ 'body' => wp_json_encode([ 'connection' => 'active', 'verified' => false, 'onboarding' => $block ]) ]);
     $this->assertSame('skip', onboarding\build_facts('freeplug')->ask['telemetry_extended']);
+    $this->assertTrue(connect\is_connected());
     $this->assertFalse(connect\is_verified());
     // Verified in the background: the next update check says so.
-    connect\read_metadata_result('freeplug', [ 'body' => wp_json_encode([ 'connection' => 'active' ]) ]);
+    connect\read_metadata_result('freeplug', [ 'body' => wp_json_encode([ 'connection' => 'active', 'verified' => true ]) ]);
     $this->assertTrue(connect\is_verified());
 
     connect\read_metadata_result('freeplug', [ 'body' => wp_json_encode([ 'connection' => 'revoked' ]) ]);
