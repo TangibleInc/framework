@@ -399,6 +399,9 @@ function register_wizard($plugin, $args = []) {
 
   add_action('admin_init', function () use ($plugin, $name) {
     if (($_GET['page'] ?? '') === get_setup_slug($plugin)) return;
+    // The Hub shows pending setup itself (Finish setting up), so the notice
+    // would only repeat it there.
+    if (defined('tangible\\hub\\PAGE') && ($_GET['page'] ?? '') === \tangible\hub\PAGE) return;
     $notice = setup_notice($plugin);
     if (!$notice) return;
     framework\register_admin_notice(function () use ($plugin, $notice) {
