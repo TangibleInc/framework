@@ -12,8 +12,9 @@
  *         keeps the stored status current, which is how a site verified in
  *         the background (the platform retries) learns it — no cron of our
  *         own. A `connection: revoked` answer drops the token (fall back to
- *         Anonymous).
- *   Hub   the round-trip notice copy; hub/page.php draws the band and the
+ *         Anonymous). The exchange and confirm answers carry the same block,
+ *         cached for every free plugin on the site (cache_onboarding_block).
+ *   Hub  the round-trip notice copy; hub/page.php draws the band and the
  *         site block and posts to flow.php's actions.
  */
 namespace tangible\connect;
@@ -107,10 +108,46 @@ function read_metadata_result($name, $result) {
   if ($status === 'active' && ($body['verified'] ?? true) === false) $status = 'unverified';
   if (!in_array($status, ['unverified', 'active'], true)) return;
   if ($status !== normalize_status(get_state()['status'] ?? '')) set_status($status);
-  if (isset($body['onboarding']) && is_array($body['onboarding'])) {
+  if (isset($body['onboarding'])) cache_onboarding_block($body['onboarding'], [ $name ]);
+}
+
+/**
+ * Cache the account's `onboarding` block (the same shape get_metadata,
+ * exchange and confirm send) as the wizard's facts for each named plugin —
+ * what onboarding\build_facts() reads. Deep-converted to arrays: nested
+ * stdClass once made the reader ignore a good block. Not an array → nothing
+ * is written. Returns whether it wrote.
+ */
+function cache_onboarding_block($block, $plugin_names) {
+  $data = json_decode(wp_json_encode($block), true);
+  if (!is_array($data)) return false;
+  foreach ((array) $plugin_names as $name) {
+    if (!is_string($name) || $name === '') continue;
     update_option('tangible_onboarding_facts_cache__' . $name,
-      [ 'at' => time(), 'data' => $body['onboarding'], 'source' => 'connect' ], false);
+      [ 'at' => time(), 'data' => $data, 'source' => 'connect' ], false);
   }
+  return true;
+}
+
+/**
+ * Every registered plugin the site's connection speaks for: free and holding
+ * no licence key. Connect is site-wide, so these share one account's answers.
+ */
+function covered_plugin_names() {
+  if (!class_exists('tangible\\framework') || !function_exists('tangible\\onboarding\\is_free_distribution')) return [];
+  $names = [];
+  foreach ((array) (framework::$state->plugins ?? []) as $plugin) {
+    $name = $plugin->name ?? '';
+    if (!is_string($name) || $name === '' || !empty($plugin->is_theme)) continue;
+    if (\tangible\onboarding\is_free_distribution($plugin) && !plugin_has_license_key($name)) $names[] = $name;
+  }
+  return array_values(array_unique($names));
+}
+
+/** An exchange or confirm answer's `onboarding` block, cached for every covered plugin. */
+function cache_onboarding_from_response($body) {
+  if (!is_array($body) || !isset($body['onboarding'])) return;
+  cache_onboarding_block($body['onboarding'], covered_plugin_names());
 }
 
 /** Wire every plugin the updater registered. Idempotent per name. */
@@ -133,8 +170,11 @@ add_action('init', __NAMESPACE__ . '\\hook_update_checkers', 20);
 
 /** Connected-account facts must not outlive the connection. */
 add_action('tangible_connect_cleared', function () {
-  if (!class_exists('tangible\\updater') || !isset(\tangible\updater::$instance->update_checkers)) return;
-  foreach (array_keys((array) \tangible\updater::$instance->update_checkers) as $name) {
+  $names = covered_plugin_names();
+  if (class_exists('tangible\\updater') && isset(\tangible\updater::$instance->update_checkers)) {
+    $names = array_merge($names, array_keys((array) \tangible\updater::$instance->update_checkers));
+  }
+  foreach (array_unique($names) as $name) {
     $cache = get_option('tangible_onboarding_facts_cache__' . $name, null);
     if (is_array($cache) && ($cache['source'] ?? '') === 'connect') {
       delete_option('tangible_onboarding_facts_cache__' . $name);

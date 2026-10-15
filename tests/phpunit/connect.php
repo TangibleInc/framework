@@ -243,6 +243,64 @@ class Connect_TestCase extends \WP_UnitTestCase {
     delete_option('tangible_onboarding_facts_cache__freeplug');
   }
 
+  /** Two free plugins on one site; returns the block exchange/confirm carry. */
+  private function two_free_plugins() {
+    foreach (['freeone', 'freetwo'] as $name) {
+      if (!\tangible\framework\get_plugin($name)) {
+        \tangible\framework\register_plugin([ 'name' => $name, 'title' => $name, 'setting_prefix' => $name ]);
+      }
+      update_option($name . '_distribution', 'free', false);
+      delete_option('tangible_onboarding_facts_cache__' . $name);
+    }
+    return [ 'accountId' => 'a1', 'accountName' => 'Acme', 'ask' => [ 'telemetry_extended' => 'ask', 'marketing' => 'skip' ] ];
+  }
+
+  function test_the_exchange_answer_caches_the_onboarding_block_for_every_free_plugin() {
+    $block = $this->two_free_plugins();
+    [, $q] = $this->start();   // a local site: exchange only, no confirm
+    $this->fake_platform([
+      '/api/v1/connect/exchange' => [200, [ 'status' => 'unverified', 'token' => self::TOKEN, 'onboarding' => $block ]],
+    ]);
+    $this->assertSame('connected', connect\handle_return($this->admin, [ 'state' => $q['state'], 'code' => self::CODE ])['status']);
+    foreach (['freeone', 'freetwo'] as $name) {
+      $this->assertSame('skip', onboarding\build_facts($name)->ask['marketing'], $name);
+      $this->assertSame('Acme', onboarding\build_facts($name)->account_name, $name);
+    }
+    // Facts from the connection go with it.
+    connect\clear();
+    $this->assertFalse(get_option('tangible_onboarding_facts_cache__freeone'));
+  }
+
+  function test_the_confirm_answer_caches_the_onboarding_block_for_every_free_plugin() {
+    $block = $this->two_free_plugins();
+    $this->as_public_site();
+    [, $q] = $this->start();
+    $this->fake_platform([
+      '/api/v1/connect/exchange' => [200, [ 'status' => 'unverified', 'token' => self::TOKEN ]],
+      '/api/v1/connect/confirm'  => [200, [ 'status' => 'active', 'onboarding' => $block ]],
+    ]);
+    $this->assertSame('connected', connect\handle_return($this->admin, [ 'state' => $q['state'], 'code' => self::CODE ])['status']);
+    foreach (['freeone', 'freetwo'] as $name) {
+      $this->assertSame('skip', onboarding\build_facts($name)->ask['marketing'], $name);
+    }
+  }
+
+  function test_no_onboarding_block_leaves_the_cache_untouched() {
+    $this->two_free_plugins();
+    $before = [ 'at' => 1, 'data' => [ 'ask' => [ 'marketing' => 'ask' ] ] ];
+    update_option('tangible_onboarding_facts_cache__freeone', $before, false);
+    $this->as_public_site();
+    [, $q] = $this->start();
+    $this->fake_platform([
+      '/api/v1/connect/exchange' => [200, [ 'status' => 'unverified', 'token' => self::TOKEN ]],
+      '/api/v1/connect/confirm'  => [200, [ 'status' => 'active' ]],
+    ]);
+    $this->assertSame('connected', connect\handle_return($this->admin, [ 'state' => $q['state'], 'code' => self::CODE ])['status']);
+    $this->assertSame($before, get_option('tangible_onboarding_facts_cache__freeone'));
+    $this->assertFalse(get_option('tangible_onboarding_facts_cache__freetwo'));
+    delete_option('tangible_onboarding_facts_cache__freeone');
+  }
+
   function test_a_staging_cloud_url_points_connect_at_staging() {
     $origin = connect\url_origin('https://api.staging.tangible.one/api/edd');
     $this->assertSame('https://api.staging.tangible.one', $origin);
