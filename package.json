@@ -18,6 +18,7 @@
     "build:libs": "roll build",
     "archive": "roll archive",
     "format": "roll format",
+    "i18n:lint": "node ../tangible-strings/bin/tangible-strings.mjs lint .",
     "version": "node version.js",
     "subrepo": "git-subrepo",
     "now": "wp-now start --blueprint=blueprint.dev.json",
