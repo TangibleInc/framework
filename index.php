@@ -16,7 +16,7 @@ require_once __DIR__ . '/utils/index.php';
 (include __DIR__ . '/module-loader.php')(new class {
 
   public $name = 'tangible_framework';
-  public $version = '20261014';
+  public $version = '20261015';
 
   function load() {
 
@@ -31,10 +31,14 @@ require_once __DIR__ . '/utils/index.php';
 
     // The framework's own strings (onboarding, Connect) are in the
     // tangible-framework domain, translated in languages/. A site-level
-    // file in wp-content/languages/plugins/ still wins: WordPress loads it
-    // just in time, before this one is consulted.
+    // file in wp-content/languages/plugins/ wins: it is loaded first, and
+    // the earliest file loaded for a domain takes precedence. (Loading only
+    // the bundled file would set the domain and skip WordPress's
+    // just-in-time lookup, so the site's own file would never be read.)
     $load_translations = function () {
-      load_textdomain('tangible-framework', __DIR__ . '/languages/tangible-framework-' . determine_locale() . '.mo');
+      $mofile = 'tangible-framework-' . determine_locale() . '.mo';
+      load_textdomain('tangible-framework', WP_LANG_DIR . '/plugins/' . $mofile);
+      load_textdomain('tangible-framework', __DIR__ . '/languages/' . $mofile);
     };
     did_action('init') ? $load_translations() : add_action('init', $load_translations, 0);
   

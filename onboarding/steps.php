@@ -502,11 +502,16 @@ function usage_rows($plugin) {
   }, ARRAY_FILTER_USE_BOTH));
   $theme = wp_get_theme();
 
+  // The framework's own key stays English, so a filter can address it on
+  // any locale; it is translated only when shown.
   $counts = (array) apply_filters('tangible_onboarding_content_counts', [
-    __('posts and pages', 'tangible-framework') => (int) ($posts->publish ?? 0) + (int) ($pages->publish ?? 0),
+    'posts and pages' => (int) ($posts->publish ?? 0) + (int) ($pages->publish ?? 0),
   ], $plugin);
   $content = [];
-  foreach ($counts as $label => $n) $content[] = number_format_i18n((int) $n) . ' ' . $label;
+  foreach ($counts as $label => $n) {
+    if ($label === 'posts and pages') $label = __('posts and pages', 'tangible-framework');
+    $content[] = number_format_i18n((int) $n) . ' ' . $label;
+  }
 
   // One row per group of what a check-in sends, each with this site's value
   // (Cristian's copy, Plugin Wizard Figma "Free 02"). The keys stay English —

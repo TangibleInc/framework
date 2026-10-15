@@ -97,7 +97,7 @@ function welcome_config($plugin) {
  */
 function normalize_media($media, $video = '') {
   if (!is_array($media) || (empty($media['image']) && empty($media['href']))) {
-    $media = $video !== '' ? ['href' => $video, 'kind' => 'video'] : null;
+    $media = is_string($video) && $video !== '' ? ['href' => $video, 'kind' => 'video'] : null;
   }
   if (!$media) return null;
   $media = array_merge(['image' => '', 'alt' => '', 'href' => '', 'label' => '', 'kind' => 'post'], $media);
@@ -200,7 +200,9 @@ function render_welcome_media($plugin, $config) {
     ?></section><?php
     return;
   }
-  $aside = $image || $config['inset'] || $media;
+  // A bare link (no image, no inset) is only the play button: it rides in
+  // the inset slot but needs no second column, as before the media slot.
+  $aside = $image || $config['inset'];
   $classes = 'tgbl-hero' . ($rich ? '' : ' is-plain') . ($aside ? ' has-aside' : '');
   ?>
   <section class="tgbl-media">
