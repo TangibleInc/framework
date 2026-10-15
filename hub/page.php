@@ -301,7 +301,7 @@ function connect_flash() {
   $notice = get_transient($key);
   if (!$notice) return '';
   delete_transient($key);
-  return \tangible\connect\NOTICE_COPY[$notice] ?? '';
+  return \tangible\connect\notice_copy($notice);
 }
 
 function app_url($path) {

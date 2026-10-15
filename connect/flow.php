@@ -173,7 +173,7 @@ function notice_key($user_id) {
 // ── admin-post endpoints ─────────────────────────────────────────────────
 
 add_action('admin_post_tangible_connect_start', function () {
-  if (!current_user_can('manage_options')) wp_die('Nope', 403);
+  if (!current_user_can('manage_options')) wp_die(esc_html__('Nope', 'tangible-framework'), 403);
   check_admin_referer('tangible_connect_start');
   $return_to = wp_validate_redirect(
     wp_unslash($_POST['return_to'] ?? ''),
@@ -184,7 +184,7 @@ add_action('admin_post_tangible_connect_start', function () {
 });
 
 add_action('admin_post_tangible_connect_return', function () {
-  if (!current_user_can('manage_options')) wp_die('Nope', 403);
+  if (!current_user_can('manage_options')) wp_die(esc_html__('Nope', 'tangible-framework'), 403);
   check_admin_referer('tangible_connect_return');
   $result = handle_return(get_current_user_id(), wp_unslash($_GET));
   set_transient(notice_key(get_current_user_id()), $result['status'], 5 * MINUTE_IN_SECONDS);
@@ -193,7 +193,7 @@ add_action('admin_post_tangible_connect_return', function () {
 });
 
 add_action('admin_post_tangible_connect_confirm', function () {
-  if (!current_user_can('manage_options')) wp_die('Nope', 403);
+  if (!current_user_can('manage_options')) wp_die(esc_html__('Nope', 'tangible-framework'), 403);
   check_admin_referer('tangible_connect_confirm');
   $status = confirm();
   if ($status === 'active') after_connected('');
@@ -203,7 +203,7 @@ add_action('admin_post_tangible_connect_confirm', function () {
 });
 
 add_action('admin_post_tangible_connect_disconnect', function () {
-  if (!current_user_can('manage_options')) wp_die('Nope', 403);
+  if (!current_user_can('manage_options')) wp_die(esc_html__('Nope', 'tangible-framework'), 403);
   check_admin_referer('tangible_connect_disconnect');
   disconnect();
   set_transient(notice_key(get_current_user_id()), 'disconnected', 5 * MINUTE_IN_SECONDS);

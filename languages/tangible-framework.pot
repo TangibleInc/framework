@@ -1,0 +1,491 @@
+# Copyright (C) 2026 
+# This file is distributed under the same license as the Tangible Framework plugin.
+msgid ""
+msgstr ""
+"Project-Id-Version: Tangible Framework 2026.10.3\n"
+"Report-Msgid-Bugs-To: https://github.com/TangibleInc/framework/issues\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"POT-Creation-Date: 2026-10-14T19:52:21+00:00\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"X-Generator: WP-CLI 2.12.0\n"
+"X-Domain: tangible-framework\n"
+
+#. Plugin Name of the plugin
+#: plugin.php
+msgid "Tangible Framework"
+msgstr ""
+
+#. Description of the plugin
+#: plugin.php
+msgid "Framework module shared by Tangible plugins"
+msgstr ""
+
+#: connect/flow.php:176
+#: connect/flow.php:187
+#: connect/flow.php:196
+#: connect/flow.php:206
+#: onboarding/site-telemetry.php:114
+#: onboarding/wizard.php:568
+msgid "Nope"
+msgstr ""
+
+#: connect/hooks.php:127
+msgid "This site is connected to tangible.one."
+msgstr ""
+
+#: connect/hooks.php:128
+msgid "Connected, but tangible.one could not verify this site yet. Check that the REST API is reachable, then try again."
+msgstr ""
+
+#: connect/hooks.php:129
+msgid "Connection cancelled."
+msgstr ""
+
+#: connect/hooks.php:130
+msgid "Connecting did not work. Start again."
+msgstr ""
+
+#: connect/hooks.php:131
+msgid "The connection was revoked on tangible.one."
+msgstr ""
+
+#: connect/hooks.php:132
+msgid "This site is no longer connected."
+msgstr ""
+
+#. translators: %s: this site's host name
+#: connect/step.php:36
+#, php-format
+msgid "tangible.one has to reach %s to verify it, and a local development site is not reachable from the internet."
+msgstr ""
+
+#. translators: %s: this site's host name
+#: connect/step.php:39
+#, php-format
+msgid "tangible.one could not reach %s/wp-json/ to verify it. Check that the site is public and its REST API is not blocked."
+msgstr ""
+
+#: connect/step.php:49
+#: connect/step.php:85
+msgid "Connect this site to tangible.one"
+msgstr ""
+
+#. translators: %s: tangible.one account name
+#: connect/step.php:55
+#, php-format
+msgid "Connected as %s"
+msgstr ""
+
+#: connect/step.php:56
+msgid "your tangible.one account"
+msgstr ""
+
+#: connect/step.php:57
+msgid "Every free Tangible plugin on this site now uses this connection, and your setup answers follow the account."
+msgstr ""
+
+#: connect/step.php:63
+msgid "Disconnect"
+msgstr ""
+
+#: connect/step.php:72
+msgid "Waiting for tangible.one to verify this site"
+msgstr ""
+
+#. translators: %s: tangible.one account name, in bold
+#: connect/step.php:76
+#, php-format
+msgid "You approved the connection to %s."
+msgstr ""
+
+#: connect/step.php:77
+msgid "You approved the connection."
+msgstr ""
+
+#: connect/step.php:79
+msgid "It finishes by itself once verification works, so you can get started now."
+msgstr ""
+
+#: connect/step.php:80
+msgid "Check again"
+msgstr ""
+
+#: connect/step.php:86
+msgid "Optional and free. One connection covers every free Tangible plugin on this site, so you answer setup questions once instead of once per plugin."
+msgstr ""
+
+#: connect/step.php:87
+msgid "Connect to tangible.one"
+msgstr ""
+
+#. translators: %s: why verification has not happened yet
+#: connect/step.php:113
+#, php-format
+msgid "Still waiting: %s"
+msgstr ""
+
+#: onboarding/site-telemetry.php:90
+msgid "performance timings, which features are used, content counts. Never content, users or visitors."
+msgstr ""
+
+#: onboarding/site-telemetry.php:92
+msgid "Usage data is <b>not sent</b> from this site, by any Tangible plugin."
+msgstr ""
+
+#: onboarding/site-telemetry.php:93
+msgid "Usage data is <b>not sent</b> from this site. Nobody has been asked yet."
+msgstr ""
+
+#. translators: %s: what usage data includes
+#: onboarding/site-telemetry.php:95
+#, php-format
+msgid "Tangible plugins on this site send usage data — %s"
+msgstr ""
+
+#. translators: %s: what usage data includes
+#: onboarding/site-telemetry.php:97
+#, php-format
+msgid "Tangible plugins on this site send usage data under your tangible.one account's terms — %s"
+msgstr ""
+
+#: onboarding/site-telemetry.php:107
+msgid "Don't send usage data from this site"
+msgstr ""
+
+#: onboarding/site-telemetry.php:108
+msgid "Send usage data from this site"
+msgstr ""
+
+#: onboarding/steps.php:374
+msgid "The updater module is not available on this site."
+msgstr ""
+
+#: onboarding/steps.php:402
+msgid "License validation failed."
+msgstr ""
+
+#: onboarding/steps.php:441
+msgid "Enter your license key to continue. You can find it in your tangible.one account."
+msgstr ""
+
+#: onboarding/steps.php:453
+msgid "Your license key"
+msgstr ""
+
+#. translators: %s: link to the customer's tangible.one account, "tangible.one account"
+#: onboarding/steps.php:457
+#, php-format
+msgid "Find it in your %s. It activates this site and unlocks updates."
+msgstr ""
+
+#: onboarding/steps.php:458
+msgid "tangible.one account"
+msgstr ""
+
+#: onboarding/steps.php:460
+msgid "License key"
+msgstr ""
+
+#: onboarding/steps.php:465
+msgid "Your license is valid."
+msgstr ""
+
+#. translators: %s: product name on the licence
+#: onboarding/steps.php:469
+#, php-format
+msgid "%s, lifetime."
+msgstr ""
+
+#. translators: 1: product name on the licence, 2: renewal date
+#: onboarding/steps.php:471
+#, php-format
+msgid "%1$s, renews %2$s."
+msgstr ""
+
+#: onboarding/steps.php:477
+msgid "Saved. tangible.one could not be reached to confirm it, so it will be checked again shortly."
+msgstr ""
+
+#: onboarding/steps.php:506
+msgid "posts and pages"
+msgstr ""
+
+#. translators: 1: number of users, 2: number of roles
+#: onboarding/steps.php:521
+#, php-format
+msgid "%1$s users · %2$s roles"
+msgstr ""
+
+#: onboarding/steps.php:524
+msgid "Not detected"
+msgstr ""
+
+#: onboarding/steps.php:525
+msgid "Weekly averages, measured on this site"
+msgstr ""
+
+#: onboarding/steps.php:534
+msgid "WordPress and PHP versions"
+msgstr ""
+
+#: onboarding/steps.php:535
+msgid "Theme"
+msgstr ""
+
+#: onboarding/steps.php:536
+msgid "Active plugins"
+msgstr ""
+
+#: onboarding/steps.php:537
+msgid "Users and roles"
+msgstr ""
+
+#: onboarding/steps.php:538
+msgid "Published content"
+msgstr ""
+
+#: onboarding/steps.php:539
+msgid "Hosting provider"
+msgstr ""
+
+#: onboarding/steps.php:540
+msgid "Page speed"
+msgstr ""
+
+#: onboarding/steps.php:584
+msgid "Usage data from this site is now shared under your tangible.one terms. You can turn it off in Settings → Tangible Plugins."
+msgstr ""
+
+#: onboarding/steps.php:588
+msgid "Never your content, your users or your visitors. One answer covers every Tangible plugin on this site, and you can change it any time in Settings."
+msgstr ""
+
+#. translators: %s: comma-separated list of what would be sent
+#: onboarding/steps.php:599
+#, php-format
+msgid "Share usage data from this site? Exactly what would be sent: %s."
+msgstr ""
+
+#. translators: %s: plugin name
+#: onboarding/steps.php:613
+#, php-format
+msgid "Get release notes from the makers of %s"
+msgstr ""
+
+#: onboarding/steps.php:614
+msgid "this plugin"
+msgstr ""
+
+#: onboarding/steps.php:634
+msgid "Usage data"
+msgstr ""
+
+#: onboarding/steps.php:643
+msgctxt "setup step state"
+msgid "on file"
+msgstr ""
+
+#: onboarding/steps.php:645
+msgid "Don't share"
+msgstr ""
+
+#: onboarding/steps.php:646
+msgid "Share usage data"
+msgstr ""
+
+#: onboarding/steps.php:651
+msgid "Share usage data from this site?"
+msgstr ""
+
+#. translators: %s: plugin's short name
+#: onboarding/steps.php:654
+#, php-format
+msgid "Optional. %s works exactly the same either way, so No is a complete answer."
+msgstr ""
+
+#: onboarding/steps.php:656
+msgid "Exactly what would be sent"
+msgstr ""
+
+#. translators: %s: plugin name
+#: onboarding/steps.php:726
+#, php-format
+msgid "%s is ready"
+msgstr ""
+
+#: onboarding/steps.php:729
+#: onboarding/steps.php:783
+msgid "What people usually do next"
+msgstr ""
+
+#: onboarding/steps.php:730
+#: onboarding/wizard.php:1383
+msgid "Go to Tangible Home"
+msgstr ""
+
+#: onboarding/steps.php:737
+msgid "Done"
+msgstr ""
+
+#: onboarding/steps.php:747
+msgid "Finish setup"
+msgstr ""
+
+#: onboarding/steps.php:761
+msgid "Enter an email address for the release notes."
+msgstr ""
+
+#: onboarding/steps.php:806
+#: onboarding/steps.php:810
+msgid "Send to"
+msgstr ""
+
+#. translators: %s: the account's email address, partly masked
+#: onboarding/steps.php:815
+#, php-format
+msgid "%s, your tangible.one account email"
+msgstr ""
+
+#: onboarding/steps.php:816
+msgid "The email on your tangible.one account"
+msgstr ""
+
+#: onboarding/steps.php:818
+msgid "Finish Setup"
+msgstr ""
+
+#. translators: %s: plugin name
+#: onboarding/welcome.php:74
+#, php-format
+msgid "Welcome to %s"
+msgstr ""
+
+#: onboarding/welcome.php:113
+msgid "Welcome"
+msgstr ""
+
+#: onboarding/welcome.php:117
+msgid "Get started"
+msgstr ""
+
+#: onboarding/welcome.php:125
+msgctxt "setup step state"
+msgid "set up"
+msgstr ""
+
+#: onboarding/welcome.php:176
+msgid "Keeps license and renewal news out of this dashboard and emails the account owner instead."
+msgstr ""
+
+#: onboarding/welcome.php:177
+msgid "Keeps upgrade offers and account news out of this dashboard and emails the account owner instead."
+msgstr ""
+
+#: onboarding/welcome.php:182
+msgid "I am installing this for a client"
+msgstr ""
+
+#: onboarding/welcome.php:184
+msgid "Covers every Tangible plugin on this site. You can change this later in Settings."
+msgstr ""
+
+#. translators: %s: link text, e.g. "Watch the video"
+#: onboarding/welcome.php:235
+#: onboarding/welcome.php:279
+#, php-format
+msgid "%s (opens in a new tab)"
+msgstr ""
+
+#: onboarding/welcome.php:288
+msgid "Watch the video"
+msgstr ""
+
+#: onboarding/welcome.php:289
+msgid "Read more"
+msgstr ""
+
+#: onboarding/welcome.php:314
+msgid "(opens in a new tab)"
+msgstr ""
+
+#. translators: %s: number of setup steps left
+#: onboarding/wizard.php:341
+#, php-format
+msgid "Setup (%s step left)"
+msgid_plural "Setup (%s steps left)"
+msgstr[0] ""
+msgstr[1] ""
+
+#: onboarding/wizard.php:342
+msgid "Setup"
+msgstr ""
+
+#. translators: %s: plugin name
+#: onboarding/wizard.php:361
+#: onboarding/wizard.php:738
+#, php-format
+msgid "%s setup"
+msgstr ""
+
+#: onboarding/wizard.php:408
+msgid "add your license key to finish setup."
+msgstr ""
+
+#. translators: %s: number of setup steps left
+#: onboarding/wizard.php:410
+#, php-format
+msgid "setup has %s step left."
+msgid_plural "setup has %s steps left."
+msgstr[0] ""
+msgstr[1] ""
+
+#: onboarding/wizard.php:413
+msgid "Continue setup"
+msgstr ""
+
+#: onboarding/wizard.php:623
+msgid "Setup progress"
+msgstr ""
+
+#: onboarding/wizard.php:627
+msgctxt "setup step state"
+msgid "complete"
+msgstr ""
+
+#: onboarding/wizard.php:628
+msgctxt "setup step state"
+msgid "skipped"
+msgstr ""
+
+#: onboarding/wizard.php:1364
+msgid "Exit setup"
+msgstr ""
+
+#: onboarding/wizard.php:1375
+msgid "Nothing left to ask."
+msgstr ""
+
+#: onboarding/wizard.php:1376
+msgid "Everything is either configured or already on file."
+msgstr ""
+
+#: onboarding/wizard.php:1425
+msgid "Back"
+msgstr ""
+
+#: onboarding/wizard.php:1438
+msgid "Skip this step"
+msgstr ""
+
+#: onboarding/wizard.php:1442
+msgid "Continue"
+msgstr ""
+
+#: empty-block-theme/theme.json
+msgctxt "Custom template name"
+msgid "Custom"
+msgstr ""

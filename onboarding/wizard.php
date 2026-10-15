@@ -336,7 +336,10 @@ function register_wizard($plugin, $args = []) {
     add_filter('plugin_action_links_' . plugin_basename($plugin->file_path), function ($links) use ($plugin, $name) {
       if (!current_user_can('manage_options')) return $links;
       $left = steps_left($name);
-      $label = $left ? 'Setup (' . $left . ' step' . ($left === 1 ? '' : 's') . ' left)' : 'Setup';
+      $label = $left
+        /* translators: %s: number of setup steps left */
+        ? sprintf(_n('Setup (%s step left)', 'Setup (%s steps left)', $left, 'tangible-framework'), number_format_i18n($left))
+        : __('Setup', 'tangible-framework');
       array_unshift($links, '<a href="' . esc_url(get_setup_url($plugin)) . '">' . esc_html($label) . '</a>');
       return $links;
     });
@@ -354,7 +357,8 @@ function register_wizard($plugin, $args = []) {
     // sent later in the request. Supply the title before admin-header runs.
     if ($hook) {
       add_action('load-' . $hook, function () use ($plugin) {
-        $GLOBALS['title'] = ($plugin->title ?? $plugin->name) . ' setup';
+        /* translators: %s: plugin name */
+        $GLOBALS['title'] = sprintf(__('%s setup', 'tangible-framework'), $plugin->title ?? $plugin->name);
         // The wizard is a takeover: the CSS hides the admin bar, but WP still
         // emits its markup and a remote gravatar request for it. Inside
         // wp-admin the `show_admin_bar` filter is never consulted
@@ -406,11 +410,12 @@ function register_wizard($plugin, $args = []) {
       // When the licence is what's missing, say so: this notice is the only
       // licence message while setup is pending (the updater's yield below).
       $what = $notice['licence']
-        ? 'add your license key to finish setup.'
-        : "setup has $n step" . ($n === 1 ? '' : 's') . ' left.';
+        ? __('add your license key to finish setup.', 'tangible-framework')
+        /* translators: %s: number of setup steps left */
+        : sprintf(_n('setup has %s step left.', 'setup has %s steps left.', $n, 'tangible-framework'), number_format_i18n($n));
       echo "<div class=\"$class\" data-tangible-admin-notice=\"$key\">"
-         . "<p><strong>$title</strong> — $what "
-         . "<a href=\"$url\">Continue setup</a></p></div>";
+         . "<p><strong>$title</strong> — " . esc_html($what) . ' '
+         . "<a href=\"$url\">" . esc_html__('Continue setup', 'tangible-framework') . '</a></p></div>';
     });
   });
 
@@ -565,7 +570,7 @@ function step_error_key($plugin_name) {
 }
 
 add_action('admin_post_tangible_onboarding_step', function () {
-  if (!current_user_can('manage_options')) wp_die('Nope');
+  if (!current_user_can('manage_options')) wp_die(esc_html__('Nope', 'tangible-framework'));
   check_admin_referer('tangible_onboarding_step');
   $plugin_name = sanitize_text_field($_POST['plugin'] ?? '');
   handle_step_submission($plugin_name, $_POST);
@@ -620,11 +625,12 @@ add_action('admin_post_tangible_onboarding_step', function () {
  */
 function render_stepper($rail, $current_id) {
   ?>
-  <nav aria-label="Setup progress" class="tgbl-steps">
+  <nav aria-label="<?php esc_attr_e('Setup progress', 'tangible-framework'); ?>" class="tgbl-steps">
     <ol class="tgbl-steps__list">
       <?php foreach ($rail as $r) :
         $state = $r['state'];
-        $suffix = $state === 'done' ? 'complete' : ($state === 'skipped' ? 'skipped' : ''); ?>
+        $suffix = $state === 'done' ? _x('complete', 'setup step state', 'tangible-framework')
+          : ($state === 'skipped' ? _x('skipped', 'setup step state', 'tangible-framework') : ''); ?>
         <li class="tgbl-steps__step" data-state="<?php echo esc_attr($state); ?>"
             <?php if ($r['id'] === $current_id) echo 'aria-current="step"'; ?>>
           <span class="tgbl-steps__dot" aria-hidden="true"></span>
@@ -732,7 +738,9 @@ function render_lockup($plugin) {
   if ($logo) {
     ?>
     <img class="tgbl-wizard__logo is-plugin" src="<?php echo esc_url($logo); ?>"
-         alt="<?php echo esc_attr($plugin->title ?? $plugin->name); ?> setup" />
+         alt="<?php
+           /* translators: %s: plugin name */
+           echo esc_attr(sprintf(__('%s setup', 'tangible-framework'), $plugin->title ?? $plugin->name)); ?>" />
     <?php
     return;
   }
@@ -1375,7 +1383,7 @@ function render_wizard($plugin) {
     <header class="tgbl-wizard__topbar">
       <?php render_lockup($plugin); ?>
       <a class="tgbl-wizard__exit"
-         href="<?php echo esc_url(admin_url('admin.php?page=tangible-home')); ?>">Exit setup</a>
+         href="<?php echo esc_url(admin_url('admin.php?page=tangible-home')); ?>"><?php esc_html_e('Exit setup', 'tangible-framework'); ?></a>
     </header>
     <div class="tgbl-wizard__stepbar">
       <?php render_stepper($plan['rail'], $plan['current']); ?>
@@ -1386,15 +1394,15 @@ function render_wizard($plugin) {
         <main class="tgbl-wizard__well">
           <div class="tgbl-wizard__page">
             <div class="tgbl-wizard__body">
-              <h2>Nothing left to ask.</h2>
-              <p class="step-intro">Everything is either configured or already on file.</p>
+              <h2><?php esc_html_e('Nothing left to ask.', 'tangible-framework'); ?></h2>
+              <p class="step-intro"><?php esc_html_e('Everything is either configured or already on file.', 'tangible-framework'); ?></p>
             </div>
           </div>
         </main>
         <footer class="tgbl-wizard__footer">
           <span style="flex:1"></span>
           <a class="tui-button is-theme-primary"
-             href="<?php echo esc_url(admin_url('admin.php?page=tangible-home')); ?>">Go to Tangible Home</a>
+             href="<?php echo esc_url(admin_url('admin.php?page=tangible-home')); ?>"><?php esc_html_e('Go to Tangible Home', 'tangible-framework'); ?></a>
         </footer>
       </form>
     <?php else : ?>
@@ -1436,7 +1444,7 @@ function render_wizard($plugin) {
         </main>
         <footer class="tgbl-wizard__footer">
           <?php if ($back) : ?>
-            <button class="tui-button is-style-outline tgbl-back" type="submit" name="do" value="back" formnovalidate>Back</button>
+            <button class="tui-button is-style-outline tgbl-back" type="submit" name="do" value="back" formnovalidate><?php esc_html_e('Back', 'tangible-framework'); ?></button>
           <?php endif; ?>
           <span style="flex:1"></span>
           <?php if (!empty($step['actions']) && is_array($step['actions'])) :
@@ -1449,11 +1457,11 @@ function render_wizard($plugin) {
             <?php endforeach;
           else : ?>
             <?php if ($step['skippable']) : ?>
-              <button class="tgbl-skip" type="submit" name="do" value="skip">Skip this step</button>
+              <button class="tgbl-skip" type="submit" name="do" value="skip"><?php esc_html_e('Skip this step', 'tangible-framework'); ?></button>
             <?php endif; ?>
             <?php if (empty($step['submit_in_body'])) : ?>
               <button class="tui-button is-theme-primary" type="submit" name="do" value="continue"><?php
-                echo esc_html($step['submit_label'] ?? 'Continue'); ?></button>
+                echo esc_html($step['submit_label'] ?? __('Continue', 'tangible-framework')); ?></button>
             <?php endif; ?>
           <?php endif; ?>
         </footer>
