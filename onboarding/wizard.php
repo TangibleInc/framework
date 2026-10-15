@@ -973,7 +973,7 @@ function render_wizard($plugin) {
       height: 80px; padding: 0 var(--tgbl-gutter); background: var(--tui-color-bg);
       border-bottom: 1px solid var(--tgbl-hairline); }
     .tgbl-wizard__logo { display: block; height: 26px; width: auto; flex: none; }
-    .tgbl-wizard__logo.is-plugin { height: 32px; }
+    .tgbl-wizard__logo.is-plugin { height: 48px; }
     .tgbl-wizard__lockup { font-size: var(--tgbl-label); font-weight: 600;
       letter-spacing: .06em; text-transform: uppercase; }
     .tgbl-wizard__lockup span { color: var(--tui-color-fg-muted); font-weight: 600; }
