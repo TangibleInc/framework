@@ -66,9 +66,8 @@ function render_page() {
     </header>
     <div class="tgbl-hub__content">
 
-      <?php // The round trip's outcome, in its own tone. "Pending" is left to the
-      // band, which says the same thing and offers the way on.
-      if ($flash && !($flash['key'] === 'pending' && $band && $band['status'] === 'pending')) : ?>
+      <?php // The round trip's outcome, in its own tone.
+      if ($flash) : ?>
         <section class="tui-notice is-theme-<?php echo esc_attr(flash_theme($flash['key'])); ?> tgbl-hub__flash" role="<?php echo in_array($flash['key'], ['error', 'revoked'], true) ? 'alert' : 'status'; ?>">
           <div class="tui-notice__inner"><div class="tui-notice__body"><?php echo esc_html($flash['text']); ?></div></div>
         </section>
@@ -110,11 +109,7 @@ function asset_url($file) {
 // ── the main column ───────────────────────────────────────────────────────
 
 function render_band($band) {
-  $pending = $band['status'] === 'pending';
-  if ($pending) {
-    $title = __('Finishing the connection to tangible.one', 'tangible-framework');
-    $body = __('tangible.one has not verified this site yet. It calls back to this site\'s REST API; check that it is reachable, then try again.', 'tangible-framework');
-  } elseif ($band['has_free']) {
+  if ($band['has_free']) {
     $title = __('Connect this site to tangible.one', 'tangible-framework');
     $body = __('Optional, and free. One connection covers every free Tangible plugin on this site, now and later, so your setup answers follow your account instead of being asked again.', 'tangible-framework');
   } else {
@@ -129,13 +124,8 @@ function render_band($band) {
         <div class="tui-notice__body"><?php echo esc_html($body); ?></div>
       </div>
       <div class="tgbl-hub__band-actions">
-        <?php if ($pending) : ?>
-          <?php post_form('tangible_connect_disconnect', __('Cancel', 'tangible-framework'), button_class('link')); ?>
-          <?php post_form('tangible_connect_confirm', __('Check again', 'tangible-framework'), button_class('primary')); ?>
-        <?php else : ?>
-          <?php post_form('tangible_hub_connect_snooze', __('Not now', 'tangible-framework'), button_class('link')); ?>
-          <?php connect_form(__('Connect', 'tangible-framework'), button_class('primary')); ?>
-        <?php endif; ?>
+        <?php post_form('tangible_hub_connect_snooze', __('Not now', 'tangible-framework'), button_class('link')); ?>
+        <?php connect_form(__('Connect', 'tangible-framework'), button_class('primary')); ?>
       </div>
     </div>
   </section>
@@ -480,7 +470,7 @@ function render_one_block($connect) {
     <div class="tui-card__inner">
       <div class="tui-card__head"><h2 id="tgbl-hub-one">tangible.one</h2></div>
       <div class="tui-card__body">
-        <?php if ($connect === 'active') : ?>
+        <?php if ($connect === 'active' || $connect === 'unverified') : ?>
           <h3><?php
             /* translators: %s: tangible.one account name */
             echo esc_html(sprintf(__('Connected as %s', 'tangible-framework'), ($state['account_name'] ?? '') ?: __('your account', 'tangible-framework'))); ?></h3>
@@ -488,15 +478,13 @@ function render_one_block($connect) {
             $masked = (string) ($state['owner_email_masked'] ?? '');
             echo esc_html(($masked !== '' ? $masked . '. ' : '')
               . __('Free Tangible plugins on this site take their setup answers from this account.', 'tangible-framework')); ?></p>
+          <?php if ($connect === 'unverified') render_unverified_why(); ?>
           <p class="tgbl-hub__links">
             <a href="<?php echo esc_url(app_url('/websites/connected')); ?>" target="_blank" rel="noopener"><?php
               esc_html_e('Manage on tangible.one', 'tangible-framework'); ?> <span aria-hidden="true">↗</span><span class="tui-visually-hidden"> <?php
               esc_html_e('(opens in a new tab)', 'tangible-framework'); ?></span></a>
             <?php post_form('tangible_connect_disconnect', __('Disconnect', 'tangible-framework'), button_class('link')); ?>
           </p>
-        <?php elseif ($connect === 'pending') : ?>
-          <h3><?php esc_html_e('Connecting', 'tangible-framework'); ?></h3>
-          <p class="tgbl-hub__small"><?php esc_html_e('Waiting for tangible.one to verify this site.', 'tangible-framework'); ?></p>
         <?php else : ?>
           <h3><?php esc_html_e('Not connected', 'tangible-framework'); ?></h3>
           <p class="tgbl-hub__small"><?php esc_html_e('Licensed plugins work through their keys either way. Connecting keeps your free plugins\' setup answers in your account.', 'tangible-framework'); ?></p>
@@ -505,6 +493,25 @@ function render_one_block($connect) {
       </div>
     </div>
   </article>
+  <?php
+}
+
+/**
+ * An unverified connection: the wizard's one plain line, then a "Why?" with
+ * the technical reason. A public site also gets "Check again"; a local site
+ * has nothing to check (tangible.one can never reach it).
+ */
+function render_unverified_why() {
+  if (!function_exists('tangible\\connect\\unverified_note')) return;
+  ?>
+  <p class="tgbl-hub__small"><?php echo esc_html(\tangible\connect\unverified_note()); ?></p>
+  <details class="tgbl-hub__why">
+    <summary class="tgbl-hub__small"><?php esc_html_e('Why?', 'tangible-framework'); ?></summary>
+    <p class="tgbl-hub__small"><?php echo esc_html(\tangible\connect\unverified_reason()); ?></p>
+    <?php if (!\tangible\connect\is_local_site()) : ?>
+      <p class="tgbl-hub__links"><?php post_form('tangible_connect_confirm', __('Check again', 'tangible-framework'), button_class('link')); ?></p>
+    <?php endif; ?>
+  </details>
   <?php
 }
 
@@ -574,7 +581,8 @@ function flash_theme($key) {
   return [
     'connected'    => 'success',
     'disconnected' => 'success',
-    'pending'      => 'warning',
+    'verified'     => 'success',
+    'unverified'   => 'warning',
     'denied'       => 'neutral',
     'error'        => 'danger',
     'revoked'      => 'danger',

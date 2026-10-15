@@ -154,3 +154,7 @@ hr.tgbl-hub-notices ~ .notice { margin: 8px 8px 8px 0; }
 /* tangible.one. */
 .tgbl-hub .tui-card__body > h3 + .tgbl-hub__small { margin-top: 4px; }
 .tgbl-hub .tui-card__body > .tgbl-hub__links { display: flex; flex-wrap: wrap; gap: 16px; padding-top: 8px; }
+/* An unverified connection's "Why?": summary keeps its disclosure marker. */
+.tgbl-hub .tgbl-hub__why { margin-top: 4px; }
+.tgbl-hub .tgbl-hub__why > summary { display: list-item; cursor: pointer; }
+.tgbl-hub .tgbl-hub__why > p { margin-top: 4px; }

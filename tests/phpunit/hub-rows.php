@@ -79,8 +79,12 @@ class Hub_Rows_TestCase extends \WP_UnitTestCase {
   }
 
   function test_free_connected_says_where_it_comes_from() {
-    $s = hub\row_state($this->free([ 'connect' => 'active', 'connect_account' => 'Oakhill' ]));
-    $this->assertSame(['info', 'Free', 'Via your tangible.one connection'], [ $s['account']['chip'], $s['account']['text'], $s['account']['sub'] ]);
+    // Verified or not, the row is the same (spec §4, amended 2026-10-14).
+    foreach (['active', 'unverified'] as $connect) {
+      $s = hub\row_state($this->free([ 'connect' => $connect, 'connect_account' => 'Oakhill' ]));
+      $this->assertSame(['info', 'Free', 'Via your tangible.one connection', null],
+        [ $s['account']['chip'], $s['account']['text'], $s['account']['sub'], $s['account']['action'] ]);
+    }
   }
 
   function test_active_licence_names_its_renewal() {
@@ -137,7 +141,6 @@ class Hub_Rows_TestCase extends \WP_UnitTestCase {
     $this->assertNull(hub\band_state('none', true, $now + 1, $now), 'Not now hides it');
     $this->assertSame([ 'status' => 'none', 'has_free' => false ], hub\band_state('none', false, 0, $now),
       'shown with no free plugin installed too');
-    $this->assertSame('pending', hub\band_state('pending', true, $now + 1, $now)['status'],
-      'a half-finished connection is not snoozable');
+    $this->assertNull(hub\band_state('unverified', true, 0, $now), 'an unverified connection is connected');
   }
 }
