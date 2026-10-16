@@ -68,13 +68,8 @@ function render_setting_field_checkbox($config) {
             <?php if (!empty($description)): ?>
                 <div class="feature-description">
                     <?php
-                    if (is_callable($description)) {
-                        $description(
-                            tangible\framework\get_plugin_feature_settings($plugin, $feature),
-                            tangible\framework\get_plugin_feature_settings_key($plugin, $feature),
-                            $is_enabled
-                        );
-                    } else {
+                    if (is_callable($description)) $description();
+                    else {
                         echo $description;
                     }
                     ?>
