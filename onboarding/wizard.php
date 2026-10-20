@@ -448,6 +448,23 @@ function asset_url($file) {
 }
 
 /**
+ * Print one of this module's stylesheets / scripts right here, through the
+ * WordPress dependency API rather than a hand-written tag (Plugin Check and
+ * wordpress.org review require it). Printing on the spot, not enqueuing,
+ * keeps it working on the full-screen setup page, which renders past the
+ * point where enqueued assets go out. The version is already in asset_url.
+ */
+function print_style($handle, $file) {
+  wp_register_style($handle, asset_url($file), [], null);
+  wp_print_styles($handle);
+}
+
+function print_script($handle, $file) {
+  wp_register_script($handle, asset_url($file), [], null, true);
+  wp_print_scripts($handle);
+}
+
+/**
  * Whether the "setup pending" notice shows for this plugin on this request,
  * and what it says: null, or [ key, steps, sticky, licence ]. Shared by the
  * notice and the updater's yield so the two can never disagree.
@@ -849,9 +866,8 @@ function render_wizard($plugin) {
   }
   $all_done = !$step;
 
-  $css_url = asset_url('wizard.css');
+  print_style('tgbl-wizard', 'wizard.css');
   ?>
-  <link rel="stylesheet" href="<?php echo esc_url($css_url); ?>" />
   <style>
     /* ------------------------------------------------------------------
        Wizard shell — Cristian's Plugin Wizard geometry: white top bar and
@@ -1381,7 +1397,7 @@ function render_wizard($plugin) {
         padding-left: 0; padding-top: 16px; width: 100%; }
     }
   </style>
-  <link rel="stylesheet" href="<?php echo esc_url(asset_url('patterns.css')); ?>" />
+  <?php print_style('tgbl-wizard-patterns', 'patterns.css'); ?>
   <div class="tui-interface tgbl-wizard">
     <header class="tgbl-wizard__topbar">
       <?php render_lockup($plugin); ?>
@@ -1475,31 +1491,6 @@ function render_wizard($plugin) {
       </form>
     <?php endif; ?>
   </div>
-  <script>
-  /* is-selected follows the native input without a framework — one delegated
-     listener covers every option card the page renders. */
-  document.addEventListener('change', function (e) {
-    var toggle = e.target.closest && e.target.closest('.tgbl-toggle');
-    if (toggle) {
-      var row = toggle.closest('.tgbl-toggle-row');
-      if (row) row.classList.toggle('is-on', toggle.checked);
-      var out = document.querySelector('[data-tgbl-estimate]');
-      if (out) {
-        var total = 0;
-        document.querySelectorAll('.tgbl-toggle[data-count]').forEach(function (t) {
-          if (t.checked) total += parseInt(t.dataset.count, 10) || 0;
-        });
-        out.textContent = total.toLocaleString();
-      }
-      return;
-    }
-    var input = e.target.closest && e.target.closest('.tui-option-card__input');
-    if (!input) return;
-    document.querySelectorAll('.tui-option-card__input[name="' + input.name + '"]').forEach(function (i) {
-      var card = i.closest('[data-tgbl-option]');
-      if (card) card.classList.toggle('is-selected', i.checked);
-    });
-  });
-  </script>
   <?php
+  print_script('tgbl-wizard', 'wizard.js');
 }
