@@ -609,8 +609,8 @@ add_action('admin_post_tangible_onboarding_step', function () {
 //
 // Styling is the compiled TUI subset (onboarding/wizard.css — button,
 // notice, stepper, option-card, checkbox, switch, progress, chip, inputs)
-// plus the brand faces from tangible\design: Recoleta for the step heading,
-// Space Mono for data, the native sans for sentences. Step BODIES keep core
+// on the native admin type stack, with a system monospace for data (see the
+// shell <style> below: no brand faces ship to customer sites). Step BODIES keep core
 // form controls unstyled in our panel — that is the archetype contract.
 //
 // v1 stays server-rendered on purpose: the markup is the TUI components'
