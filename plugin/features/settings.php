@@ -8,7 +8,7 @@ function render_features_settings_page($plugin) {
   $settings = framework\get_plugin_settings($plugin);
 
   $features = $plugin->features ?? [];
-  $features_title = 'Features';
+  $features_title = esc_html__('Features', 'tangible-framework');
 
   ?>
   <div class="tangible-plugin-features-settings tangible-plugin-<?php echo $plugin->name; ?>-features-settings">

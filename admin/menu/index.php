@@ -78,6 +78,7 @@ add_action(
       && !function_exists('tangible_loops_and_logic')
       && !template_system\is_plugin()
     ;
+    // These match the titles other plugins register, so they stay as written.
     $remove_items = $is_blocks_basic
       ? [
         'Templates',
@@ -97,7 +98,7 @@ add_action(
       if ($is_blocks_basic) {
         if (in_array($title, $remove_items)) continue;
         if ($title==='Import & Export') {
-          $title = 'Import';
+          $title = __('Import', 'tangible-framework');
         }
       }
 
