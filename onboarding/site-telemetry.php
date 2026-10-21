@@ -89,8 +89,10 @@ function render_site_telemetry_setting($text_class = 'tgbl-site-telemetry', $but
   $sending = in_array($state, ['granted', 'terms'], true);
   $what = __('performance timings, which features are used, content counts. Never content, users or visitors.', 'tangible-framework');
   $text = [
-    'refused' => __('Usage data is <b>not sent</b> from this site, by any Tangible plugin.', 'tangible-framework'),
-    'none'    => __('Usage data is <b>not sent</b> from this site. Nobody has been asked yet.', 'tangible-framework'),
+    /* translators: 1: start of the emphasis, 2: its end */
+    'refused' => sprintf(__('Usage data is %1$snot sent%2$s from this site, by any Tangible plugin.', 'tangible-framework'), '<b>', '</b>'),
+    /* translators: 1: start of the emphasis, 2: its end */
+    'none'    => sprintf(__('Usage data is %1$snot sent%2$s from this site. Nobody has been asked yet.', 'tangible-framework'), '<b>', '</b>'),
     /* translators: %s: what usage data includes */
     'granted' => sprintf(__('Tangible plugins on this site send usage data — %s', 'tangible-framework'), $what),
     /* translators: %s: what usage data includes */

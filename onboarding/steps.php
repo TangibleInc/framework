@@ -570,6 +570,8 @@ function detect_host() {
   foreach ($signs as $name => $test) {
     if ($test()) { $found = $name; break; }
   }
+  // Host names are names; this one is a description, shown as the value.
+  if ($found === 'Local development') $found = __('Local development', 'tangible-framework');
   return (string) apply_filters('tangible_onboarding_host', $found);
 }
 
