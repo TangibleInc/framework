@@ -152,7 +152,9 @@ function render_setup_card($pending) {
             /* translators: 1: current step number, 2: number of steps */
             $where = sprintf(__('Step %1$s of %2$s', 'tangible-framework'), number_format_i18n($step), number_format_i18n($total));
             /* translators: 1: "Step 2 of 3"; 2: the step's name */
-            if ($f['next_step'] !== '') $where = sprintf(__('%1$s: %2$s', 'tangible-framework'), $where, $f['next_step']); ?>
+            if ($f['next_step'] !== '') $where = sprintf(__('%1$s: %2$s', 'tangible-framework'), $where, $f['next_step']);
+            /* translators: %s: plugin name */
+            $setup_label = sprintf(__('%s setup', 'tangible-framework'), $f['title']); ?>
             <li class="tgbl-hub__setup">
               <?php render_tile($f['icon']); ?>
               <div class="tgbl-hub__text">
@@ -160,7 +162,7 @@ function render_setup_card($pending) {
                 <p class="tgbl-hub__small"><?php echo esc_html($where); ?></p>
               </div>
               <div role="progressbar" aria-valuenow="<?php echo (int) $setup['pct']; ?>" aria-valuemin="0" aria-valuemax="100"
-                   aria-label="<?php echo esc_attr(sprintf(__('%s setup', 'tangible-framework'), $f['title'])); ?>"
+                   aria-label="<?php echo esc_attr($setup_label); ?>"
                    class="tui-progress is-mode-line is-size-md tgbl-hub__progress"
                    style="--tui-progress-value:<?php echo (int) $setup['pct']; ?>;--tui-progress-max:100;--tui-progress-pct:<?php echo (int) $setup['pct']; ?>">
                 <div class="tui-progress__track"><div class="tui-progress__bar"></div></div>

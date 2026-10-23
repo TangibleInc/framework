@@ -107,7 +107,10 @@ add_action('admin_bar_menu', function ($bar) {
     'id'    => 'tangible-hub',
     'title' => $tiles . $pill,
     'href'  => url(),
-    'meta'  => [ 'title' => 'Tangible' . ($count ? " — $count unread" : '') ],
+    'meta'  => [ 'title' => $count
+      /* translators: %s: number of unread notifications */
+      ? sprintf(_n('Tangible — %s unread', 'Tangible — %s unread', $count, 'tangible-framework'), number_format_i18n($count))
+      : 'Tangible' ],
   ]);
 }, 80);
 
@@ -135,14 +138,14 @@ function back_to_hub() {
 }
 
 add_action('admin_post_tangible_hub_dismiss', function () {
-  if (!current_user_can('manage_options')) wp_die('Nope', 403);
+  if (!current_user_can('manage_options')) wp_die(esc_html__('Nope', 'tangible-framework'), 403);
   check_admin_referer('tangible_hub_dismiss');
   hub\dismiss_notification(sanitize_text_field(wp_unslash($_GET['item'] ?? '')));
   back_to_hub();
 });
 
 add_action('admin_post_tangible_hub_dismiss_all', function () {
-  if (!current_user_can('manage_options')) wp_die('Nope', 403);
+  if (!current_user_can('manage_options')) wp_die(esc_html__('Nope', 'tangible-framework'), 403);
   check_admin_referer('tangible_hub_dismiss_all');
   foreach (hub\get_notifications() as $item) hub\dismiss_notification($item['id']);
   back_to_hub();
@@ -150,7 +153,7 @@ add_action('admin_post_tangible_hub_dismiss_all', function () {
 
 // The steward line's switch: the same site option the onboarder writes.
 add_action('admin_post_tangible_hub_steward', function () {
-  if (!current_user_can('manage_options')) wp_die('Nope', 403);
+  if (!current_user_can('manage_options')) wp_die(esc_html__('Nope', 'tangible-framework'), 403);
   check_admin_referer('tangible_hub_steward');
   $value = sanitize_key(wp_unslash($_POST['steward'] ?? ''));
   if (function_exists('tangible\\onboarding\\set_steward')) \tangible\onboarding\set_steward($value);
@@ -159,7 +162,7 @@ add_action('admin_post_tangible_hub_steward', function () {
 
 // "Not now" on the Connect band: this admin, 30 days.
 add_action('admin_post_tangible_hub_connect_snooze', function () {
-  if (!current_user_can('manage_options')) wp_die('Nope', 403);
+  if (!current_user_can('manage_options')) wp_die(esc_html__('Nope', 'tangible-framework'), 403);
   check_admin_referer('tangible_hub_connect_snooze');
   update_user_meta(get_current_user_id(), BAND_SNOOZE_META, time() + BAND_SNOOZE_DAYS * DAY_IN_SECONDS);
   back_to_hub();
@@ -167,7 +170,7 @@ add_action('admin_post_tangible_hub_connect_snooze', function () {
 
 // "More from Tangible" stays dismissed for this admin.
 add_action('admin_post_tangible_hub_more_dismiss', function () {
-  if (!current_user_can('manage_options')) wp_die('Nope', 403);
+  if (!current_user_can('manage_options')) wp_die(esc_html__('Nope', 'tangible-framework'), 403);
   check_admin_referer('tangible_hub_more_dismiss');
   update_user_meta(get_current_user_id(), MORE_DISMISSED_META, 1);
   back_to_hub();
