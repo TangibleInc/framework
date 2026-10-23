@@ -385,6 +385,42 @@ class Consent_Sync_TestCase extends \WP_UnitTestCase {
     $this->assertSame('', $this->requests[0]['body']['license'], 'anonymous: no key');
   }
 
+  function test_an_anonymous_no_never_leaves_the_site() {
+    $plugin = \tangible\framework\register_plugin([ 'name' => 'anondecline', 'title' => 'Anon Decline' ]);
+    delete_option(onboarding\CONSENT_OUTBOX);
+    onboarding\record_consent_answer('telemetry_extended', 'declined', 'wording v1');
+
+    $this->fake_server([ 'success' => true ]);
+    onboarding\attempt_consent_sync($plugin);
+    $this->assertCount(0, $this->requests, 'declining must not itself contact the server');
+    $this->assertFalse(get_option(onboarding\CONSENT_OUTBOX)['telemetry_extended']['synced'],
+      'kept for delivery once the site has a key or connects');
+  }
+
+  function test_an_anonymous_no_that_withdraws_a_delivered_yes_is_sent() {
+    $plugin = \tangible\framework\register_plugin([ 'name' => 'anonwithdraw', 'title' => 'Anon Withdraw' ]);
+    delete_option(onboarding\CONSENT_OUTBOX);
+    $this->fake_server([ 'success' => true ]);
+    onboarding\record_consent_answer('telemetry_extended', 'granted', 'wording v1');
+    onboarding\attempt_consent_sync($plugin);
+
+    onboarding\record_consent_answer('telemetry_extended', 'declined', 'wording v1');
+    onboarding\attempt_consent_sync($plugin);
+    $this->assertCount(2, $this->requests);
+    $answers = json_decode($this->requests[1]['body']['answers'], true);
+    $this->assertSame('declined', $answers[0]['answer']);
+    $this->assertTrue(get_option(onboarding\CONSENT_OUTBOX)['telemetry_extended']['synced']);
+  }
+
+  function test_a_licensed_site_delivers_its_no() {
+    // setUp's plugin carries a licence key: the site already talks to us.
+    onboarding\record_consent_answer('telemetry_extended', 'declined', 'wording v1');
+    $this->fake_server([ 'success' => true ]);
+    onboarding\attempt_consent_sync($this->plugin);
+    $this->assertCount(1, $this->requests);
+    $this->assertSame('declined', json_decode($this->requests[0]['body']['answers'], true)[0]['answer']);
+  }
+
   function test_a_server_verdict_beats_the_fallback() {
     $plugin = \tangible\framework\register_plugin([ 'name' => 'verdicttest', 'title' => 'Verdict Test' ]);
     update_option('verdicttest_distribution', 'licensed');

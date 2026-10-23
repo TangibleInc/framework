@@ -51,6 +51,14 @@ function get_consent_answer($key) {
 
 function record_consent_answer($key, $answer, $consent_text, $email = '') {
   $outbox = get_option(CONSENT_OUTBOX, []);
+  // A "no" that takes back a "yes" the platform already holds (or one still
+  // waiting to do so) is a withdrawal: the site has a consented relationship
+  // to end, so it may be delivered even anonymously. See is_deliverable().
+  $prev = $outbox[$key] ?? null;
+  $withdraws = $answer === 'declined' && is_array($prev) && (
+    (($prev['answer'] ?? '') === 'granted' && !empty($prev['synced']))
+    || !empty($prev['withdraws'])
+  );
   $outbox[$key] = [
     // Free (anonymous) marketing only: the address typed in the wizard. It
     // goes to the platform's double opt-in, never into an interaction.
@@ -63,8 +71,24 @@ function record_consent_answer($key, $answer, $consent_text, $email = '') {
     // carries the same source_operation_id and the server records it once.
     'op'           => wp_generate_uuid4(),
   ];
+  if ($withdraws) $outbox[$key]['withdraws'] = true;
   update_option(CONSENT_OUTBOX, $outbox, false);
   do_action('tangible_consent_recorded', $key, $answer);
+}
+
+/**
+ * Whether an outbox answer may leave the site on this delivery.
+ *
+ * An anonymous site (no licence key, no Connect token) has given us no
+ * permission to contact our server, so a plain "no" stays local: sending it
+ * would itself be the contact the user just declined (wordpress.org plugin
+ * guideline 7). It stays unsynced in the outbox, so it is delivered later if
+ * the site gets a key or connects. A "yes", or a "no" that withdraws an
+ * earlier delivered "yes", is consent-bearing and goes out.
+ */
+function is_deliverable($entry, $anonymous) {
+  if (!$anonymous) return true;
+  return ($entry['answer'] ?? '') !== 'declined' || !empty($entry['withdraws']);
 }
 
 // Outbox answers silence the ask before the server has confirmed it.
@@ -104,11 +128,12 @@ function attempt_consent_sync($plugin) {
     ? \tangible\connect\get_active_token() : '';
   if (empty($key) && $site_token === '' && !is_free_distribution($plugin)) return;
 
+  $anonymous = empty($key) && $site_token === '';
   $outbox = get_option(CONSENT_OUTBOX, []);
   $answers = [];
   $ops = [];
   foreach ($outbox as $consent_key => $entry) {
-    if (empty($entry['synced'])) {
+    if (empty($entry['synced']) && is_deliverable($entry, $anonymous)) {
       $answer = [
         'key'         => $consent_key,
         'answer'      => $entry['answer'],
