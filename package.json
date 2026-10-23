@@ -16,6 +16,7 @@
     "clean": "rm -rf build",
     "dev:libs": "roll dev",
     "build:libs": "roll build",
+    "build:wizard-css": "sass --no-source-map --style=compressed --load-path=node_modules onboarding/src/wizard.scss onboarding/wizard.css",
     "archive": "roll archive",
     "format": "roll format",
     "version": "node version.js",
@@ -45,10 +46,12 @@
     "@tangible/git-subrepo": "^1.0.1",
     "@tangible/now": "^3.0.2",
     "@tangible/roller": "^2.1.9",
+    "@tangible/ui": "^0.2.29",
     "@wordpress/e2e-test-utils-playwright": "^1.36.0",
     "@wordpress/env": "^11.15.0",
     "esbuild": "^0.27.1",
     "globby": "^16.0.0",
+    "sass": "^1.80.0",
     "testra": "^2.1.5",
     "typescript": "^5.9.3"
   }

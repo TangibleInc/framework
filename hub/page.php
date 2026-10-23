@@ -54,9 +54,13 @@ function render_page() {
   $seen_at = (int) get_user_meta(get_current_user_id(), SEEN_META, true);
   update_user_meta(get_current_user_id(), SEEN_META, time());
 
-  foreach (['tui.css', 'wp-admin-theme.css', 'hub.css'] as $file) : ?>
-    <link rel="stylesheet" href="<?php echo esc_url(asset_url($file)); ?>" />
-  <?php endforeach; ?>
+  // Through the dependency API, not hand-written tags (Plugin Check). Printed
+  // on the spot, in order; asset_url already carries the version.
+  foreach (['tgbl-hub-tui' => 'tui.css', 'tgbl-hub-admin-theme' => 'wp-admin-theme.css', 'tgbl-hub' => 'hub.css'] as $handle => $file) {
+    wp_register_style($handle, asset_url($file), [], null);
+    wp_print_styles($handle);
+  }
+  ?>
   <?php // Core moves admin notices to after this marker: above the page, on
   // the admin grey, where core's own update nag sits — not inside the Hub. ?>
   <hr class="wp-header-end tgbl-hub-notices" />

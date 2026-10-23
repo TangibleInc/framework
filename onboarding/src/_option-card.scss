@@ -1,0 +1,231 @@
+@use "@tangible/ui/styles/system" as sys;
+
+/* @tui-tokens
+--tui-option-card-bg
+--tui-option-card-bg-selected
+--tui-option-card-border
+--tui-option-card-border-selected
+--tui-option-card-radius
+--tui-option-card-padding
+--tui-option-card-gap
+--tui-option-card-accent
+--tui-option-card-title-color
+--tui-option-card-description-color
+--tui-option-card-badge-bg
+--tui-option-card-badge-fg
+--tui-option-card-group-gap
+*/
+
+@mixin styles() {
+  // ==========================================================================
+  // OptionCard + OptionCardGroup Components
+  // ==========================================================================
+  //
+  // Component API tokens (never defined here, only read via fallback):
+  //   --tui-option-card-bg                  Card background
+  //   --tui-option-card-bg-selected         Card background when selected
+  //   --tui-option-card-border              Card border color
+  //   --tui-option-card-border-selected     Card border color when selected
+  //   --tui-option-card-radius              Card corner radius
+  //   --tui-option-card-padding             Card padding
+  //   --tui-option-card-gap                 Gap between control / body / meta
+  //   --tui-option-card-accent              Control + selected accent color
+  //   --tui-option-card-title-color         Title color
+  //   --tui-option-card-description-color   Description color
+  //   --tui-option-card-badge-bg            Badge chip background
+  //   --tui-option-card-badge-fg            Badge chip text color
+  //   --tui-option-card-group-gap           Gap between cards in the group
+  //
+  // The native input is visually hidden; the label surface is the control.
+  // Focus is surfaced via :focus-visible on the hidden input → ring on the
+  // card, so keyboard users see exactly where they are.
+  //
+  // ==========================================================================
+
+  // ---------------------------------------------------------------------------
+  // Group wrapper
+  // ---------------------------------------------------------------------------
+  :where(.#{sys.$prefix}interface) .#{sys.$prefix}option-card-group {
+    --_group-gap: var(--#{sys.$prefix}option-card-group-gap, var(--#{sys.$prefix}spacing-sm));
+
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--_group-gap);
+    align-items: stretch;
+
+    &.is-stack {
+      display: flex;
+      flex-direction: column;
+    }
+
+    &[aria-disabled="true"] {
+      opacity: var(--#{sys.$prefix}opacity-disabled);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Card
+  // ---------------------------------------------------------------------------
+  :where(.#{sys.$prefix}interface) .#{sys.$prefix}option-card {
+    --_bg: var(--#{sys.$prefix}option-card-bg, var(--#{sys.$prefix}color-bg-surface));
+    --_bg-selected: var(--#{sys.$prefix}option-card-bg-selected, var(--#{sys.$prefix}theme-primary-subtlest));
+    --_border: var(--#{sys.$prefix}option-card-border, var(--#{sys.$prefix}color-border));
+    --_border-selected: var(--#{sys.$prefix}option-card-border-selected, var(--#{sys.$prefix}theme-primary-base));
+    --_radius: var(--#{sys.$prefix}option-card-radius, var(--#{sys.$prefix}radius-md));
+    --_padding: var(--#{sys.$prefix}option-card-padding, var(--#{sys.$prefix}spacing-md));
+    --_gap: var(--#{sys.$prefix}option-card-gap, var(--#{sys.$prefix}spacing-sm));
+    --_accent: var(--#{sys.$prefix}option-card-accent, var(--#{sys.$prefix}theme-primary-base));
+    --_title: var(--#{sys.$prefix}option-card-title-color, var(--#{sys.$prefix}color-fg));
+    --_desc: var(--#{sys.$prefix}option-card-description-color, var(--#{sys.$prefix}color-fg-muted));
+    --_badge-bg: var(--#{sys.$prefix}option-card-badge-bg, var(--#{sys.$prefix}theme-success-subtle));
+    --_badge-fg: var(--#{sys.$prefix}option-card-badge-fg, var(--#{sys.$prefix}theme-success-stronger));
+    --_control-size: 20px;
+
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: var(--_gap);
+    padding: var(--_padding);
+    background: var(--_bg);
+    border: var(--#{sys.$prefix}border-width, 1px) solid var(--_border);
+    border-radius: var(--_radius);
+    cursor: pointer;
+    transition:
+      border-color var(--#{sys.$prefix}motion-duration) var(--#{sys.$prefix}motion-timing),
+      background-color var(--#{sys.$prefix}motion-duration) var(--#{sys.$prefix}motion-timing);
+
+    &:hover:not(.is-disabled) {
+      border-color: var(--_border-selected);
+    }
+
+    &.is-selected {
+      background: var(--_bg-selected);
+      border-color: var(--_border-selected);
+      box-shadow: inset 0 0 0 1px var(--_border-selected);
+    }
+
+    &.is-disabled {
+      cursor: not-allowed;
+      opacity: var(--#{sys.$prefix}opacity-disabled);
+    }
+
+    // Keyboard focus on the hidden input surfaces as a ring on the card.
+    &:has(.#{sys.$prefix}option-card__input:focus-visible) {
+      outline: var(--#{sys.$prefix}focus-ring-width, 2px) solid var(--#{sys.$prefix}focus-ring-color, var(--_accent));
+      outline-offset: var(--#{sys.$prefix}focus-ring-offset, 2px);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Control (the visible tick affordance)
+  // ---------------------------------------------------------------------------
+  :where(.#{sys.$prefix}interface) .#{sys.$prefix}option-card__control {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--_control-size);
+    height: var(--_control-size);
+    flex: none;
+    margin-top: 1px;
+    border: var(--#{sys.$prefix}border-width, 1px) solid var(--_border);
+    border-radius: var(--#{sys.$prefix}radius-full);
+    background: var(--#{sys.$prefix}color-bg);
+    color: transparent;
+
+    .#{sys.$prefix}icon {
+      width: 12px;
+      height: 12px;
+    }
+  }
+
+  :where(.#{sys.$prefix}interface) .#{sys.$prefix}option-card.is-selected .#{sys.$prefix}option-card__control {
+    background: var(--_accent);
+    border-color: var(--_accent);
+    color: var(--#{sys.$prefix}color-fg-on-accent);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Body
+  // ---------------------------------------------------------------------------
+  :where(.#{sys.$prefix}interface) .#{sys.$prefix}option-card__body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--#{sys.$prefix}spacing-xxs);
+    min-width: 0;
+    flex: 1;
+  }
+
+  :where(.#{sys.$prefix}interface) .#{sys.$prefix}option-card__heading {
+    display: flex;
+    align-items: center;
+    gap: var(--#{sys.$prefix}spacing-xs);
+    flex-wrap: wrap;
+  }
+
+  :where(.#{sys.$prefix}interface) .#{sys.$prefix}option-card__title {
+    color: var(--_title);
+    font-size: var(--#{sys.$prefix}typography-size-sm);
+    font-weight: var(--#{sys.$prefix}typography-weight-semibold);
+    line-height: var(--#{sys.$prefix}typography-line-height-tight);
+  }
+
+  :where(.#{sys.$prefix}interface) .#{sys.$prefix}option-card__badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px var(--#{sys.$prefix}spacing-xs);
+    border-radius: var(--#{sys.$prefix}radius-full);
+    background: var(--_badge-bg);
+    color: var(--_badge-fg);
+    font-size: var(--#{sys.$prefix}typography-size-xs);
+    font-weight: var(--#{sys.$prefix}typography-weight-semibold);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  :where(.#{sys.$prefix}interface) .#{sys.$prefix}option-card__description {
+    color: var(--_desc);
+    font-size: var(--#{sys.$prefix}typography-size-sm);
+    line-height: var(--#{sys.$prefix}typography-line-height);
+  }
+
+  :where(.#{sys.$prefix}interface) .#{sys.$prefix}option-card__bullets {
+    display: flex;
+    flex-direction: column;
+    gap: var(--#{sys.$prefix}spacing-xxs);
+    margin-top: var(--#{sys.$prefix}spacing-xs);
+  }
+
+  :where(.#{sys.$prefix}interface) .#{sys.$prefix}option-card__bullet {
+    display: flex;
+    align-items: center;
+    gap: var(--#{sys.$prefix}spacing-xs);
+    color: var(--_desc);
+    font-size: var(--#{sys.$prefix}typography-size-sm);
+
+    .#{sys.$prefix}icon {
+      color: var(--#{sys.$prefix}theme-success-base);
+      flex: none;
+    }
+  }
+
+  :where(.#{sys.$prefix}interface) .#{sys.$prefix}option-card__meta {
+    flex: none;
+    align-self: center;
+    color: var(--_desc);
+    font-size: var(--#{sys.$prefix}typography-size-sm);
+    font-variant-numeric: tabular-nums;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Row variant
+  // ---------------------------------------------------------------------------
+  :where(.#{sys.$prefix}interface) .#{sys.$prefix}option-card.is-row {
+    align-items: center;
+    padding-block: var(--#{sys.$prefix}spacing-sm);
+
+    .#{sys.$prefix}option-card__control {
+      margin-top: 0;
+      border-radius: var(--#{sys.$prefix}radius-xs);
+    }
+  }
+}

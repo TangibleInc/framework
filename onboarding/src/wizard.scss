@@ -1,0 +1,19 @@
+// Source of onboarding/wizard.css: rebuild with `npm run build:wizard-css`.
+//
+// The setup wizard's styling is @tangible/ui (MIT, published on npm with its
+// SCSS sources): the component subset the wizard renders, emitted unlayered
+// because WordPress admin styles are unlayered and would beat layered rules.
+//
+// OptionCard and Stepper are not in a published @tangible/ui release yet, so
+// their styles live here as partials (_option-card.scss, _stepper.scss, from
+// the TUI wizard element catalog) and build against the published system
+// module. Drop them once a release ships both components.
+@use "@tangible/ui/styles/index.scss" with (
+  $components: (button, notice, checkbox, switch, progress, chip, input, text-input, field),
+  $layers: false
+);
+@use "./option-card";
+@use "./stepper";
+
+@include option-card.styles();
+@include stepper.styles();
