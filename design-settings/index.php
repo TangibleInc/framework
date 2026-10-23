@@ -114,13 +114,13 @@ function export( array $names = array() ) {
 function parse( $json ) {
 	$payload = json_decode( (string) $json, true );
 	if ( ! is_array( $payload ) || ( $payload['format'] ?? '' ) !== FORMAT ) {
-		return new \WP_Error( 'format', 'This file is not a Tangible design settings export.' );
+		return new \WP_Error( 'format', __( 'This file is not a Tangible design settings export.', 'tangible-framework' ) );
 	}
 	if ( (int) ( $payload['version'] ?? 0 ) > VERSION ) {
-		return new \WP_Error( 'version', 'This export was made by a newer version. Update the plugins on this site first.' );
+		return new \WP_Error( 'version', __( 'This export was made by a newer version. Update the plugins on this site first.', 'tangible-framework' ) );
 	}
 	if ( ! is_array( $payload['plugins'] ?? null ) ) {
-		return new \WP_Error( 'plugins', 'This export contains no design settings.' );
+		return new \WP_Error( 'plugins', __( 'This export contains no design settings.', 'tangible-framework' ) );
 	}
 	return $payload;
 }
