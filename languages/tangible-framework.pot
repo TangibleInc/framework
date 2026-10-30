@@ -9,7 +9,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-10-30T18:39:54+00:00\n"
+"POT-Creation-Date: 2026-10-30T18:49:34+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: tangible-framework\n"
@@ -95,14 +95,14 @@ msgstr ""
 
 #: connect/step.php:37
 #: connect/step.php:61
+#: hub/page.php:114
 #: hub/page.php:117
-#: hub/page.php:120
 msgid "Connect this site to tangible.one"
 msgstr ""
 
 #. translators: %s: tangible.one account name
 #: connect/step.php:43
-#: hub/page.php:479
+#: hub/page.php:461
 #, php-format
 msgid "Connected as %s"
 msgstr ""
@@ -116,7 +116,7 @@ msgid "Every free Tangible plugin on this site now uses this connection, and you
 msgstr ""
 
 #: connect/step.php:54
-#: hub/page.php:489
+#: hub/page.php:471
 msgid "Disconnect"
 msgstr ""
 
@@ -246,12 +246,12 @@ msgid "Each selected plugin’s design is replaced by the file’s."
 msgstr ""
 
 #: design-settings/tab.php:173
-#: hub/page.php:208
+#: hub/page.php:196
 msgid "Plugin"
 msgstr ""
 
 #: design-settings/tab.php:174
-#: hub/page.php:244
+#: hub/page.php:228
 msgid "Settings"
 msgstr ""
 
@@ -322,7 +322,7 @@ msgstr ""
 
 #: hub/index.php:73
 #: hub/index.php:74
-#: hub/page.php:69
+#: hub/page.php:66
 msgid "Tangible Hub"
 msgstr ""
 
@@ -334,239 +334,229 @@ msgid_plural "Tangible — %s unread"
 msgstr[0] ""
 msgstr[1] ""
 
-#: hub/page.php:118
+#: hub/page.php:115
 msgid "Optional, and free. One connection covers every free Tangible plugin on this site, now and later, so your setup answers follow your account instead of being asked again."
 msgstr ""
 
-#: hub/page.php:121
+#: hub/page.php:118
 msgid "See this site in your tangible.one account, and any free Tangible plugin you add later takes its setup answers from it. Your licensed plugins already work through their keys; connecting changes nothing for them."
 msgstr ""
 
-#: hub/page.php:131
+#: hub/page.php:128
 msgid "Not now"
 msgstr ""
 
-#: hub/page.php:132
+#: hub/page.php:129
 msgid "Connect"
 msgstr ""
 
-#: hub/page.php:144
+#: hub/page.php:141
 msgid "Finish setting up"
 msgstr ""
 
 #. translators: 1: current step number, 2: number of steps
-#: hub/page.php:153
+#: hub/page.php:150
 #, php-format
 msgid "Step %1$s of %2$s"
 msgstr ""
 
 #. translators: 1: "Step 2 of 3"; 2: the step's name
-#: hub/page.php:155
+#: hub/page.php:152
 #, php-format
 msgid "%1$s: %2$s"
 msgstr ""
 
 #. translators: %s: plugin name
-#: hub/page.php:157
+#: hub/page.php:154
 #: onboarding/wizard.php:361
 #: onboarding/wizard.php:763
 #, php-format
 msgid "%s setup"
 msgstr ""
 
-#: hub/page.php:172
+#: hub/page.php:169
 msgid "Resume setup"
 msgstr ""
 
-#: hub/page.php:189
+#: hub/page.php:185
 msgid "Your Tangible plugins"
 msgstr ""
 
-#: hub/page.php:193
+#: hub/page.php:189
 msgid "Check for updates"
 msgstr ""
 
-#. translators: %s: the account owner's email address, partly masked
-#: hub/page.php:201
-#, php-format
-msgid "Licenses and renewals go to the account owner, %s, by email. They do not appear on this site."
-msgstr ""
-
-#: hub/page.php:202
-msgid "Licenses and renewals go to the account owner by email. They do not appear on this site."
-msgstr ""
-
-#: hub/page.php:209
+#: hub/page.php:197
 msgid "Version"
 msgstr ""
 
-#: hub/page.php:210
+#: hub/page.php:198
 #: hub/rows.php:177
 msgid "License"
 msgstr ""
 
-#: hub/page.php:211
+#: hub/page.php:199
 msgid "Action"
 msgstr ""
 
-#: hub/page.php:219
+#: hub/page.php:207
 msgid "No Tangible plugins registered on this site."
 msgstr ""
 
-#: hub/page.php:247
-#: hub/page.php:620
+#: hub/page.php:231
+#: hub/page.php:602
 msgid "Release notes"
 msgstr ""
 
-#: hub/page.php:248
-#: hub/page.php:286
-#: hub/page.php:348
-#: hub/page.php:488
-#: onboarding/welcome.php:316
+#: hub/page.php:232
+#: hub/page.php:268
+#: hub/page.php:330
+#: hub/page.php:470
+#: onboarding/welcome.php:313
 msgid "(opens in a new tab)"
 msgstr ""
 
 #. translators: %s: version number
-#: hub/page.php:259
+#: hub/page.php:243
 #, php-format
 msgid "%s available"
 msgstr ""
 
-#: hub/page.php:280
+#: hub/page.php:262
 msgid "Enter key"
 msgstr ""
 
-#: hub/page.php:285
+#: hub/page.php:267
 msgid "Renew"
 msgstr ""
 
-#: hub/page.php:291
+#: hub/page.php:273
 msgid "Update"
 msgstr ""
 
-#: hub/page.php:334
+#: hub/page.php:316
 msgid "More from Tangible"
 msgstr ""
 
-#: hub/page.php:335
+#: hub/page.php:317
 msgid "Dismiss More from Tangible"
 msgstr ""
 
 #. translators: %s: product name
-#: hub/page.php:347
+#: hub/page.php:329
 #, php-format
 msgid "See %s"
 msgstr ""
 
-#: hub/page.php:368
+#: hub/page.php:350
 msgid "Notifications"
 msgstr ""
 
 #. translators: %s: number of unread notifications
-#: hub/page.php:372
+#: hub/page.php:354
 #, php-format
 msgid "%s new"
 msgid_plural "%s new"
 msgstr[0] ""
 msgstr[1] ""
 
-#: hub/page.php:374
+#: hub/page.php:356
 msgid "Dismiss all"
 msgstr ""
 
-#: hub/page.php:383
+#: hub/page.php:365
 msgid "New:"
 msgstr ""
 
-#: hub/page.php:388
+#: hub/page.php:370
 msgid "Open"
 msgstr ""
 
 #. translators: 1: notification kind, e.g. "Release notes"; 2: how long ago, e.g. "3 days"
-#: hub/page.php:393
+#: hub/page.php:375
 #, php-format
 msgid "%1$s · %2$s ago"
 msgstr ""
 
 #. translators: %s: notification title
-#: hub/page.php:399
+#: hub/page.php:381
 #, php-format
 msgid "Dismiss %s"
 msgstr ""
 
-#: hub/page.php:404
+#: hub/page.php:386
 msgid "Nothing new. Release notes and news from Tangible show up here, never as notices across your dashboard."
 msgstr ""
 
-#: hub/page.php:420
+#: hub/page.php:402
 msgid "This site"
 msgstr ""
 
-#: hub/page.php:429
+#: hub/page.php:411
 msgid "Built for a client"
 msgstr ""
 
-#: hub/page.php:432
-msgid "License and renewal news goes to the account owner by email instead of this dashboard. Covers every Tangible plugin on this site."
+#: hub/page.php:414
+msgid "Covers every Tangible plugin on this site."
 msgstr ""
 
-#: hub/page.php:453
+#: hub/page.php:435
 msgid "Not sent from this site, by any Tangible plugin."
 msgstr ""
 
-#: hub/page.php:454
+#: hub/page.php:436
 msgid "Not sent from this site. Nobody here has been asked, and nothing is sent until someone says yes."
 msgstr ""
 
-#: hub/page.php:458
+#: hub/page.php:440
 #: onboarding/steps.php:751
 msgid "Usage data"
 msgstr ""
 
-#: hub/page.php:463
+#: hub/page.php:445
 msgid "Stop sending usage data"
 msgstr ""
 
-#: hub/page.php:463
+#: hub/page.php:445
 msgid "Send usage data"
 msgstr ""
 
 #. translators: %s: tangible.one account name
-#: hub/page.php:479
+#: hub/page.php:461
 msgid "your account"
 msgstr ""
 
-#: hub/page.php:483
+#: hub/page.php:465
 msgid "Free Tangible plugins on this site take their setup answers from this account."
 msgstr ""
 
-#: hub/page.php:487
+#: hub/page.php:469
 msgid "Manage on tangible.one"
 msgstr ""
 
-#: hub/page.php:492
+#: hub/page.php:474
 #: hub/rows.php:174
 msgid "Not connected"
 msgstr ""
 
-#: hub/page.php:493
+#: hub/page.php:475
 msgid "Licensed plugins work through their keys either way. Connecting keeps your free plugins' setup answers in your account."
 msgstr ""
 
-#: hub/page.php:494
+#: hub/page.php:476
 msgid "Connect this site"
 msgstr ""
 
-#: hub/page.php:512
+#: hub/page.php:494
 msgid "Why?"
 msgstr ""
 
-#: hub/page.php:515
+#: hub/page.php:497
 msgid "Check again"
 msgstr ""
 
 #. translators: %s: number of installed Tangible plugins
-#: hub/page.php:610
+#: hub/page.php:592
 #, php-format
 msgid "%s installed"
 msgid_plural "%s installed"
@@ -574,7 +564,7 @@ msgstr[0] ""
 msgstr[1] ""
 
 #. translators: %s: number of plugins whose license needs attention
-#: hub/page.php:612
+#: hub/page.php:594
 #, php-format
 msgid "%s needs attention"
 msgid_plural "%s need attention"
@@ -582,18 +572,18 @@ msgstr[0] ""
 msgstr[1] ""
 
 #. translators: %s: number of plugin updates available
-#: hub/page.php:614
+#: hub/page.php:596
 #, php-format
 msgid "%s update"
 msgid_plural "%s updates"
 msgstr[0] ""
 msgstr[1] ""
 
-#: hub/page.php:621
+#: hub/page.php:603
 msgid "Tip"
 msgstr ""
 
-#: hub/page.php:622
+#: hub/page.php:604
 msgid "News"
 msgstr ""
 
@@ -667,11 +657,11 @@ msgstr ""
 #. translators: %s: expiry date
 #: hub/rows.php:238
 #, php-format
-msgid "Expired %s. Updates are paused"
+msgid "Expired %s. Updates are paused, including security fixes"
 msgstr ""
 
 #: hub/rows.php:239
-msgid "Updates are paused"
+msgid "Updates are paused, including security fixes"
 msgstr ""
 
 #: onboarding/site-telemetry.php:91
@@ -803,7 +793,7 @@ msgid "Local development"
 msgstr ""
 
 #: onboarding/steps.php:701
-msgid "Usage data from this site is now shared under your tangible.one terms. You can turn it off in Settings → Tangible Plugins."
+msgid "Usage data from this site is now shared under your tangible.one terms. You can turn it off in Settings → Tangible Hub."
 msgstr ""
 
 #: onboarding/steps.php:705
@@ -919,34 +909,26 @@ msgctxt "setup step state"
 msgid "set up"
 msgstr ""
 
-#: onboarding/welcome.php:176
-msgid "Keeps license and renewal news out of this dashboard and emails the account owner instead."
-msgstr ""
-
-#: onboarding/welcome.php:177
-msgid "Keeps upgrade offers and account news out of this dashboard and emails the account owner instead."
-msgstr ""
-
-#: onboarding/welcome.php:182
+#: onboarding/welcome.php:179
 msgid "I am installing this for a client"
 msgstr ""
 
-#: onboarding/welcome.php:184
+#: onboarding/welcome.php:181
 msgid "Covers every Tangible plugin on this site. You can change this later in Settings."
 msgstr ""
 
 #. translators: %s: link text, e.g. "Watch the video"
-#: onboarding/welcome.php:237
-#: onboarding/welcome.php:281
+#: onboarding/welcome.php:234
+#: onboarding/welcome.php:278
 #, php-format
 msgid "%s (opens in a new tab)"
 msgstr ""
 
-#: onboarding/welcome.php:290
+#: onboarding/welcome.php:287
 msgid "Watch the video"
 msgstr ""
 
-#: onboarding/welcome.php:291
+#: onboarding/welcome.php:288
 msgid "Read more"
 msgstr ""
 
