@@ -149,7 +149,17 @@ function attempt_consent_sync($plugin) {
       $ops[] = $entry['op'] ?? ($consent_key . ':' . ($entry['at'] ?? 0));
     }
   }
-  if (!$answers) return;
+
+  // The site relationship rides along while usage data is on (ADR-014 in
+  // tangible-one), and goes alone when it changed since it was last
+  // delivered through this key or connection.
+  $relationship = site_relationship_to_report(
+    get_steward(), get_consent_answer('telemetry_extended'), $anonymous
+  );
+  $report = $relationship !== null
+    ? pending_relationship_report($relationship, $key !== '' ? $key : $site_token) : null;
+  if (!$answers && $report === null) return;
+  if ($report !== null) $ops[] = $report['op'];
 
   $args = [
     'timeout'   => 15,
@@ -157,7 +167,7 @@ function attempt_consent_sync($plugin) {
     // opt-out says otherwise.
     'sslverify' => function_exists('tangible\\updater\\should_verify_ssl')
       ? \tangible\updater\should_verify_ssl($plugin) : true,
-    'body'      => consent_sync_body($plugin, $key, $answers, $ops),
+    'body'      => consent_sync_body($plugin, $key, $answers, $ops, $relationship),
   ];
   if ($site_token !== '') {
     // The token rides in a header, over VERIFIED TLS — never sslverify=false,
@@ -182,7 +192,73 @@ function attempt_consent_sync($plugin) {
       $outbox[ $a['key'] ]['synced_at'] = time();
     }
   }
-  update_option(CONSENT_OUTBOX, $outbox, false);
+  if ($answers) update_option(CONSENT_OUTBOX, $outbox, false);
+  if ($report !== null) {
+    $report['synced'] = true;
+    update_option(SITE_RELATIONSHIP_REPORT, $report, false);
+  }
+}
+
+/**
+ * The site relationship as reported to tangible.one (ADR-014 there): the
+ * steward answer as `own` | `client`, and only while usage data is on.
+ *
+ *   anonymous   null — no account on tangible.one to hold it
+ *   declined    null — the site refused usage data
+ *   unanswered  null — nothing to report
+ *
+ * The steward answer itself stays the site option; this only maps it.
+ */
+function site_relationship_to_report($steward, $telemetry_answer, $anonymous) {
+  if ($anonymous || $telemetry_answer === 'declined') return null;
+  if ($steward === 'client') return 'client';
+  if ($steward === 'team') return 'own';
+  return null;
+}
+
+/**
+ * Last relationship report: value, which key or connection it went through
+ * (hashed), its operation id, and whether it was delivered. A report is
+ * pending when the value or the channel changed, or it was never delivered.
+ */
+const SITE_RELATIONSHIP_REPORT = 'tangible_site_relationship_report';
+
+/** The pending report for this value and channel, or null when already delivered. */
+function pending_relationship_report($relationship, $credential) {
+  $via = md5((string) $credential);
+  $last = get_option(SITE_RELATIONSHIP_REPORT, []);
+  if (is_array($last) && ($last['value'] ?? null) === $relationship && ($last['via'] ?? null) === $via) {
+    if (!empty($last['synced'])) return null;
+    if (!empty($last['op'])) return $last;   // a retry keeps its operation id
+  }
+  $report = [
+    'value'  => $relationship,
+    'via'    => $via,
+    'op'     => 'site_relationship:' . wp_generate_uuid4(),
+    'synced' => false,
+  ];
+  update_option(SITE_RELATIONSHIP_REPORT, $report, false);
+  return $report;
+}
+
+/**
+ * Forget the last report, so the relationship is sent again the next time it
+ * may be (the site turned usage data off; the server cleared it).
+ */
+function forget_relationship_report() {
+  delete_option(SITE_RELATIONSHIP_REPORT);
+}
+
+/**
+ * Try to deliver site-wide answers now through any registered Tangible plugin
+ * (the outbox is site-wide; the first delivery marks it synced).
+ */
+function deliver_site_answers() {
+  if (!function_exists('tangible\\framework\\get_plugin')) return;
+  foreach (array_keys(registered_wizards()) as $name) {
+    $plugin = framework\get_plugin($name);
+    if ($plugin) attempt_consent_sync($plugin);
+  }
 }
 
 /**
@@ -203,15 +279,18 @@ function consent_endpoint($plugin) {
  * from the answers' own ids, so a retry of the same unsynced batch repeats
  * it and the server records the delivery once.
  */
-function consent_sync_body($plugin, $key, $answers, $ops) {
+function consent_sync_body($plugin, $key, $answers, $ops, $relationship = null) {
   $body = [
     'edd_action' => 'tangible_sync_consent',
     'license'    => (string) $key,
     'url'        => home_url(),
-    'answers'    => wp_json_encode($answers),
     'slug'       => $plugin->name,
     'source_operation_id' => 'wizard-batch:' . md5(implode('|', $ops)),
   ];
+  // A relationship-only delivery carries no answers at all; the server reads
+  // a missing `answers` as none when `site_relationship` is present.
+  if ($answers) $body['answers'] = wp_json_encode($answers);
+  if ($relationship !== null) $body['site_relationship'] = $relationship;
   if (!empty($plugin->version)) $body['version'] = (string) $plugin->version;
   if (function_exists('tangible\\updater\\get_install_id')) {
     $install_id = \tangible\updater\get_install_id($plugin);
@@ -222,10 +301,12 @@ function consent_sync_body($plugin, $key, $answers, $ops) {
 
 /**
  * The steward answer — "who will look after this site?" — is ONE site option,
- * shared by every Tangible plugin on the site (decided 2026-09-25): never on
- * tangible.one, and not keyed by account or licence, even when several
- * licences are used on one site. If the options are wiped, asking again is
- * fine.
+ * shared by every Tangible plugin on the site (decided 2026-09-25), and not
+ * keyed by account or licence, even when several licences are used on one
+ * site. If the options are wiped, asking again is fine. tangible.one never
+ * holds the answer; since its ADR-014 a keyed or connected site REPORTS it
+ * there as usage data (`own` | `client`) while usage data is on — see
+ * site_relationship_to_report().
  *
  * Reads the older shapes: a per-account map (2026-08-28 cut) collapses to
  * "client" only when every recorded answer says so — one self-managed answer
@@ -248,7 +329,12 @@ function get_steward() {
 
 function set_steward($value) {
   if (!in_array($value, ['team', 'client'], true)) return;
+  $changed = get_steward() !== $value;
   update_option(STEWARD_OPTION, $value, false);
+  // While usage data is on, the answer is also reported to tangible.one as
+  // the site relationship (ADR-014 there); the option stays the answer. Only
+  // a site with an account behind it reports one, so only then try now.
+  if ($changed && site_covered_by_terms()) deliver_site_answers();
 }
 
 /**

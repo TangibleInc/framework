@@ -72,11 +72,24 @@ function set_site_telemetry($send) {
     $send ? 'granted' : 'declined',
     $send ? SITE_TELEMETRY_ON_TEXT : SITE_TELEMETRY_OFF_TEXT
   );
-  if (!function_exists('tangible\\framework\\get_plugin')) return;
-  foreach (array_keys(registered_wizards()) as $name) {
-    $plugin = framework\get_plugin($name);
-    if ($plugin) attempt_consent_sync($plugin);
-  }
+  // Excluding the site clears its relationship on tangible.one, so turning
+  // usage data back on must report it again.
+  if (!$send) forget_relationship_report();
+  deliver_site_answers();
+}
+
+/**
+ * What usage data is, for a site that sends it (Allison's copy, 2026-10-30):
+ * the Hub's "This site" block and the per-plugin setting both show it. The
+ * last clause discloses the site relationship (the steward answer), reported
+ * to tangible.one while usage data is on (ADR-014 there). `$terms`: the site
+ * sends under an account's Terms (keyed or connected), so the description
+ * says so first.
+ */
+function usage_data_description($terms) {
+  return $terms
+    ? __("Shared under your tangible.one terms. Helps us make Tangible plugins work better on sites like yours. Shares the basics about this site: the software versions it runs, its theme and other plugins, its hosting, its page speed, how many users and how much content it has, and whether you built it for a client. Never what's in your content, and never who your users or visitors are.", 'tangible-framework')
+    : __("Helps us make Tangible plugins work better on sites like yours. Shares the basics about this site: the software versions it runs, its theme and other plugins, its hosting, its page speed, how many users and how much content it has, and whether you built it for a client. Never what's in your content, and never who your users or visitors are.", 'tangible-framework');
 }
 
 /**
@@ -87,16 +100,13 @@ function set_site_telemetry($send) {
 function render_site_telemetry_setting($text_class = 'tgbl-site-telemetry', $button_class = 'button-link') {
   $state = site_telemetry_state(get_consent_answer('telemetry_extended'), site_covered_by_terms());
   $sending = in_array($state, ['granted', 'terms'], true);
-  $what = __('performance timings, which features are used, content counts. Never content, users or visitors.', 'tangible-framework');
   $text = [
     /* translators: 1: start of the emphasis, 2: its end */
     'refused' => sprintf(__('Usage data is %1$snot sent%2$s from this site, by any Tangible plugin.', 'tangible-framework'), '<b>', '</b>'),
     /* translators: 1: start of the emphasis, 2: its end */
     'none'    => sprintf(__('Usage data is %1$snot sent%2$s from this site. Nobody has been asked yet.', 'tangible-framework'), '<b>', '</b>'),
-    /* translators: %s: what usage data includes */
-    'granted' => sprintf(__('Tangible plugins on this site send usage data — %s', 'tangible-framework'), $what),
-    /* translators: %s: what usage data includes */
-    'terms'   => sprintf(__('Tangible plugins on this site send usage data under your tangible.one account\'s terms — %s', 'tangible-framework'), $what),
+    'granted' => usage_data_description(false),
+    'terms'   => usage_data_description(true),
   ][ $state ];
   ?>
   <p class="<?php echo esc_attr($text_class); ?>"><?php echo wp_kses($text, ['b' => []]); ?></p>
