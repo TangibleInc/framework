@@ -93,7 +93,9 @@ class Hub_Rows_TestCase extends \WP_UnitTestCase {
     $life = hub\row_state($this->paid([ 'has_key' => true, 'licence_status' => 'valid', 'expires' => 'lifetime' ]));
     $this->assertSame('Lifetime license', $life['account']['sub']);
     $expired = hub\row_state($this->paid([ 'has_key' => true, 'licence_status' => 'expired', 'expires' => '2026-10-02' ]));
-    $this->assertSame('Expired 2 Oct 2026. Updates are paused', $expired['account']['sub']);
+    $this->assertSame('Expired 2 Oct 2026. Updates are paused, including security fixes', $expired['account']['sub']);
+    $undated = hub\row_state($this->paid([ 'has_key' => true, 'licence_status' => 'expired' ]));
+    $this->assertSame('Updates are paused, including security fixes', $undated['account']['sub']);
   }
 
   function test_the_row_action_leaves_setup_to_its_own_card() {
@@ -133,6 +135,19 @@ class Hub_Rows_TestCase extends \WP_UnitTestCase {
     $this->assertSame('update', $done['primary']);
 
     $this->assertNull(hub\row_state($this->paid())['setup'], 'no wizard, no setup column');
+  }
+
+  function test_a_client_site_still_shows_the_license_column_and_its_action() {
+    \tangible\onboarding\set_steward('client');
+    $facts = $this->paid([ 'name' => 'tgbl-x', 'title' => 'X Pro', 'version' => '1.0',
+      'has_key' => true, 'licence_status' => 'expired' ]) + hub\default_facts();
+    $row = [ 'plugin' => (object) [ 'name' => 'tgbl-x', 'title' => 'X Pro' ], 'facts' => $facts, 'state' => hub\row_state($facts) ];
+    ob_start();
+    hub\render_plugins_card([ $row ], 0, 1);
+    $html = ob_get_clean();
+    $this->assertStringContainsString('<th scope="col">License</th>', $html);
+    $this->assertStringContainsString('Updates are paused, including security fixes', $html);
+    $this->assertStringContainsString('Renew', $html);
   }
 
   function test_connect_band_follows_the_site() {

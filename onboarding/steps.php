@@ -606,13 +606,13 @@ function detect_host() {
  * that read them; what is shown comes from the functions, translated.
  */
 const TERMS_USAGE_DISCLOSURE = 'Usage data from this site is now shared under your tangible.one terms. '
-  . 'You can turn it off in Settings → Tangible Plugins.';
+  . 'You can turn it off in Settings → Tangible Hub.';
 
 const USAGE_NOTE ='Never your content, your users or your visitors. One answer covers every Tangible plugin '
   . 'on this site, and you can change it any time in Settings.';
 
 function terms_usage_disclosure() {
-  return __('Usage data from this site is now shared under your tangible.one terms. You can turn it off in Settings → Tangible Plugins.', 'tangible-framework');
+  return __('Usage data from this site is now shared under your tangible.one terms. You can turn it off in Settings → Tangible Hub.', 'tangible-framework');
 }
 
 function usage_note() {

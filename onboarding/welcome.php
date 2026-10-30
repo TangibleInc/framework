@@ -160,7 +160,7 @@ function render_welcome($plugin) {
       if ($paid) render_licence_field($plugin);
       elseif ($connect) \tangible\connect\render_welcome_section($plugin);
       if ($paid || $connect) echo '<hr class="tgbl-divider" />';
-      render_steward_checkbox($paid);
+      render_steward_checkbox();
       ?>
     </section>
   </div>
@@ -171,17 +171,14 @@ function render_welcome($plugin) {
  * The steward answer as one checkbox. Unticked is "me or my team" — the
  * hub's other value — so the site always leaves Welcome with an answer.
  */
-function render_steward_checkbox($paid) {
-  $help = $paid
-    ? __('Keeps license and renewal news out of this dashboard and emails the account owner instead.', 'tangible-framework')
-    : __('Keeps upgrade offers and account news out of this dashboard and emails the account owner instead.', 'tangible-framework');
+function render_steward_checkbox() {
   ?>
   <label class="tgbl-check">
     <input type="checkbox" name="steward_client" value="1" <?php checked(get_steward() === 'client'); ?> />
     <span class="tgbl-check__body">
       <span class="tgbl-check__title"><?php esc_html_e('I am installing this for a client', 'tangible-framework'); ?></span>
-      <span class="tgbl-check__help"><?php echo esc_html($help); ?>
-        <?php esc_html_e('Covers every Tangible plugin on this site. You can change this later in Settings.', 'tangible-framework'); ?></span>
+      <span class="tgbl-check__help"><?php
+        esc_html_e('Covers every Tangible plugin on this site. You can change this later in Settings.', 'tangible-framework'); ?></span>
     </span>
   </label>
   <?php

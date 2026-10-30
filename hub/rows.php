@@ -235,8 +235,8 @@ function renews_line($expires, $fallback = '') {
 function expired_line($expires) {
   $time = $expires !== '' && $expires !== 'lifetime' ? strtotime($expires) : false;
   /* translators: %s: expiry date */
-  return $time ? sprintf(__('Expired %s. Updates are paused', 'tangible-framework'), date_i18n('j M Y', $time))
-    : __('Updates are paused', 'tangible-framework');
+  return $time ? sprintf(__('Expired %s. Updates are paused, including security fixes', 'tangible-framework'), date_i18n('j M Y', $time))
+    : __('Updates are paused, including security fixes', 'tangible-framework');
 }
 
 function chip($chip, $text, $sub, $action = null) {
