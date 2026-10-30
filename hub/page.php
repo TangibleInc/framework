@@ -429,12 +429,9 @@ function render_usage_data() {
     \tangible\onboarding\site_covered_by_terms()
   );
   $sending = in_array($state, ['granted', 'terms'], true);
-  $what = __('versions, theme, plugins, users and roles, content counts, hosting and page speed. Never your content, users or visitors.', 'tangible-framework');
   $text = [
-    /* translators: %s: what usage data includes */
-    'terms'   => sprintf(__('Sent under your tangible.one terms: %s', 'tangible-framework'), $what),
-    /* translators: %s: what usage data includes */
-    'granted' => sprintf(__('Sent from this site: %s', 'tangible-framework'), $what),
+    'terms'   => \tangible\onboarding\usage_data_description(true),
+    'granted' => \tangible\onboarding\usage_data_description(false),
     'refused' => __('Not sent from this site, by any Tangible plugin.', 'tangible-framework'),
     'none'    => __('Not sent from this site. Nobody here has been asked, and nothing is sent until someone says yes.', 'tangible-framework'),
   ][ $state ];

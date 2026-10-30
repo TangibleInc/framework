@@ -421,6 +421,46 @@ class Consent_Sync_TestCase extends \WP_UnitTestCase {
     $this->assertSame('declined', json_decode($this->requests[0]['body']['answers'], true)[0]['answer']);
   }
 
+  function test_the_site_relationship_maps_the_steward_answer_only_while_usage_data_is_on() {
+    $this->assertSame('client', onboarding\site_relationship_to_report('client', null, false));
+    $this->assertSame('own', onboarding\site_relationship_to_report('team', 'granted', false));
+    $this->assertNull(onboarding\site_relationship_to_report(null, 'granted', false), 'unanswered');
+    $this->assertNull(onboarding\site_relationship_to_report('client', 'declined', false), 'usage data off');
+    $this->assertNull(onboarding\site_relationship_to_report('client', 'granted', true), 'anonymous: no account');
+  }
+
+  function test_the_site_relationship_rides_along_then_goes_alone_when_it_changes() {
+    update_option(onboarding\STEWARD_OPTION, 'client');
+    $this->fake_server([ 'success' => true, 'synced' => 0, 'skipped' => 1 ]);
+    onboarding\attempt_consent_sync($this->plugin);
+    $this->assertCount(1, $this->requests);
+    $this->assertSame('client', $this->requests[0]['body']['site_relationship']);
+
+    // Delivered, and every answer synced: nothing to send.
+    onboarding\attempt_consent_sync($this->plugin);
+    $this->assertCount(1, $this->requests);
+
+    // A changed answer goes on its own, with no answers at all.
+    update_option(onboarding\STEWARD_OPTION, 'team');
+    onboarding\attempt_consent_sync($this->plugin);
+    $this->assertCount(2, $this->requests);
+    $body = $this->requests[1]['body'];
+    $this->assertSame('own', $body['site_relationship']);
+    $this->assertArrayNotHasKey('answers', $body);
+    $this->assertNotSame($this->requests[0]['body']['source_operation_id'], $body['source_operation_id']);
+    onboarding\attempt_consent_sync($this->plugin);
+    $this->assertCount(2, $this->requests);
+  }
+
+  function test_no_site_relationship_once_the_site_refuses_usage_data() {
+    update_option(onboarding\STEWARD_OPTION, 'client');
+    onboarding\record_consent_answer('telemetry_extended', 'declined', 'wording v1');
+    $this->fake_server([ 'success' => true ]);
+    onboarding\attempt_consent_sync($this->plugin);
+    $this->assertCount(1, $this->requests, 'the refusal itself is delivered');
+    $this->assertArrayNotHasKey('site_relationship', $this->requests[0]['body']);
+  }
+
   function test_a_server_verdict_beats_the_fallback() {
     $plugin = \tangible\framework\register_plugin([ 'name' => 'verdicttest', 'title' => 'Verdict Test' ]);
     update_option('verdicttest_distribution', 'licensed');
