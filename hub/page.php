@@ -41,9 +41,6 @@ function render_page() {
   $snoozed = (int) get_user_meta(get_current_user_id(), BAND_SNOOZE_META, true);
   $band = band_state($connect, $has_free, $snoozed, time());
   $steward = function_exists('tangible\\onboarding\\get_steward') ? \tangible\onboarding\get_steward() : null;
-  // A client's site keeps licences and renewals off this dashboard (they go
-  // to the account owner by email), so the plugin list drops that column.
-  $client = $steward === 'client';
   $items = hub\get_notifications();
   $flash = connect_flash();
   $pending = array_values(array_filter($rows, function ($row) {
@@ -81,7 +78,7 @@ function render_page() {
       <div class="tgbl-hub__grid">
         <div class="tgbl-hub__main">
           <?php if ($pending) render_setup_card($pending); ?>
-          <?php render_plugins_card($rows, $updates, $client ? 0 : $attention, $client); ?>
+          <?php render_plugins_card($rows, $updates, $attention); ?>
           <?php render_more_card($rows); ?>
           <?php
           // Cards contributed by other modules, under the main column.
@@ -180,8 +177,7 @@ function render_setup_card($pending) {
   <?php
 }
 
-function render_plugins_card($rows, $updates, $attention, $client) {
-  $state = function_exists('tangible\\connect\\get_state') ? \tangible\connect\get_state() : [];
+function render_plugins_card($rows, $updates, $attention) {
   ?>
   <article class="tui-card is-style-solid tgbl-hub__plugins" aria-labelledby="tgbl-hub-installed">
     <div class="tui-card__inner">
@@ -193,26 +189,18 @@ function render_plugins_card($rows, $updates, $attention, $client) {
             esc_html_e('Check for updates', 'tangible-framework'); ?></span></a>
         <?php endif; ?>
       </div>
-      <?php if ($client) : ?>
-        <p class="tgbl-hub__small tgbl-hub__client"><?php
-          $owner = (string) ($state['owner_email_masked'] ?? '');
-          echo esc_html($owner !== ''
-            /* translators: %s: the account owner's email address, partly masked */
-            ? sprintf(__('Licenses and renewals go to the account owner, %s, by email. They do not appear on this site.', 'tangible-framework'), $owner)
-            : __('Licenses and renewals go to the account owner by email. They do not appear on this site.', 'tangible-framework')); ?></p>
-      <?php endif; ?>
       <?php if ($rows) : ?>
         <table class="tgbl-hub__table">
           <thead>
             <tr>
               <th scope="col"><?php esc_html_e('Plugin', 'tangible-framework'); ?></th>
               <th scope="col"><?php esc_html_e('Version', 'tangible-framework'); ?></th>
-              <?php if (!$client) : ?><th scope="col"><?php esc_html_e('License', 'tangible-framework'); ?></th><?php endif; ?>
+              <th scope="col"><?php esc_html_e('License', 'tangible-framework'); ?></th>
               <th scope="col"><span class="tui-visually-hidden"><?php esc_html_e('Action', 'tangible-framework'); ?></span></th>
             </tr>
           </thead>
           <tbody>
-            <?php foreach ($rows as $row) render_row($row['plugin'], $row['facts'], $row['state'], $client); ?>
+            <?php foreach ($rows as $row) render_row($row['plugin'], $row['facts'], $row['state']); ?>
           </tbody>
         </table>
       <?php else : ?>
@@ -223,14 +211,10 @@ function render_plugins_card($rows, $updates, $attention, $client) {
   <?php
 }
 
-function render_row($plugin, $f, $s, $client) {
+function render_row($plugin, $f, $s) {
   $a = $s['account'];
   $settings_url = function_exists('tangible\\framework\\get_plugin_settings_page_url')
     ? framework\get_plugin_settings_page_url($plugin) : '';
-  // A client's site shows no licence actions; an update is still the site's.
-  // row_state ranks a licence action above an update, so on a client's site
-  // an expired plugin with a pending update falls back to its Update.
-  $action = $client && $s['action'] !== 'update' ? ($f['update'] ? 'update' : null) : $s['action'];
   ?>
   <tr>
     <th scope="row">
@@ -259,13 +243,11 @@ function render_row($plugin, $f, $s, $client) {
           echo esc_html(sprintf(__('%s available', 'tangible-framework'), $f['update'])); ?></span>
       <?php endif; ?>
     </td>
-    <?php if (!$client) : ?>
-      <td>
-        <?php render_chip($a); ?>
-        <?php if ($a['sub'] !== '') : ?><span class="tgbl-hub__small"><?php echo esc_html($a['sub']); ?></span><?php endif; ?>
-      </td>
-    <?php endif; ?>
-    <td class="tgbl-hub__action"><?php render_action($plugin, $f, $action); ?></td>
+    <td>
+      <?php render_chip($a); ?>
+      <?php if ($a['sub'] !== '') : ?><span class="tgbl-hub__small"><?php echo esc_html($a['sub']); ?></span><?php endif; ?>
+    </td>
+    <td class="tgbl-hub__action"><?php render_action($plugin, $f, $s['action']); ?></td>
   </tr>
   <?php
 }
@@ -429,7 +411,7 @@ function render_site_block($steward) {
             <span class="tui-switch__label"><?php esc_html_e('Built for a client', 'tangible-framework'); ?></span>
           </label>
           <p class="tgbl-hub__small" id="tgbl-hub-steward-help"><?php
-            esc_html_e('License and renewal news goes to the account owner by email instead of this dashboard. Covers every Tangible plugin on this site.', 'tangible-framework'); ?></p>
+            esc_html_e('Covers every Tangible plugin on this site.', 'tangible-framework'); ?></p>
         </form>
         <hr class="tgbl-hub__divider" />
         <?php render_usage_data(); ?>

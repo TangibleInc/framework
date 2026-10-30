@@ -417,7 +417,7 @@ function register_wizard($plugin, $args = []) {
         /* translators: %s: number of setup steps left */
         : sprintf(_n('setup has %s step left.', 'setup has %s steps left.', $n, 'tangible-framework'), number_format_i18n($n));
       echo "<div class=\"$class\" data-tangible-admin-notice=\"$key\">"
-         . "<p><strong>$title</strong> — " . esc_html($what) . ' '
+         . "<p><strong>$title</strong>: " . esc_html($what) . ' '
          . "<a href=\"$url\">" . esc_html__('Continue setup', 'tangible-framework') . '</a></p></div>';
     });
   });
