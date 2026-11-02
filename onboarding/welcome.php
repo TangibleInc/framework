@@ -24,7 +24,7 @@
  * `tangible_onboarding_welcome` filter — same array either way:
  *
  *   onboarding\register_wizard($plugin, [
- *     'short_title' => 'Design Upgrade',            // "Design Upgrade works…"
+ *     'short_title' => 'Example',                   // "Example works…"
  *     'welcome' => [
  *       'intro'    => 'Restyles courses, lessons…', // subtitle under the heading
  *       'logo'     => $url,                         // on the hero
