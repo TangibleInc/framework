@@ -718,10 +718,14 @@ function telemetry_consent_text($rows) {
     . ' ' . usage_note() . ' (telemetry v2, site answer, wizard v3)';
 }
 
-/** The release-notes band's wording, per plugin; the note after it is the record's, not shown. */
+/**
+ * The release-notes band's wording, per plugin; the note after it is the
+ * record's, not shown. v3 names the plugin by its short title; v2 records
+ * used the full plugin name.
+ */
 function marketing_consent_text($plugin) {
   return release_notes_title($plugin)
-    . '. Recorded when Finish Setup is pressed with this box shown. (plugin wizard opt-in v2, Done band)';
+    . '. Recorded when Finish Setup is pressed with this box shown. (plugin wizard opt-in v3, Done band)';
 }
 
 function release_notes_title($plugin) {
