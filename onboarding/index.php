@@ -291,6 +291,7 @@ function unmark($plugin_name, $step_id) {
 }
 
 require_once __DIR__ . '/wizard.php';
+require_once __DIR__ . '/traps.php';
 require_once __DIR__ . '/steps.php';
 require_once __DIR__ . '/welcome.php';
 require_once __DIR__ . '/site-telemetry.php';

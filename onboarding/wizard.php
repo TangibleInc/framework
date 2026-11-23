@@ -6,7 +6,8 @@
  *
  *   onboarding\register_wizard($plugin);
  *
- * and the shell owns the rest: the activation redirect, the resumable
+ * and the shell owns the rest: the activation redirect (and, for plugins
+ * that register update traps, the redirect after an update), the resumable
  * "setup pending" notice, the hidden setup page, the rail, the
  * continue/skip plumbing, and the guarantee that a step's `handle` runs
  * before its answer is recorded — nothing is saved until you continue.
@@ -301,9 +302,14 @@ function register_wizard($plugin, $args = []) {
   // register_wizard() inside its own plugins_loaded callback (the house
   // pattern) never gets that hook registered during the activation request,
   // because plugins_loaded already ran before WordPress included it.
-  if (!empty($plugin->file_path) && consume_activation(plugin_basename($plugin->file_path))) {
+  $just_activated = !empty($plugin->file_path) && consume_activation(plugin_basename($plugin->file_path));
+  if ($just_activated) {
     update_option($redirect_flag, 1, false);
   }
+
+  // Update traps (traps.php): the wizard after an update, for plugins that
+  // register one. Activation tells a fresh install from an update.
+  register_traps($plugin, $just_activated);
 
   // The redirect happens at most once per plugin per site, ever (spec §5).
   // The marker lives in a framework-owned site option, so deleting and
