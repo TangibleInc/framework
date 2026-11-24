@@ -62,3 +62,66 @@ class Hub_TestCase extends \WP_UnitTestCase {
     $this->assertSame('notice', hub\get_notifications()[0]['kind']);
   }
 }
+
+/**
+ * The Hub shows only on sites with something for it: a tangible.one plugin
+ * (cloud_id or wizard) or a connection. Library-only sites look as before.
+ */
+class Hub_Enabled_TestCase extends \WP_UnitTestCase {
+
+  private $plugins;
+
+  function setUp(): void {
+    parent::setUp();
+    // Other tests register platform plugins into the same global list.
+    $this->plugins = \tangible\framework::$state->plugins ?? [];
+    \tangible\framework::$state->plugins = [];
+  }
+
+  function tearDown(): void {
+    \tangible\framework::$state->plugins = $this->plugins;
+    remove_all_filters('tangible_hub_enabled');
+    parent::tearDown();
+  }
+
+  private function menu_has_hub() {
+    global $submenu;
+    $submenu = [];
+    wp_set_current_user(self::factory()->user->create([ 'role' => 'administrator' ]));
+    do_action('admin_menu');
+    foreach ($submenu['options-general.php'] ?? [] as $item) {
+      if (($item[2] ?? '') === hub\PAGE) return true;
+    }
+    return false;
+  }
+
+  function test_a_site_with_only_library_plugins_has_no_hub() {
+    \tangible\framework\register_plugin([ 'name' => 'hubtest-library', 'title' => 'Client Features', 'version' => '1.0.0' ]);
+    $this->assertFalse(hub\is_enabled());
+    $this->assertFalse($this->menu_has_hub());
+  }
+
+  function test_a_plugin_with_a_cloud_id_brings_the_hub() {
+    \tangible\framework\register_plugin([ 'name' => 'hubtest-library', 'title' => 'Client Features', 'version' => '1.0.0' ]);
+    \tangible\framework\register_plugin([ 'name' => 'hubtest-cloud', 'title' => 'Cloud', 'version' => '1.0.0', 'cloud_id' => 'hubtest-cloud' ]);
+    $this->assertTrue(hub\is_enabled());
+    $this->assertTrue($this->menu_has_hub());
+  }
+
+  function test_a_plugin_with_a_wizard_brings_the_hub() {
+    $plugin = \tangible\framework\register_plugin([ 'name' => 'hubtest-wizard', 'title' => 'Wizard', 'version' => '1.0.0' ]);
+    \tangible\onboarding\register_wizard($plugin);
+    $this->assertTrue(hub\is_enabled());
+    delete_option('tangible_onboarding_state__hubtest-wizard');
+  }
+
+  function test_the_filter_forces_the_answer_both_ways() {
+    add_filter('tangible_hub_enabled', '__return_true');
+    $this->assertTrue(hub\is_enabled());
+    remove_all_filters('tangible_hub_enabled');
+
+    \tangible\framework\register_plugin([ 'name' => 'hubtest-cloud', 'title' => 'Cloud', 'version' => '1.0.0', 'cloud_id' => 'hubtest-cloud' ]);
+    add_filter('tangible_hub_enabled', '__return_false');
+    $this->assertFalse(hub\is_enabled());
+  }
+}
