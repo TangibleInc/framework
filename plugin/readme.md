@@ -35,6 +35,9 @@ add_action('plugins_loaded', function() {
     'file' => __FILE__,
   ]);
 
+  // First-run onboarding: see onboarding/readme.md
+  require __DIR__ . '/includes/onboarding.php';
+
   if (!framework\has_all_plugin_dependencies($plugin)) {
     return;
   }

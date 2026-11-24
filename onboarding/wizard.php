@@ -1,0 +1,1506 @@
+<?php
+/**
+ * The wizard shell — everything a plugin does NOT write.
+ *
+ * A plugin contributes steps (see index.php) and calls
+ *
+ *   onboarding\register_wizard($plugin);
+ *
+ * and the shell owns the rest: the activation redirect (and, for plugins
+ * that register update traps, the redirect after an update), the resumable
+ * "setup pending" notice, the hidden setup page, the rail, the
+ * continue/skip plumbing, and the guarantee that a step's `handle` runs
+ * before its answer is recorded — nothing is saved until you continue.
+ *
+ * Step contract (in addition to the resolver fields):
+ *
+ *   render  callable($plugin, $facts, $step) — echoes the step's body.
+ *           It runs inside the shell's <form>; fields it prints are the
+ *           fields `handle` receives.
+ *   handle  callable($plugin, $step) — on Continue, before the step is
+ *           marked done. Reads $_POST, saves. Return false (or throw) to
+ *           keep the step open — validation failure is not completion.
+ *
+ * Layout keys (layout-rules.md, Cristian 2026-10-14):
+ *
+ *   width          'narrow' — the 720 column, for a single card or a list —
+ *                  or 'wide' (default) — 1200, for things side by side.
+ *                  The default stays wide so plugin steps written before
+ *                  the rules keep the column they were laid out in.
+ *   align          'center' centres the heading block (Done).
+ *   actions        [ answer => [ 'label' => …, 'style' => 'primary'|'outline' ] ]
+ *                  The footer's right side as answer buttons instead of
+ *                  Skip/Continue. Each posts do=answer:<answer>, which the
+ *                  shell runs as Continue with $_POST['answer'] set. A body
+ *                  button may post the same shape (Connect, Disconnect).
+ *   submit_in_body true when the step prints its own Continue (Done's
+ *                  "Finish Setup" sits inside the email band), so the
+ *                  footer keeps only Back.
+ *
+ * v1 is server-rendered on purpose: no JS framework rides along until the
+ * TUI-on-preact question is settled. The markup carries the House idioms
+ * (tile mark, mono labels, dashed skip) so a hydration layer can land on
+ * it later without re-deciding the design.
+ *
+ * Facts arrive through `tangible_onboarding_facts` ($facts, $plugin_name).
+ * The default is honest about what is wired today: licence state comes from
+ * the updater when present; the consent ask/skip decisions default to 'ask'
+ * because the resolve endpoint is not built — the platform side
+ * (resolveTelemetryConsentForKeyHash, marketing suppression) exists, the
+ * HTTP route does not. When it lands, it plugs in here and nowhere else.
+ */
+namespace tangible\onboarding;
+
+use tangible\framework;
+use tangible\onboarding;
+
+function get_setup_slug($plugin) {
+  return ($plugin->name ?? $plugin['name']) . '-setup';
+}
+
+function get_setup_url($plugin) {
+  return admin_url('admin.php?page=' . get_setup_slug($plugin));
+}
+
+function build_facts($plugin_name) {
+  $facts = (object) [
+    'licence_active' => false,
+    // Decisions, not state — the shape the resolve endpoint will return.
+    'ask' => [ 'telemetry_extended' => 'ask', 'marketing' => 'ask' ],
+  ];
+  $plugin = function_exists('tangible\\framework\\get_plugin')
+    ? framework\get_plugin($plugin_name) : null;
+  if ($plugin && function_exists('tangible\\updater\\get_license_status')) {
+    $status = \tangible\updater\get_license_status($plugin);
+    $facts->licence_active = in_array($status, ['valid', 'active'], true);
+  }
+
+  // Server-resolved decisions from the last activation, when the platform
+  // sends them (steward, ask/skip per consent — decisions, never state).
+  // Unknown stays 'ask': asking twice is annoying, collecting without
+  // consent is illegal, so the failure mode is chosen deliberately.
+  $cache = get_option('tangible_onboarding_facts_cache__' . $plugin_name, null);
+  // Tolerant read: accept object or array — caches written before the
+  // deep-convert fix hold a stdClass here, and array access on stdClass is
+  // a fatal, not a null.
+  $cached = is_array($cache) ? ($cache['data'] ?? null) : null;
+  if (is_object($cached)) $cached = (array) $cached;
+  $cached_ask = is_array($cached) ? (array) ($cached['ask'] ?? []) : [];
+  if (!empty($cached_ask)) {
+    foreach ($cached_ask as $k => $v) {
+      if (in_array($v, ['ask', 'skip'], true)) $facts->ask[$k] = $v;
+    }
+  }
+  // The opaque account handle + display name from the last activation. The
+  // handle keys the LOCAL per-account steward map (steward lives on the site
+  // by decision, 2026-08-28); the name lets the wizard say "managed by
+  // Dave's Agency" instead of "a client".
+  $facts->account_id = is_array($cached) && !empty($cached['accountId']) ? (string) $cached['accountId'] : '';
+  $facts->account_name = is_array($cached) && !empty($cached['accountName']) ? (string) $cached['accountName'] : '';
+
+  return apply_filters('tangible_onboarding_facts', $facts, $plugin_name);
+}
+
+/**
+ * Which plugins have a wizard. The shell's own steps (licence, consent)
+ * attach only to these — a bare resolve_plan() for a name that never
+ * registered a wizard sees exactly the steps its own filters contributed,
+ * which is also what keeps test fixtures hermetic.
+ */
+function registered_wizards($add = null) {
+  static $wizards = [];
+  if ($add !== null) $wizards[$add] = true;
+  return $wizards;
+}
+
+/**
+ * Framework-wide: remember which plugins were just activated, by basename.
+ * The framework is loaded during the activation request (the plugin requires
+ * it at file scope), so this listener is in place when WordPress fires the
+ * action. WP-CLI and network activation have no admin on the other end, and a
+ * flag left behind would redirect whoever loads wp-admin next.
+ */
+const ACTIVATED_OPTION = 'tangible_onboarding_activated';
+
+add_action('activated_plugin', function ($basename, $network_wide = false) {
+  if ($network_wide || (defined('WP_CLI') && WP_CLI) || is_disabled()) return;
+  $pending = get_option(ACTIVATED_OPTION, []);
+  if (!is_array($pending)) $pending = [];
+  $pending[$basename] = time();
+  update_option(ACTIVATED_OPTION, $pending, false);
+}, 10, 2);
+
+/** True once for a just-activated plugin (within the hour); clears the entry. */
+function consume_activation($basename) {
+  $pending = get_option(ACTIVATED_OPTION, []);
+  if (!is_array($pending) || empty($pending[$basename])) return false;
+  $at = (int) $pending[$basename];
+  unset($pending[$basename]);
+  update_option(ACTIVATED_OPTION, $pending, false);
+  return $at > time() - HOUR_IN_SECONDS;
+}
+
+/**
+ * Plugins that became active since the last admin load, by basename. The
+ * fallback above must know WHICH plugin was just activated — "any wizard not
+ * yet onboarded" sent a Merge activation to SearchSync's setup. A snapshot of
+ * active_plugins taken on every admin load, diffed once per request, answers
+ * that no matter which framework copy handled the activation request. The
+ * first run only takes the snapshot (otherwise everything looks new).
+ */
+const ACTIVE_SNAPSHOT_OPTION = 'tangible_onboarding_active_snapshot';
+
+function newly_active_plugins() {
+  return active_snapshot_diff()['newly'];
+}
+
+/** True when this request found no snapshot to diff against. */
+function had_no_active_snapshot() {
+  return active_snapshot_diff()['missing'];
+}
+
+function active_snapshot_diff() {
+  static $diff = null;
+  if ($diff !== null) return $diff;
+  $active = (array) get_option('active_plugins', []);
+  $snapshot = get_option(ACTIVE_SNAPSHOT_OPTION, null);
+  $diff = [
+    'newly'   => is_array($snapshot) ? array_values(array_diff($active, $snapshot)) : [],
+    'missing' => !is_array($snapshot),
+  ];
+  if ($snapshot !== $active) update_option(ACTIVE_SNAPSHOT_OPTION, $active, false);
+  return $diff;
+}
+
+// Keep the snapshot current on every admin load, not only when a wizard asks.
+add_action('admin_init', function () { newly_active_plugins(); }, 0);
+
+// A deactivation leaves the snapshot at once. Otherwise a plugin turned off
+// while no current framework copy loads stays in the snapshot, and turning it
+// back on never looks new. The deactivation request always has a current copy
+// loaded: the plugin being turned off is still active and brings it.
+add_action('deactivated_plugin', function ($basename, $network_wide = false) {
+  if ($network_wide) return;
+  $snapshot = get_option(ACTIVE_SNAPSHOT_OPTION, null);
+  if (!is_array($snapshot)) return;
+  $kept = array_values(array_diff($snapshot, [$basename]));
+  if ($kept !== $snapshot) update_option(ACTIVE_SNAPSHOT_OPTION, $kept, false);
+}, 10, 2);
+
+/**
+ * The one wizard a first-run landing can mean. With no snapshot there is no
+ * diff, so the only safe guess is elimination: exactly one registered wizard
+ * never onboarded here. Two or more is ambiguous (the Merge→SearchSync
+ * misroute), so nothing redirects and the notice points the way instead.
+ */
+function sole_unonboarded_wizard() {
+  $never = array_values(array_filter(array_keys(registered_wizards()), function ($name) {
+    return !was_onboarded($name);
+  }));
+  return count($never) === 1 ? $never[0] : null;
+}
+
+/** Agency provisioning and the like: no redirect, no notice. */
+function is_disabled() {
+  return defined('TANGIBLE_ONBOARDING_DISABLE') && TANGIBLE_ONBOARDING_DISABLE;
+}
+
+/**
+ * Plugins that have been onboarded on this site. Framework-owned and shared,
+ * so it outlives any single plugin's uninstall. A cloned site copies it, which
+ * is the point: the clone was already set up.
+ */
+const ONBOARDED_OPTION = 'tangible_onboarding_onboarded';
+
+function was_onboarded($plugin_name) {
+  $map = get_option(ONBOARDED_OPTION, []);
+  return is_array($map) && !empty($map[$plugin_name]);
+}
+
+function mark_onboarded($plugin_name) {
+  $map = get_option(ONBOARDED_OPTION, []);
+  if (!is_array($map)) $map = [];
+  if (!empty($map[$plugin_name])) return;
+  $map[$plugin_name] = time();
+  update_option(ONBOARDED_OPTION, $map, false);
+}
+
+/** The plan's steps that ask something — terminal steps (Done) excluded. */
+function pending_questions($plan) {
+  return array_values(array_filter($plan['steps'], function ($s) { return empty($s['terminal']); }));
+}
+
+/** How many steps are still needed — for the Hub's "Resume setup". */
+function steps_left($plugin_name) {
+  return count(pending_questions(onboarding\resolve_plan($plugin_name, build_facts($plugin_name))));
+}
+
+/**
+ * Where "Back" goes: the most recently answered step before the current one
+ * that would actually reopen. A step whose needed() stays false once its
+ * record is gone (a licence that is active, a consent already on file) would
+ * just be skipped again, so it is not a target unless it declares `on_back`
+ * to clear its own state. Account-scoped steps record nothing locally and
+ * have nothing to undo.
+ */
+function back_target($plugin_name, $facts, $plan) {
+  $by_id = [];
+  foreach (onboarding\get_steps($plugin_name, $facts) as $s) $by_id[ $s['id'] ] = $s;
+  $target = null;
+  foreach ($plan['rail'] as $r) {
+    if ($r['id'] === $plan['current']) break;
+    $step = $by_id[ $r['id'] ] ?? null;
+    if (!$step || $step['scope'] === 'account') continue;
+    if (!onboarding\is_recorded($plugin_name, $step)) continue;
+    $reopens = is_callable($step['on_back'] ?? null)
+      || !is_callable($step['needed']) || call_user_func($step['needed'], $facts);
+    if ($reopens) $target = $step;
+  }
+  return $target;
+}
+
+/** One redirect a step asks for after it completes (Done's primary action). */
+function pending_redirect($url = null) {
+  static $pending = null;
+  if ($url !== null) $pending = $url;
+  return $pending;
+}
+
+/**
+ * What a plugin told register_wizard() about its own screens — today the
+ * Welcome media (see welcome.php). Kept beside the registry rather than in
+ * it, so registered_wizards() stays the plain name => true map its callers
+ * (and the hub) read.
+ */
+function wizard_args($plugin_name, $args = null) {
+  static $all = [];
+  if ($args !== null) $all[$plugin_name] = (array) $args;
+  return $all[$plugin_name] ?? [];
+}
+
+/**
+ * Wire the shell for one plugin. Call at plugins_loaded, after
+ * framework\register_plugin().
+ *
+ * $args (optional):
+ *   welcome   the Welcome step's media card — headline, accent, bullets,
+ *             stats, inset, video; see welcome_config() in welcome.php.
+ *             The `tangible_onboarding_welcome` filter can supply or
+ *             reshape the same array.
+ *   release_notes_title
+ *             the Done screen's release-notes question, in place of
+ *             "Get release notes from the makers of {short_title}". Pass it
+ *             translated. It is also the consent record's wording.
+ */
+function register_wizard($plugin, $args = []) {
+  $name = $plugin->name;
+  registered_wizards($name);
+  if ($args) wizard_args($name, $args);
+  $redirect_flag = 'tangible_onboarding_redirect__' . $name;
+
+  // Activation → one-shot redirect flag. The flag pattern (not a direct
+  // redirect) because activation runs in a request whose response the user
+  // never sees; the next admin load performs the redirect.
+  // Activation is noticed by the framework-wide `activated_plugin` listener
+  // below, not by register_activation_hook(): a plugin that calls
+  // register_wizard() inside its own plugins_loaded callback (the house
+  // pattern) never gets that hook registered during the activation request,
+  // because plugins_loaded already ran before WordPress included it.
+  $just_activated = !empty($plugin->file_path) && consume_activation(plugin_basename($plugin->file_path));
+  if ($just_activated) {
+    update_option($redirect_flag, 1, false);
+  }
+
+  // Update traps (traps.php): the wizard after an update, for plugins that
+  // register one. Activation tells a fresh install from an update.
+  register_traps($plugin, $just_activated);
+
+  // The redirect happens at most once per plugin per site, ever (spec §5).
+  // The marker lives in a framework-owned site option, so deleting and
+  // reinstalling the plugin counts as returning, not new; anything needed
+  // after that is the notice's job.
+  add_action('admin_init', function () use ($plugin, $name, $redirect_flag) {
+    // Fallback for an activation the listener could not see: when an older
+    // framework copy won the load in the activation request, nothing recorded
+    // it. WordPress lands a single activation on plugins.php?activate=true;
+    // a wizard never onboarded here takes that as its first run.
+    $landed = ($GLOBALS['pagenow'] ?? '') === 'plugins.php' && ($_GET['activate'] ?? '') === 'true'
+      && !empty($plugin->file_path)
+      && (in_array(plugin_basename($plugin->file_path), newly_active_plugins(), true)
+        || (had_no_active_snapshot() && sole_unonboarded_wizard() === $name));
+    if (!get_option($redirect_flag) && !($landed && !was_onboarded($name))) return;
+    delete_option($redirect_flag);
+    if (wp_doing_ajax() || !current_user_can('manage_options')) return;
+    if (isset($_GET['activate-multi'])) return;   // bulk activation is not an invitation
+    if (is_network_admin() || is_disabled() || was_onboarded($name)) return;
+    $plan = onboarding\resolve_plan($name, build_facts($name));
+    if (!pending_questions($plan)) return;         // nothing to ask — stay out of the way
+    mark_onboarded($name);
+    wp_safe_redirect(get_setup_url($plugin));
+    exit;
+  });
+
+  // Always reachable: a "Setup" link on the plugin's row, whether or not
+  // anything is pending — dismissing the notice must not strand the wizard.
+  if (!empty($plugin->file_path)) {
+    add_filter('plugin_action_links_' . plugin_basename($plugin->file_path), function ($links) use ($plugin, $name) {
+      if (!current_user_can('manage_options')) return $links;
+      $left = steps_left($name);
+      $label = $left
+        /* translators: %s: number of setup steps left */
+        ? sprintf(_n('Setup (%s step left)', 'Setup (%s steps left)', $left, 'tangible-framework'), number_format_i18n($left))
+        : __('Setup', 'tangible-framework');
+      array_unshift($links, '<a href="' . esc_url(get_setup_url($plugin)) . '">' . esc_html($label) . '</a>');
+      return $links;
+    });
+  }
+
+  // The hidden setup page. Parent null = reachable by URL, absent from menus.
+  add_action('admin_menu', function () use ($plugin) {
+    $hook = add_submenu_page(
+      '', $plugin->title ?? $plugin->name, '', 'manage_options',
+      get_setup_slug($plugin),
+      function () use ($plugin) { render_wizard($plugin); }
+    );
+    // Hidden pages resolve no page title, and WP trunk's admin-header now
+    // deprecation-warns on strip_tags(null) — which also breaks any header()
+    // sent later in the request. Supply the title before admin-header runs.
+    if ($hook) {
+      add_action('load-' . $hook, function () use ($plugin) {
+        /* translators: %s: plugin name */
+        $GLOBALS['title'] = sprintf(__('%s setup', 'tangible-framework'), $plugin->title ?? $plugin->name);
+        // The wizard is a takeover: the CSS hides the admin bar, but WP still
+        // emits its markup and a remote gravatar request for it. Inside
+        // wp-admin the `show_admin_bar` filter is never consulted
+        // (is_admin_bar_showing() returns true outright for is_admin()), so
+        // the render action is what has to go.
+        remove_action('in_admin_header', 'wp_admin_bar_render', 0);
+        // Screen Options is a float at the top of #wpbody-content, and the
+        // wizard is a new formatting context, so it narrows beside the
+        // float: a grey strip down the right of every step. Not emitting it
+        // is the fix; the help tab, if a plugin adds one, is hidden in CSS.
+        add_filter('screen_options_show_screen', '__return_false');
+      });
+    }
+  });
+
+  // While setup is pending, every licence door leads to the wizard: the
+  // updater's plugins-row "Activate License" link is filtered here so the
+  // reader never lands on a bare settings field with no context. Once the
+  // plan is empty, the filter stands down and licence management belongs to
+  // the settings page again — one licence surface at a time.
+  add_filter('tangible_updater_activation_url', function ($url, $for_plugin) use ($plugin, $name) {
+    if (($for_plugin->name ?? null) !== $name) return $url;
+    $plan = onboarding\resolve_plan($name, build_facts($name));
+    return !pending_questions($plan) ? $url : get_setup_url($plugin);
+  }, 10, 2);
+
+  // Resumable re-entry: the playbook's one universal finding. Dismissible
+  // (see notice_is_sticky for the one exception), and it re-resolves each
+  // load, so finishing setup removes it without a dismissal ever being
+  // recorded.
+  // Outbox retry: any visit to the setup page redelivers unsynced consent
+  // answers (server side is idempotent, so over-triggering costs nothing).
+  add_action('admin_init', function () use ($plugin) {
+    if (($_GET['page'] ?? '') !== get_setup_slug($plugin)) return;
+    if (!current_user_can('manage_options')) return;
+    attempt_consent_sync($plugin);
+  });
+
+  add_action('admin_init', function () use ($plugin, $name) {
+    if (($_GET['page'] ?? '') === get_setup_slug($plugin)) return;
+    // The Hub shows pending setup itself (Finish setting up), so the notice
+    // would only repeat it there.
+    if (defined('tangible\\hub\\PAGE') && ($_GET['page'] ?? '') === \tangible\hub\PAGE) return;
+    $notice = setup_notice($plugin);
+    if (!$notice) return;
+    framework\register_admin_notice(function () use ($plugin, $notice) {
+      $title = esc_html($plugin->title ?? $plugin->name);
+      $url = esc_url(get_setup_url($plugin));
+      $n = $notice['steps'];
+      $key = $notice['key'];
+      $class = $notice['sticky'] ? 'notice notice-warning' : 'notice notice-info is-dismissible';
+      // When the licence is what's missing, say so: this notice is the only
+      // licence message while setup is pending (the updater's yield below).
+      $what = $notice['licence']
+        ? __('add your license key to finish setup.', 'tangible-framework')
+        /* translators: %s: number of setup steps left */
+        : sprintf(_n('setup has %s step left.', 'setup has %s steps left.', $n, 'tangible-framework'), number_format_i18n($n));
+      echo "<div class=\"$class\" data-tangible-admin-notice=\"$key\">"
+         . "<p><strong>$title</strong>: " . esc_html($what) . ' '
+         . "<a href=\"$url\">" . esc_html__('Continue setup', 'tangible-framework') . '</a></p></div>';
+    });
+  });
+
+  // One licence message at a time: while setup is pending and speaking for
+  // this plugin (its notice showing, or the wizard itself open), the updater's
+  // "License key is missing" notice and Plugins-row strip stay quiet. Once
+  // setup is finished, a key removed, expired or revoked later is the
+  // updater's to report again.
+  add_filter('tangible_updater_licence_notice_yields', function ($yields, $for_plugin) use ($plugin, $name) {
+    if (($for_plugin->name ?? null) !== $name) return $yields;
+    if (($_GET['page'] ?? '') === get_setup_slug($plugin)) return true;
+    return $yields || (bool) setup_notice($plugin);
+  }, 10, 2);
+}
+
+/**
+ * URL of a stylesheet in this module, versioned by the framework version AND
+ * the file's modification time: hosts cache these for years, so a CSS change
+ * made without a version bump would otherwise never reach a browser that has
+ * seen the page. module_url carries no trailing slash and may answer with the
+ * wrong scheme behind SSL proxies — normalize both or the stylesheet 404s.
+ */
+function asset_url($file) {
+  $mtime = @filemtime(__DIR__ . '/' . $file);
+  return set_url_scheme(trailingslashit(framework\module_url(__FILE__)) . $file)
+    . '?v=' . rawurlencode((framework::$state->version ?? '1') . ($mtime ? '.' . $mtime : ''));
+}
+
+/**
+ * Print one of this module's stylesheets / scripts right here, through the
+ * WordPress dependency API rather than a hand-written tag (Plugin Check and
+ * wordpress.org review require it). Printing on the spot, not enqueuing,
+ * keeps it working on the full-screen setup page, which renders past the
+ * point where enqueued assets go out. The version is already in asset_url.
+ */
+function print_style($handle, $file) {
+  wp_register_style($handle, asset_url($file), [], null);
+  wp_print_styles($handle);
+}
+
+function print_script($handle, $file) {
+  wp_register_script($handle, asset_url($file), [], null, true);
+  wp_print_scripts($handle);
+}
+
+/**
+ * Whether the "setup pending" notice shows for this plugin on this request,
+ * and what it says: null, or [ key, steps, sticky, licence ]. Shared by the
+ * notice and the updater's yield so the two can never disagree.
+ */
+function setup_notice($plugin) {
+  static $memo = [];
+  $name = $plugin->name;
+  if (array_key_exists($name, $memo)) return $memo[$name];
+  $memo[$name] = null;
+
+  if (!current_user_can('manage_options') || is_disabled()) return null;
+  $key = $name . '-setup-pending';
+  $facts = build_facts($name);
+  $sticky = notice_is_sticky($plugin, $facts);
+  if (!$sticky && framework\is_admin_notice_dismissed($key)) return null;
+  $questions = pending_questions(onboarding\resolve_plan($name, $facts));
+  if (!$questions) return null;
+
+  return $memo[$name] = [
+    'key'     => $key,
+    'steps'   => count($questions),
+    'sticky'  => $sticky,
+    'licence' => licence_applies($plugin) && empty($facts->licence_active),
+  ];
+}
+
+/**
+ * The setup notice cannot be dismissed only while a paid plugin has no active
+ * licence on a live site: without it the plugin gets no updates, which is
+ * worth insisting on. Everything else is a nudge the reader may close for good.
+ * Dev sites are exempt, since they often run a paid plugin unlicensed.
+ */
+function notice_is_sticky($plugin, $facts) {
+  return is_licensed_distribution($plugin)
+    && empty($facts->licence_active)
+    && !is_dev_site();
+}
+
+/**
+ * Continue/skip submission. Factored out of the admin-post hook so the
+ * decision logic is testable without HTTP.
+ *
+ * Returns the step id that was recorded, or null when nothing was
+ * (validation failure, unknown step, or a step that refused).
+ */
+function handle_step_submission($plugin_name, $post) {
+  $step_id = sanitize_text_field($post['step'] ?? '');
+  $do = (string) ($post['do'] ?? '');
+
+  // An answer button — "Don't share" / "Share usage data", or "Connect to
+  // tangible.one" inside a card — is a Continue that carries its answer in
+  // the same field: a submit button has one name and one value, and `do`
+  // is the one the shell reads. The handler finds it in $_POST['answer'].
+  if (strpos($do, 'answer:') === 0) {
+    $answer = sanitize_key(substr($do, 7));
+    if ($answer === '') return null;
+    $_POST['answer'] = $answer;
+    $do = 'continue';
+  }
+  if ($step_id === '' || !in_array($do, ['continue', 'skip', 'back'], true)) return null;
+
+  $facts = build_facts($plugin_name);
+  $plan = onboarding\resolve_plan($plugin_name, $facts);
+
+  // Only the CURRENT step accepts a submission — a stale tab posting an
+  // earlier step must not re-run a handler whose answer already exists.
+  if ($plan['current'] !== $step_id) return null;
+
+  $step = null;
+  foreach ($plan['steps'] as $s) if ($s['id'] === $step_id) { $step = $s; break; }
+
+  if ($do === 'back') {
+    $target = back_target($plugin_name, $facts, $plan);
+    if (!$target) return null;
+    if (is_callable($target['on_back'] ?? null)) {
+      $plugin = function_exists('tangible\\framework\\get_plugin')
+        ? framework\get_plugin($plugin_name) : null;
+      call_user_func($target['on_back'], $plugin, $target);
+    }
+    onboarding\unmark($plugin_name, $target['id']);
+    return $target['id'];
+  }
+
+  if ($do === 'skip') {
+    if (!$step['skippable']) return null;
+    // A step may declare 'on_skip' (callable) when skipping is itself a
+    // decision with a consequence — "skip Connect" means "stay on the Local
+    // backend", and that has to be RECORDED, not implied, or the promise in
+    // the skip note quietly stops being true.
+    if (is_callable($step['on_skip'] ?? null)) {
+      $plugin = function_exists('tangible\\framework\\get_plugin')
+        ? framework\get_plugin($plugin_name) : null;
+      call_user_func($step['on_skip'], $plugin, $step);
+    }
+    onboarding\mark($plugin_name, $step_id, 'skipped');
+    return $step_id;
+  }
+
+  if (is_callable($step['handle'] ?? null)) {
+    $plugin = function_exists('tangible\\framework\\get_plugin')
+      ? framework\get_plugin($plugin_name) : null;
+    $ok = call_user_func($step['handle'], $plugin, $step);
+    // A handler refuses two ways, and the shell treats them differently:
+    //   false     — incomplete input; stay open, no message (the form says why)
+    //   WP_Error  — a TEST failed; stay open and show the reason. This is the
+    //               whole infra behind "a credentials step ends in a test, not
+    //               a save": the shell knows nothing about Algolia or Stripe,
+    //               only that a handler may decline with an explanation.
+    if ($ok === false) return null;
+    if (is_wp_error($ok)) {
+      set_transient(step_error_key($plugin_name), $ok->get_error_message(), 60);
+      return null;
+    }
+  }
+  onboarding\mark($plugin_name, $step_id, 'done');
+  if (!empty($step['redirect_to'])) pending_redirect((string) $step['redirect_to']);
+  return $step_id;
+}
+
+/** Per-user, so two admins onboarding two sites in parallel don't cross wires. */
+function step_error_key($plugin_name) {
+  return 'tangible_onboarding_error__' . $plugin_name . '__' . get_current_user_id();
+}
+
+add_action('admin_post_tangible_onboarding_step', function () {
+  if (!current_user_can('manage_options')) wp_die(esc_html__('Nope', 'tangible-framework'));
+  check_admin_referer('tangible_onboarding_step');
+  $plugin_name = sanitize_text_field($_POST['plugin'] ?? '');
+  handle_step_submission($plugin_name, $_POST);
+  $plugin = framework\get_plugin($plugin_name);
+  wp_safe_redirect(pending_redirect() ?: ($plugin ? get_setup_url($plugin) : admin_url()));
+  exit;
+});
+
+// ── rendering ──────────────────────────────────────────────────────────────
+//
+// The frame is the Plugin Wizard design (Cristian, Figma 2026-08), rendered
+// with the TUI wizard element catalog (@tangible/ui `Compositions/Wizard`):
+//
+//   top bar    the House mark + product lockup left, "Exit setup" as a plain
+//              link right — its own white band
+//   stepper    horizontal, every step named, in its own white band under the
+//              top bar — done = green dot + muted label, current = filled
+//              primary pill, upcoming = grey dot. No numerals, no progress
+//              track (Figma `topbar-stepper-zoom`). Skipped renders as done:
+//              the design has no skipped state and the rail is not the place
+//              to explain one.
+//   page       the #F0F0F0 ground runs edge to edge; heading, intro, cards
+//              and panels sit directly on it inside a centred 1200px column
+//              (no modal card). A step may declare 'aside' (callable) for
+//              the two-column facts-panel layout.
+//   footer     full-width white band pinned to the bottom of the viewport,
+//              hairline above: blue "Skip this step" link + outcome-named
+//              primary right (submit_label). The design also has Back on the
+//              left; the flow has no back handler yet, so that slot is empty.
+//
+// Difference inventory against the design, item by item:
+// tangible-app/.docs/archive/audits/2026-09-14-searchsync-wizard-vs-figma-inventory.md
+//
+// Styling is the compiled TUI subset (onboarding/wizard.css — button,
+// notice, stepper, option-card, checkbox, switch, progress, chip, inputs)
+// on the native admin type stack, with a system monospace for data (see the
+// shell <style> below: no brand faces ship to customer sites). Step BODIES keep core
+// form controls unstyled in our panel — that is the archetype contract.
+//
+// v1 stays server-rendered on purpose: the markup is the TUI components'
+// own DOM (classes and all), so the preact hydration layer can land on it
+// later without a redesign.
+
+/**
+ * The wizard's step strip — Cristian's Plugin Wizard stepper: a small dot and
+ * a label per step, the current one a filled pill. No numerals, no checkmark,
+ * no progress bar (audit G-5).
+ *
+ * TUI's <Stepper> is close to this dot-rail but has no pill state, so the
+ * classes stay wizard-local (.tgbl-steps). Skipped steps render as done — the
+ * design has no third state — and keep a visually-hidden ", skipped" for AT.
+ */
+function render_stepper($rail, $current_id) {
+  ?>
+  <nav aria-label="<?php esc_attr_e('Setup progress', 'tangible-framework'); ?>" class="tgbl-steps">
+    <ol class="tgbl-steps__list">
+      <?php foreach ($rail as $r) :
+        $state = $r['state'];
+        $suffix = $state === 'done' ? _x('complete', 'setup step state', 'tangible-framework')
+          : ($state === 'skipped' ? _x('skipped', 'setup step state', 'tangible-framework') : ''); ?>
+        <li class="tgbl-steps__step" data-state="<?php echo esc_attr($state); ?>"
+            <?php if ($r['id'] === $current_id) echo 'aria-current="step"'; ?>>
+          <span class="tgbl-steps__dot" aria-hidden="true"></span>
+          <span class="tgbl-steps__label"><?php echo esc_html(ucfirst($r['label'])); ?></span>
+          <?php if ($suffix) : ?><span class="tui-visually-hidden">, <?php echo esc_html($suffix); ?></span><?php endif; ?>
+        </li>
+      <?php endforeach; ?>
+    </ol>
+  </nav>
+  <?php
+}
+
+/** The content column for one step: 720 or 1200, heading left or centred. */
+function page_classes($step) {
+  return 'tgbl-wizard__page'
+    . (($step['width'] ?? 'wide') === 'narrow' ? ' is-narrow' : '')
+    . (($step['align'] ?? '') === 'center' ? ' is-center' : '');
+}
+
+/** The design's check, at 1em — bullets, the connected box, option cards. */
+function check_svg($size = '1em') {
+  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="' . esc_attr($size)
+    . '" height="' . esc_attr($size) . '" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10.687 16.567 18.14 3.99l1.72 1.02-8.547 14.423-7.382-5.111 1.138-1.644z" clip-rule="evenodd"/></svg>';
+}
+
+/**
+ * A selectable option card — the same DOM @tangible/ui's OptionCard emits,
+ * over a native input the browser owns. Steps compose these for the Choice
+ * and steward archetypes; the group wrapper is render_option_group().
+ *
+ * $args: name, value, title, checked, type (radio|checkbox), description,
+ *        badge, meta, variant (card|row|plain), bullets (string[]),
+ *        content (callable — extra markup rendered inside the body, under
+ *        the description; the design nests a field under a chosen option)
+ *
+ * `plain` is the design's "Basic Option": a radio, a title and a one-line
+ * description with no box around it — used inside a white card that
+ * carries the section title (Configure, Your site).
+ */
+function render_option_card($args) {
+  $a = wp_parse_args($args, [
+    'type' => 'radio', 'variant' => 'card', 'checked' => false,
+    'description' => '', 'badge' => '', 'meta' => '', 'bullets' => [],
+    'content' => null,
+  ]);
+  $check_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10.687 16.567 18.14 3.99l1.72 1.02-8.547 14.423-7.382-5.111 1.138-1.644z" clip-rule="evenodd"/></svg>';
+  // The control's shape follows the input type, not the card variant: a tick
+  // in a square says "pick as many as you like", a dot in a circle says "pick
+  // one". TUI's own is-row variant squares the control either way, which
+  // makes every single-choice row lie about itself — hence is-radio here.
+  $classes = 'tui-option-card'
+    . ($a['type'] === 'radio' ? ' is-radio' : ' is-checkbox')
+    . ($a['variant'] === 'row' ? ' is-row' : '')
+    . ($a['variant'] === 'plain' ? ' is-plain' : '')
+    . ($a['checked'] ? ' is-selected' : '');
+  ?>
+  <label class="<?php echo esc_attr($classes); ?>" data-tgbl-option>
+    <input class="tui-option-card__input tui-visually-hidden"
+           type="<?php echo esc_attr($a['type']); ?>"
+           name="<?php echo esc_attr($a['name']); ?>"
+           value="<?php echo esc_attr($a['value']); ?>"
+           <?php checked($a['checked']); ?> />
+    <span class="tui-option-card__control" aria-hidden="true"><?php
+    if ($a['type'] !== 'radio') : ?><span class="tui-icon"><?php echo $check_svg; ?></span><?php endif; ?></span>
+    <span class="tui-option-card__body">
+      <span class="tui-option-card__heading">
+        <span class="tui-option-card__title"><?php echo esc_html($a['title']); ?></span>
+        <?php if ($a['badge']) : ?><span class="tui-option-card__badge"><?php echo esc_html($a['badge']); ?></span><?php endif; ?>
+      </span>
+      <?php if ($a['description']) : ?>
+        <span class="tui-option-card__description"><?php echo esc_html($a['description']); ?></span>
+      <?php endif; ?>
+      <?php if (is_callable($a['content'])) : ?>
+        <span class="tui-option-card__content"><?php call_user_func($a['content'], $a); ?></span>
+      <?php endif; ?>
+      <?php if ($a['variant'] === 'card' && $a['bullets']) : ?>
+        <span class="tui-option-card__bullets">
+          <?php foreach ($a['bullets'] as $b) : ?>
+            <span class="tui-option-card__bullet"><span class="tui-icon"><?php echo $check_svg; ?></span><?php echo esc_html($b); ?></span>
+          <?php endforeach; ?>
+        </span>
+      <?php endif; ?>
+    </span>
+    <?php if ($a['meta']) : ?><span class="tui-option-card__meta"><?php echo esc_html($a['meta']); ?></span><?php endif; ?>
+  </label>
+  <?php
+}
+
+/**
+ * The top bar's lockup.
+ *
+ * A plugin that ships its own logo wears it — SearchSync's is a full lockup,
+ * mark and wordmark together, so it needs no text beside it. Everything else
+ * gets the real Tangible mark (the six brand-coloured tiles) and its name in
+ * words. The six-tile progress mark this used to draw is retired: the stepper
+ * below already says where you are, and a logo that changes as you advance is
+ * a logo doing someone else's job.
+ */
+function render_lockup($plugin) {
+  // Behind an SSL proxy plugins_url() can answer http:// while the page is
+  // served over https — the logo would then be blocked as mixed content and
+  // the top bar would sit empty. Same normalisation the stylesheet URL needs.
+  $logo  = !empty($plugin->logo) ? set_url_scheme($plugin->logo) : '';
+  $title = trim(str_ireplace(['tangible ', ' plugin'], ['', ''], $plugin->title ?? $plugin->name));
+  if ($logo) {
+    ?>
+    <img class="tgbl-wizard__logo is-plugin" src="<?php echo esc_url($logo); ?>"
+         alt="<?php
+           /* translators: %s: plugin name */
+           echo esc_attr(sprintf(__('%s setup', 'tangible-framework'), $plugin->title ?? $plugin->name)); ?>" />
+    <?php
+    return;
+  }
+  ?>
+  <img class="tgbl-wizard__logo" src="<?php echo esc_url(\tangible\design\logo_url()); ?>"
+       alt="" aria-hidden="true" />
+  <span class="tgbl-wizard__lockup">Tangible <span><?php echo esc_html($title); ?></span></span>
+  <?php
+}
+
+/**
+ * A toggle row — "index this, or don't".
+ *
+ * The design (Cristian's Index frame) puts a switch on the right of a titled
+ * row, with the count beside it, and the same row tinted and two-up when what
+ * it describes was detected rather than always there. A box with a tick reads
+ * as "add this to a list"; a switch reads as "this is on", which is the
+ * truthful shape for a thing that either indexes or does not.
+ *
+ * TUI's <Switch> is a <button role="switch"> that needs JS to hold its state.
+ * This renders inside a plain form, so the control underneath is a native
+ * checkbox wearing a track and a thumb: it submits, it keyboard-focuses, and
+ * it still works with JS off.
+ *
+ * $args: name, value, title, checked, description, meta, note, tone, count
+ */
+function render_toggle_row($args) {
+  $a = wp_parse_args($args, [
+    'checked' => false, 'description' => '', 'meta' => '', 'note' => '',
+    'tone' => '', 'count' => null, 'value' => '1',
+  ]);
+  // Title, description, meta and control are siblings rather than nested, so
+  // each variant can place them with grid areas — the two-up card wants the
+  // control top-right, the full-width row wants it centred at the end, and no
+  // amount of ordering reaches into a wrapper to do that.
+  $classes = 'tgbl-toggle-row'
+    . ($a['tone'] ? ' is-tone-' . $a['tone'] : '')
+    . ($a['description'] ? ' has-desc' : '')
+    . ($a['checked'] ? ' is-on' : '');
+  ?>
+  <label class="<?php echo esc_attr($classes); ?>">
+    <span class="tgbl-toggle-row__title"><?php echo esc_html($a['title']);
+      if ($a['note']) : ?> <em class="tgbl-toggle-row__note"><?php
+        echo esc_html($a['note']); ?></em><?php endif; ?></span>
+    <?php if ($a['description']) : ?>
+      <span class="tgbl-toggle-row__desc"><?php echo esc_html($a['description']); ?></span>
+    <?php endif; ?>
+    <?php if ($a['meta']) : ?>
+      <span class="tgbl-toggle-row__meta"><?php echo esc_html($a['meta']); ?></span>
+    <?php endif; ?>
+    <input class="tgbl-toggle" type="checkbox"
+           name="<?php echo esc_attr($a['name']); ?>"
+           value="<?php echo esc_attr($a['value']); ?>"
+           <?php if ($a['count'] !== null) : ?>data-count="<?php echo (int) $a['count']; ?>"<?php endif; ?>
+           <?php checked($a['checked']); ?> />
+  </label>
+  <?php
+}
+
+/** Wrapper for toggle rows. $cols: 1 (full-width rows) or 2 (the tinted pair). */
+function render_toggle_group($aria_label, $render_rows, $cols = 1) {
+  ?>
+  <div role="group" aria-label="<?php echo esc_attr($aria_label); ?>"
+       class="tgbl-toggle-group<?php echo (int) $cols === 2 ? ' is-cols-2' : ''; ?>">
+    <?php $render_rows(); ?>
+  </div>
+  <?php
+}
+
+/**
+ * Group wrapper for option cards.
+ *
+ * $layout: 'stack' (one per row), 'grid' (auto-fit), or an integer column
+ * count — short choices read as a row of siblings, not a vertical list.
+ */
+function render_option_group($aria_label, $render_cards, $layout = 'stack', $single = true) {
+  $class = 'tui-option-card-group';
+  if ($layout === 'stack') $class .= ' is-stack';
+  elseif (is_int($layout) || ctype_digit((string) $layout)) $class .= ' is-cols-' . (int) $layout;
+  ?>
+  <div role="<?php echo $single ? 'radiogroup' : 'group'; ?>"
+       aria-label="<?php echo esc_attr($aria_label); ?>"
+       class="<?php echo esc_attr($class); ?>">
+    <?php $render_cards(); ?>
+  </div>
+  <?php
+}
+
+function render_wizard($plugin) {
+  $name = $plugin->name;
+  // Opening the wizard by hand counts: the activation redirect never fires
+  // for a plugin someone already set up this way.
+  mark_onboarded($name);
+  $facts = build_facts($name);
+  $plan = onboarding\resolve_plan($name, $facts);
+  $back = $plan['current'] ? back_target($name, $facts, $plan) : null;
+  $step = $plan['steps'][0] ?? null;
+  $total = count($plan['rail']);
+  $position = 0; $done = 0;
+  foreach ($plan['rail'] as $idx => $r) {
+    if ($r['id'] === $plan['current']) $position = $idx + 1;
+    if (in_array($r['state'], ['done', 'skipped'], true)) $done++;
+  }
+  $all_done = !$step;
+
+  print_style('tgbl-wizard', 'wizard.css');
+  ?>
+  <style>
+    /* ------------------------------------------------------------------
+       Wizard shell — Cristian's Plugin Wizard geometry: white top bar and
+       stepper bands, a #F0F0F0 page with a centred 1200px content column,
+       a white footer band pinned to the viewport bottom. Native admin type
+       stack.
+
+       No brand faces here. Recoleta / League Spartan / Space Mono are
+       licensed for Tangible's own sites, not for redistribution inside a
+       plugin ZIP, so the wizard that ships to customer sites uses the
+       system stack only — which is also what the design specifies.
+       ------------------------------------------------------------------ */
+
+    /* Full-screen takeover: the wizard owns the page (Figma: no admin chrome). */
+    html.wp-toolbar { padding-top: 0 !important; }
+    #wpadminbar, #adminmenumain, #adminmenuback, #adminmenuwrap, #adminmenu, #wpfooter,
+    #screen-meta, #screen-meta-links,
+    .notice, .update-nag, .updated, .error:not(.tgbl-keep) { display: none !important; }
+    /* The admin menu's dark column is also painted by body/#wpwrap backgrounds
+       under the hidden menu, which is the ~20px sliver on the launchpad (G-18). */
+    body.wp-admin, #wpwrap, #wpcontent, #wpbody { background: #f0f0f0 !important; }
+    #wpcontent, #wpbody-content { margin-left: 0 !important; padding: 0 !important; float: none; }
+    /* Below 783px WP gives #wpwrap overflow:auto, which makes it the sticky
+       bands' scroll container — one that never scrolls — so neither the
+       header nor the footer held. */
+    #wpwrap { overflow: visible !important; }
+    /* Below 601px WP pads #wpbody 46px for the admin bar, which the
+       takeover hides: the gap would sit above the wizard. */
+    #wpbody { padding-top: 0 !important; }
+    #wpbody-content .tgbl-wizard { min-height: 100vh; }
+
+    /* ------------------------------------------------------------------
+       Token pinning.
+
+       The host plugin ships its own WP-native TUI theme at
+       `.wp-admin .tui-interface` (2px radii, 13px controls, and
+       --tui-color-bg: #f0f0f0 — which turns every "white" surface grey).
+       That is right for its settings screens and wrong for a full-page
+       takeover, and it outranks :where(.tui-interface), so the wizard
+       has to state its own surfaces at matching specificity.
+
+       The accent IS pinned to the design's #3858E9 (audit G-16): the
+       wizard is a takeover and must not change colour with the admin
+       scheme. The plugin's settings screens keep following the scheme.
+       ------------------------------------------------------------------ */
+    .wp-admin .tui-interface.tgbl-wizard {
+      --tui-theme-primary-base: #3858e9;
+      --tui-theme-primary-strong: #2f4bd0;
+      --tui-theme-primary-stronger: #2740b3;
+      --tui-theme-primary-strongest: #1f3391;
+      --tui-theme-primary-border: #3858e9;
+      --tui-color-focus-ring: #3858e9;
+      --tui-color-bg: #fff;
+      --tui-color-bg-surface: #fff;
+      --tui-color-bg-elevated: #fff;
+      --tui-color-bg-muted: #f6f7f7;
+      --tui-color-fg: #1e1e1e;
+      --tui-color-fg-secondary: #3c434a;
+      --tui-color-fg-muted: #646970;
+      --tui-color-border: #dcdcde;
+      --tui-color-divider: #e6e7e8;
+      --tui-color-fill: #eef0f1;
+      --tui-color-fill-subtle: #f0f0f1;
+      /* Selection reads as a tint, not a fill — the host theme's
+         primary-subtlest (#c5d9ed) is a mid blue and swamps a selected row. */
+      --tui-theme-primary-subtlest: #e2e9ff;   /* Figma selected tint (G-15) */
+      --tui-theme-primary-subtle: #b9c6f5;
+      --tui-radius-md: 8px;
+      --tui-button-radius: 4px;
+      --tui-input-radius: 4px;
+      --tui-select-trigger-radius: 4px;
+      --tui-select-content-radius: 8px;
+      --tui-card-radius: 8px;
+      /* Notices are flat tinted panels with a 1px border — no stripe (G-11). */
+      --tui-notice-radius: 6px;
+      --tui-notice-border-width: 1px;
+      --tui-notice-stripe: transparent;
+      --tui-notice-stripe-width: 0px;
+      --tui-typography-size: 14px;
+      --tui-typography-size-sm: 13px;
+      --tui-typography-size-xs: 12px;
+      --tui-control-height-md: 36px;
+      --tui-control-height-lg: 40px;
+      --tui-control-font-size-md: 14px;
+      --tui-control-font-size-lg: 14px;
+      --tui-button-font-size: 13px;
+      --tui-button-font-size-sm: 13px;
+      --tui-button-font-weight: 400;
+    }
+    .tgbl-wizard .tui-notice.is-theme-info { --tui-notice-bg: #f0f6fc; --tui-notice-border: #c5d9ed; }
+    .tgbl-wizard .tui-notice.is-theme-warning { --tui-notice-bg: #fcf9e8; --tui-notice-border: #f0e6a6; }
+    .tgbl-wizard .tui-notice.is-theme-danger { --tui-notice-bg: #fcf0f1; --tui-notice-border: #f1c1c5; }
+    .tgbl-wizard .tui-notice.is-theme-success { --tui-notice-bg: #edfaef; --tui-notice-border: #b8e6c1; }
+
+    .tgbl-wizard {
+      --tgbl-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+        "Helvetica Neue", Arial, sans-serif;
+      --tgbl-font-data: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      --tgbl-measure: 1200px;   /* side-by-side steps (layout rules §2) */
+      --tgbl-narrow: 720px;     /* every other step */
+      --tgbl-gutter: 32px;      /* bands' side padding, min page edge */
+      --tgbl-hairline: #cccccc; /* the bars' lines (§1) */
+
+      /* ----------------------------------------------------------------
+         Seven roles, and nothing outside them.
+
+         An earlier pass left eleven different size/weight pairs on a
+         single step — some from here, some from TUI's component tokens,
+         some from the host plugin's WP-native override. That is what
+         "the font feels weird" is: no ramp, just accidents. Every rule
+         below spends one of these and none invents its own number.
+
+         The base is 14px — the design's (Inter 14/19.6). Descriptions
+         and buttons sit one step down at 13 (audit G-17).
+         ---------------------------------------------------------------- */
+      --tgbl-display: 32px;    /* step heading            400 (§6) */
+      --tgbl-lede:    13px;    /* step subtitle           400 (§6) */
+      --tgbl-title:   14px;    /* row / card titles       500 */
+      --tgbl-body:    14px;    /* everything else         400 */
+      --tgbl-small:   13px;    /* descriptions, buttons   400 */
+      --tgbl-meta:    14px;    /* counts, emphasis        600 */
+      --tgbl-label:   14px;    /* section labels          500, sentence case */
+      --tgbl-micro:   11px;    /* badges                  700 caps */
+
+      display: flex; flex-direction: column;
+      background: #f0f0f0;
+      color: var(--tui-color-fg);
+      font-family: var(--tgbl-font);
+      font-size: var(--tgbl-body); line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+    .tgbl-wizard *, .tgbl-wizard *::before, .tgbl-wizard *::after { box-sizing: border-box; }
+
+    /* Top strip — the design's breadcrumb line, plus the exit affordance. */
+    /* Layout rules §1: 80px white bar, #CCCCCC line under it, logo 32 tall. */
+    .tgbl-wizard__topbar { display:flex; align-items:center; gap:10px;
+      height: 80px; padding: 0 var(--tgbl-gutter); background: var(--tui-color-bg);
+      border-bottom: 1px solid var(--tgbl-hairline); }
+    .tgbl-wizard__logo { display: block; height: 26px; width: auto; flex: none; }
+    .tgbl-wizard__logo.is-plugin { height: 48px; }
+    .tgbl-wizard__lockup { font-size: var(--tgbl-label); font-weight: 600;
+      letter-spacing: .06em; text-transform: uppercase; }
+    .tgbl-wizard__lockup span { color: var(--tui-color-fg-muted); font-weight: 600; }
+    /* A ghost button: the design's Text Button (tertiary, 40px, label in
+       the base primary), not an inline link. G-13 read it as a link. */
+    .tgbl-wizard .tgbl-wizard__exit { margin-left: auto; --tui-button-fg: var(--tui-theme-primary-base);
+      --tui-control-height-md: 40px; padding-inline: 16px; }
+
+    /* Stepper band — its own white strip under the top bar (G-2). */
+    /* §1: 68px, white, steps centred. */
+    .tgbl-wizard__stepbar { background: var(--tui-color-bg);
+      min-height: 68px; display: flex; align-items: center; justify-content: center;
+      padding: 0 var(--tgbl-gutter); }
+
+    /* The header bands stay in view while a long step scrolls, as the
+       footer does: the stepper always, the top bar (and Exit setup) too
+       when the window is tall enough to spare 148px of header. */
+    .tgbl-wizard__stepbar { position: sticky; top: 0; z-index: 2; }
+    @media (min-height: 700px) {
+      .tgbl-wizard__topbar { position: sticky; top: 0; z-index: 3; }
+      .tgbl-wizard__stepbar { top: 80px; }
+    }
+
+    /* The form is the flex spine between the bands: page grows, footer sits
+       at the bottom of the viewport (G-3). */
+    .tgbl-wizard form { display: flex; flex-direction: column; flex: 1; }
+
+    /* The page: the grey ground runs edge to edge, content sits directly on
+       it in a centred column at the design's measure. No card (G-1). */
+    /* §5: 64px above the heading and below the last block. §2: 720 unless
+       the step puts things side by side; below 1100 everything is 720. */
+    .tgbl-wizard__well { flex: 1; padding: 64px var(--tgbl-gutter); }
+    .tgbl-wizard__page { width: 100%; max-width: var(--tgbl-measure); margin: 0 auto;
+      display: flex; flex-direction: column; gap: 32px; }
+    .tgbl-wizard__page.is-narrow { max-width: var(--tgbl-narrow); }
+    .tgbl-wizard__page.is-center .tgbl-wizard__body > h2,
+    .tgbl-wizard__page.is-center .tgbl-wizard__body > .step-intro { text-align: center; }
+    @media (max-width: 1100px) {
+      .tgbl-wizard__page { max-width: var(--tgbl-narrow); }
+    }
+    /* Steps author their own markup with a margin-bottom convention, so the
+       body is a block with a default flow rhythm rather than a flex gap —
+       a gap would stack on top of those margins and pull the heading block
+       apart. Anything with its own inline margin still wins. */
+    .tgbl-wizard__body { display: block; }
+    /* .step-intro is excluded: it belongs to the heading above it and keeps
+       its own tight 8px, in one-column and two-column steps alike. */
+    .tgbl-wizard__body > * + *:not(.step-intro),
+    .tgbl-wizard .tgbl-cols > .main > * + *:not(.step-intro),
+    .tgbl-wizard .tgbl-flow > * + *:not(.step-intro) { margin-top: 32px; }
+    /* §5: 32px between blocks, and from the heading block to the first. */
+    .tgbl-wizard__body > .step-intro + *, .tgbl-wizard__body > h2 + *:not(.step-intro) { margin-top: 32px; }
+    /* A trailing note after a card group is a caption for it, not a new
+       block — but it still needs air, or it reads as card overflow. */
+    .tgbl-wizard__body > .tui-option-card-group + .whisper,
+    .tgbl-wizard__body > .tui-option-card-group + p { margin-top: 18px; }
+    .tgbl-wizard .tgbl-flow > [hidden] { display: none; }
+
+    /* Step strip — dot + label, current as a filled pill (G-5) ---------- */
+    .tgbl-steps__list { display: flex; flex-wrap: wrap; justify-content: center;
+      gap: 8px 32px; margin: 0; padding: 0; list-style: none; }
+    .tgbl-steps__step { display: flex; align-items: center; gap: 8px; margin: 0;
+      min-height: 32px; font-size: var(--tgbl-body); line-height: 1.2;
+      color: var(--tui-color-fg-muted); }
+    .tgbl-steps__dot { flex: none; width: 8px; height: 8px; border-radius: 50%;
+      background: #c3c4c7; }
+    .tgbl-steps__step[data-state="done"] .tgbl-steps__dot,
+    .tgbl-steps__step[data-state="skipped"] .tgbl-steps__dot { background: var(--tui-theme-success-base, #00a32a); }
+    .tgbl-steps__step[aria-current="step"] { padding: 0 20px; border-radius: 999px;
+      background: var(--tui-theme-primary-base); color: var(--tui-color-fg-on-accent, #fff); }
+    .tgbl-steps__step[aria-current="step"] .tgbl-steps__dot { display: none; }
+
+    /* Type scale ---------------------------------------------------------- */
+    /* Heading is regular weight at 30 — the design carries no display face
+       and no bold headline (G-9). */
+    .tgbl-wizard h2 { font-family: inherit; font-size: var(--tgbl-display); font-weight: 400;
+      line-height: 1.25; letter-spacing: 0; margin: 0; padding: 0;
+      color: var(--tui-color-fg); }
+    .tgbl-wizard .step-intro { font-size: var(--tgbl-lede); line-height: 1.55;
+      color: var(--tui-color-fg-muted); margin: 12px 0 0; }
+    /* :where() so this reset carries no specificity of its own. As a plain
+       `.tgbl-wizard p` it was (0,1,1) and quietly beat every single-class rule
+       on a paragraph — .tgbl-done__actions, .tgbl-build__meta and
+       .tgbl-result__excerpt all had their margins zeroed by it, which is why
+       the finish screen's buttons sat flush against the sentence above them. */
+    .tgbl-wizard :where(p) { font-size: var(--tgbl-body); line-height: 1.6; margin: 0; }
+    /* Section labels open a block, so they carry the air above and a tight
+       gap below — steps no longer hand-tune this per instance. */
+    /* Section labels are sentence case, 14/500, near-black (G-8). */
+    .tgbl-wizard .lbl, .tgbl-wizard .eyebrow { display: block; font-size: var(--tgbl-label);
+      font-weight: 500; letter-spacing: 0; text-transform: none;
+      color: var(--tui-color-fg); margin: 24px 0 12px; }
+    .tgbl-wizard__body > .lbl:first-child { margin-top: 0; }
+    .tgbl-wizard .lbl + *, .tgbl-wizard .eyebrow + * { margin-top: 0; }
+
+    /* A labelled field: <p class="tgbl-field"><label>Name<br/><input/></label></p> */
+    .tgbl-wizard .tgbl-field { margin-top: 16px; }
+    .tgbl-wizard .tgbl-field label { font-weight: 500; font-size: var(--tgbl-body); }
+    .tgbl-wizard .tgbl-field input, .tgbl-wizard .tgbl-field select { margin-top: 6px; }
+    .tgbl-wizard .tgbl-field__hint { display: block; margin-top: 6px; }
+
+    /* Consent question pairs (framework steps.php) */
+    .tgbl-wizard .tgbl-answer { margin-top: 24px; }
+    .tgbl-wizard .tgbl-answer__q { font-size: var(--tgbl-title); font-weight: 500; margin: 0 0 4px; }
+    .tgbl-wizard .tgbl-answer__d { font-size: var(--tgbl-body); color: var(--tui-color-fg-muted);
+      margin: 0 0 12px; }
+    .tgbl-wizard .tgbl-factkey { padding: 3px 16px 3px 0; font-size: var(--tgbl-small);
+      margin: 0; letter-spacing: 0; color: var(--tui-color-fg-muted); }
+    .tgbl-wizard .whisper { font-size: var(--tgbl-small); color: var(--tui-color-fg-muted); }
+    .tgbl-wizard .code { font-family: var(--tgbl-font-data); font-size: var(--tgbl-body); }
+    .tgbl-wizard label { font-size: var(--tgbl-body); }
+    .tgbl-wizard strong, .tgbl-wizard b { font-weight: 600; }
+    .tgbl-wizard a { color: var(--tui-theme-primary-base); }
+    /* WP admin underlines anchors; a link-as-button must not wear it. */
+    .tgbl-wizard a.tui-button, .tgbl-wizard a.tui-button:hover { text-decoration: none; }
+
+    /* Fields fill the measure — a 300px input inside a 880px card is the
+       misalignment the design never has. */
+    .tgbl-wizard input[type=text], .tgbl-wizard input[type=password],
+    .tgbl-wizard input[type=email], .tgbl-wizard input[type=url],
+    .tgbl-wizard select, .tgbl-wizard textarea { width: 100%; max-width: 100%;
+      font-family: inherit; font-size: var(--tgbl-body); }
+    .tgbl-wizard .tui-field, .tgbl-wizard .tui-input-wrap { width: 100%; }
+
+    /* Steps emit .tgbl-dbl between the heading block and the controls.
+       The design separates those with air, not a rule, so this is now a
+       spacer — the double hairline was a leftover from the DDD artifacts. */
+    .tgbl-dbl { border: 0; height: 0; margin: 12px 0 0; }
+
+    /* Footer: a full-width white band at the bottom of the viewport (G-3).
+       Left slot is where the design puts Back; empty until the flow can. */
+    /* §1: 80px, #CCCCCC line above, held at the bottom of the window. */
+    .tgbl-wizard__footer { display: flex; align-items: center; gap: 16px;
+      position: sticky; bottom: 0; z-index: 2;
+      height: 80px; padding: 0 var(--tgbl-gutter); background: var(--tui-color-bg);
+      border-top: 1px solid var(--tgbl-hairline); }
+
+    /* Cards: white, radius 8, soft shadow, no border — the grey ground
+       provides the contrast (G-10). Selected keeps tint + 1px primary. */
+    /* §3: the four-layer card shadow, 12px corners. */
+    .tgbl-wizard { --tgbl-card-shadow: 0 4px 4px rgba(0,0,0,.01), 0 3px 3px rgba(0,0,0,.02),
+      0 1px 2px rgba(0,0,0,.02), 0 1px 1px rgba(0,0,0,.03); --tgbl-card-radius: 12px; }
+    .tgbl-wizard .tui-option-card { --tui-option-card-padding: 20px 24px;
+      --tui-option-card-radius: var(--tgbl-card-radius); --tui-option-card-border: transparent;
+      --_control-size: 20px; box-shadow: var(--tgbl-card-shadow); }
+    .tgbl-wizard .tui-option-card.is-row { --tui-option-card-padding: 16px 20px; }
+    .tgbl-wizard .tui-option-card.is-selected { box-shadow: var(--tgbl-card-shadow), inset 0 0 0 1px var(--tui-theme-primary-base); }
+    .tgbl-wizard .tui-option-card:hover:not(.is-selected) { --tui-option-card-border: transparent; }
+
+    /* A tick in a square means "as many as you like"; a dot in a circle means
+       "one of these". TUI's is-row squares the control whichever it is, so the
+       shape is restated here from the input type the card actually holds. */
+    .tgbl-wizard .tui-option-card.is-radio .tui-option-card__control {
+      border-radius: 999px; background: var(--tui-color-bg);
+      border-color: var(--tui-color-border); }
+    .tgbl-wizard .tui-option-card.is-radio.is-selected .tui-option-card__control {
+      background: var(--tui-color-bg); border-color: var(--tui-theme-primary-base);
+      box-shadow: inset 0 0 0 5px var(--tui-theme-primary-base); }
+    .tgbl-wizard .tui-option-card.is-checkbox .tui-option-card__control {
+      border-radius: 4px; }
+
+    /* Short choices belong side by side. A four-item pick spread down 880px
+       of column is the "vertical instead of horizontal" complaint. */
+    .tgbl-wizard .tui-option-card-group.is-cols-2 { grid-template-columns: repeat(2, 1fr); }
+    .tgbl-wizard .tui-option-card-group.is-cols-3 { grid-template-columns: repeat(3, 1fr); }
+    .tgbl-wizard .tui-option-card-group.is-cols-4 { grid-template-columns: repeat(4, 1fr); }
+    @media (max-width: 860px) {
+      .tgbl-wizard .tui-option-card-group[class*="is-cols-"] {
+        grid-template-columns: repeat(2, 1fr); }
+    }
+    /* Plain option (design "Basic Option"): no box, no tint — the card the
+       options sit in carries the surface (C-3). */
+    .tgbl-wizard .tui-option-card.is-plain { --tui-option-card-padding: 0;
+      --tui-option-card-bg: transparent; --tui-option-card-bg-selected: transparent;
+      --tui-option-card-border: transparent; --tui-option-card-border-selected: transparent;
+      --tui-option-card-gap: 12px; box-shadow: none; border-radius: 0; }
+    .tgbl-wizard .tui-option-card.is-plain.is-selected { box-shadow: none; }
+    .tgbl-wizard .tui-option-card.is-plain .tui-option-card__control { margin-top: 1px; }
+    .tgbl-wizard .tui-option-card.is-plain .tui-option-card__body { display: flex;
+      flex-direction: column; gap: 4px; min-width: 0; }
+    .tgbl-wizard .tui-option-card-group.is-stack .tui-option-card.is-plain + .tui-option-card.is-plain { margin-top: 4px; }
+    /* Nested content under an option — a field the choice reveals. Hidden
+       until the option is selected; the step's own script keeps it in step. */
+    .tgbl-wizard .tui-option-card__content { display: block; margin-top: 8px; }
+    .tgbl-wizard .tui-option-card__content[hidden] { display: none; }
+    .tgbl-wizard .tui-option-card__content input, .tgbl-wizard .tui-option-card__content select { margin: 0; font-weight: 400; color: var(--tui-color-fg); }
+
+    /* A white card that carries a section title and its controls (C-2). */
+    .tgbl-card { background: var(--tui-color-bg); border-radius: var(--tgbl-card-radius); padding: 32px;
+      box-shadow: var(--tgbl-card-shadow); }
+    .tgbl-card > .lbl:first-child, .tgbl-card > .eyebrow:first-child { margin-top: 0; }
+    .tgbl-card > * + *:not(.step-intro) { margin-top: 16px; }
+    /* The core steps' patterns (Welcome, Usage data, Done) live in
+       onboarding/patterns.css, linked after this block. */
+
+    /* "Here is what we will set up" — a flat info panel with a title line (C-8). */
+    .tgbl-summary { padding: 20px 24px; border-radius: 6px;
+      background: #f0f6fc; border: 1px solid #c5d9ed; }
+    .tgbl-summary__title { display: block; font-size: var(--tgbl-title); font-weight: 500;
+      margin: 0 0 8px; color: var(--tui-color-fg); }
+    .tgbl-summary p { margin: 0; }
+
+    .tgbl-wizard .tui-option-card__title { font-size: var(--tgbl-title); font-weight: 500; }
+    .tgbl-wizard .tui-option-card__description,
+    .tgbl-wizard .tui-option-card__bullet { font-size: var(--tgbl-small); font-weight: 400; }
+    .tgbl-wizard .tui-option-card__badge { font-size: var(--tgbl-micro); font-weight: 700; }
+    .tgbl-wizard .tui-option-card__meta { font-size: var(--tgbl-meta); font-weight: 600;
+      color: var(--tui-theme-primary-base); font-variant-numeric: tabular-nums; }
+    .tgbl-wizard .tui-option-card-group { --tui-option-card-group-gap: 24px; }
+
+    /* Toggle rows — the design's Index step. A native checkbox wearing a
+       track and a thumb, so the form still works with JS off. */
+    .tgbl-toggle-group { display: grid; gap: 8px; }
+    .tgbl-toggle-group.is-cols-2 { grid-template-columns: repeat(2, 1fr); align-items: stretch; }
+    @media (max-width: 860px) { .tgbl-toggle-group.is-cols-2 { grid-template-columns: 1fr; } }
+
+    .tgbl-toggle-row { display: grid; cursor: pointer;
+      grid-template-columns: 1fr auto auto; gap: 2px 14px; align-items: center;
+      grid-template-areas: "title meta toggle";
+      padding: 14px 20px; border: 0; border-radius: 8px;
+      background: var(--tui-color-bg); box-shadow: var(--tgbl-card-shadow);
+      transition: box-shadow var(--tui-motion-duration) var(--tui-motion-timing); }
+    .tgbl-toggle-row.has-desc { grid-template-areas: "title meta toggle" "desc meta toggle"; }
+    .tgbl-toggle-row:hover { box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 2px 10px rgba(0,0,0,.06); }
+    .tgbl-toggle-row__title { grid-area: title; font-size: var(--tgbl-title);
+      font-weight: 600; line-height: 1.35; }
+    .tgbl-toggle-row__note { font-style: normal; font-weight: 600;
+      color: var(--tui-theme-primary-base); }
+    .tgbl-toggle-row__desc { grid-area: desc; font-size: var(--tgbl-body);
+      color: var(--tui-color-fg-muted); line-height: 1.45; }
+    .tgbl-toggle-row__meta { grid-area: meta; font-size: var(--tgbl-meta); font-weight: 600;
+      color: var(--tui-color-fg-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .tgbl-toggle-row.is-on .tgbl-toggle-row__meta { color: var(--tui-theme-primary-base); }
+    .tgbl-toggle-row .tgbl-toggle { grid-area: toggle; }
+
+    /* Two-up: the control goes top-right, the copy runs the full card width. */
+    .tgbl-toggle-group.is-cols-2 .tgbl-toggle-row { grid-template-columns: 1fr auto;
+      grid-template-areas: "title toggle" "meta meta"; align-items: start;
+      align-content: start; gap: 6px 12px; padding: 16px; }
+    .tgbl-toggle-group.is-cols-2 .tgbl-toggle-row.has-desc {
+      grid-template-areas: "title toggle" "desc desc" "meta meta"; }
+
+    /* Tint is reserved for things we DETECTED — a plugin we found active.
+       A site's own custom post types are ordinary and stay on white. */
+    .tgbl-toggle-row.is-tone-detected { background: var(--tui-theme-primary-subtlest);
+      box-shadow: var(--tgbl-card-shadow), inset 0 0 0 1px var(--tui-theme-primary-subtle); }
+    .tgbl-toggle-row.is-tone-detected .tgbl-toggle-row__title { color: var(--tui-theme-primary-stronger); }
+    .tgbl-toggle-row.is-tone-detected .tgbl-toggle-row__desc { color: var(--tui-theme-primary-strong); }
+
+    /* wp-admin styles `input[type=checkbox]` (0,1,1) — a bare .tgbl-toggle
+       (0,1,0) loses to it and renders as a blue tick box. Match on the
+       attribute too so the track actually wins. */
+    .tgbl-wizard input.tgbl-toggle[type=checkbox] {
+      appearance: none; -webkit-appearance: none; flex: none; margin: 0;
+      position: relative; width: 38px; height: 22px; min-width: 38px; border-radius: 999px;
+      background: var(--tui-color-fill-strong); cursor: pointer; border: 0; padding: 0;
+      box-shadow: none;
+      transition: background-color var(--tui-motion-duration) var(--tui-motion-timing); }
+    .tgbl-wizard input.tgbl-toggle[type=checkbox]::before { content: none; }
+    .tgbl-wizard input.tgbl-toggle[type=checkbox]::after { content: ""; position: absolute;
+      top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff;
+      box-shadow: 0 1px 2px rgba(0,0,0,.2); margin: 0;
+      transition: transform var(--tui-motion-duration) var(--tui-motion-timing); }
+    .tgbl-wizard input.tgbl-toggle[type=checkbox]:checked {
+      background: var(--tui-theme-primary-base); }
+    .tgbl-wizard input.tgbl-toggle[type=checkbox]:checked::after { transform: translateX(16px); }
+    .tgbl-wizard input.tgbl-toggle[type=checkbox]:focus-visible {
+      outline: var(--tui-focus-ring-width) solid var(--tui-color-focus-ring);
+      outline-offset: var(--tui-focus-ring-offset); }
+
+    /* The estimate the design closes the Index step with. */
+    .tgbl-estimate { display: flex; align-items: center; gap: 9px;
+      padding: 12px 16px; border-radius: 6px;
+      background: var(--tui-theme-success-subtlest);
+      color: var(--tui-theme-success-stronger);
+      font-size: var(--tgbl-body); font-weight: 600; }
+    .tgbl-estimate svg { flex: none; align-self: center; }
+    .tgbl-estimate b { font-variant-numeric: tabular-nums; }
+
+    /* Build step — the design's two columns: what is happening on the left,
+       that it worked on the right. They are siblings in one grid rather than
+       a stack, because the whole point of the pairing is watching the index
+       fill while searching what is already in it. */
+    .tgbl-build { display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+      align-items: stretch; }
+    @media (max-width: 860px) { .tgbl-build { grid-template-columns: 1fr; } }
+
+    .tgbl-build__panel { border: 0; border-radius: 8px; box-shadow: var(--tgbl-card-shadow);
+      background: var(--tui-color-bg); padding: 20px 24px; min-width: 0; }
+    .tgbl-build__head { display: flex; align-items: baseline; gap: 12px; }
+    .tgbl-build__title { font-size: var(--tgbl-title); font-weight: 600; margin: 0 0 12px;
+      line-height: 1.35; }
+    .tgbl-build__count { font-size: var(--tgbl-body); color: var(--tui-color-fg-muted);
+      font-variant-numeric: tabular-nums; }
+    .tgbl-build__pct { margin-left: auto; font-size: var(--tgbl-meta); font-weight: 600;
+      color: var(--tui-theme-primary-base); font-variant-numeric: tabular-nums; }
+    .tgbl-build__track { margin-top: 10px; height: 8px; border-radius: 999px;
+      background: var(--tui-color-fill-subtle); overflow: hidden; }
+    .tgbl-build__fill { display: block; height: 100%; width: 0%; border-radius: inherit;
+      background: var(--tui-theme-primary-base); transition: width .4s ease; }
+    .tgbl-build__log { list-style: none; margin: 0; padding: 12px 14px; border-radius: 8px;
+      background: var(--tui-color-bg-muted); color: var(--tui-color-fg-secondary);
+      font-family: var(--tgbl-font-data); font-size: var(--tgbl-body); line-height: 1.9;
+      max-height: 168px; overflow-y: auto; }
+    .tgbl-build__log li { margin: 0; }
+    .tgbl-build__meta { margin-top: 10px; font-size: var(--tgbl-body);
+      color: var(--tui-color-fg-muted); }
+
+    .tgbl-search { margin: 0; }
+    .tgbl-wizard input.tgbl-search__input[type=search] { width: 100%; }
+
+    /* A search result: title and its kind on one line, the excerpt beneath. */
+    .tgbl-results { display: flex; flex-direction: column; gap: 14px; margin-top: 14px; }
+    .tgbl-results:empty { display: none; }
+    /* Inline flow, not a grid: the kind follows the title like a word does,
+       so a long title wraps and the chip trails it instead of being pinned to
+       a column of its own. */
+    .tgbl-result { display: block; }
+    .tgbl-result__title { font-size: var(--tgbl-title); font-weight: 600; line-height: 1.4; }
+    /* No tracking: these chips carry sentence-case words ("Posts", "Tangible
+       Templates"), where letter-spacing reads as a mistake. It stays on the
+       uppercase badges, which are set in caps and need it to stay legible. */
+    .tgbl-result__chip { display: inline-block; margin-left: 8px; vertical-align: 1px;
+      font-size: var(--tgbl-micro); font-weight: 700; letter-spacing: normal;
+      padding: 2px 8px; border-radius: 999px; white-space: nowrap;
+      background: var(--tui-theme-primary-subtlest); color: var(--tui-theme-primary-stronger); }
+    .tgbl-result__excerpt { margin: 3px 0 0; font-size: var(--tgbl-body);
+      color: var(--tui-color-fg-muted); line-height: 1.5; }
+
+    /* Done step — the design's centred finish: a mark, the claim, the two
+       ways onward. Anything conditional (staging paused, global search)
+       stays left-aligned below, because a notice is not a celebration. */
+    .tgbl-done { text-align: center; padding: 8px 0 4px; }
+    .tgbl-done__mark { display: inline-flex; align-items: center; justify-content: center;
+      width: 60px; height: 60px; border-radius: 50%; margin-bottom: 20px;
+      background: var(--tui-theme-success-subtle); color: var(--tui-theme-success-stronger); }
+    .tgbl-done .step-intro { margin-left: auto; margin-right: auto; }
+    .tgbl-done__actions { display: flex; flex-direction: column; align-items: center;
+      gap: 10px; margin-top: 28px; }
+    .tgbl-done__actions .tui-button { min-width: 280px; justify-content: center; }
+
+    .tgbl-wizard .tgbl-notice__p { margin: 0 0 10px; }
+    /* No margin reset here — that would out-specify the body's flow rhythm
+       and jam the list under its heading. */
+    .tgbl-wizard .tgbl-list { list-style: disc; padding-left: 20px; font-size: var(--tgbl-body);
+      line-height: 1.7; margin-bottom: 0; }
+    .tgbl-wizard .tgbl-list li + li { margin-top: 4px; }
+
+    /* the aside slot — content + facts panel, unchanged contract */
+    .tgbl-cols { display:flex; gap:32px; align-items:flex-start; }
+    .tgbl-cols .main { flex:1 1 auto; min-width:0; }
+    .tgbl-aside { flex:0 0 240px; border-left:1px solid var(--tui-color-divider); padding-left:24px; }
+    .tgbl-aside dl { display:grid; grid-template-columns:1fr auto; gap:6px 12px;
+      font-size:var(--tgbl-body); margin:0; }
+    .tgbl-aside dt { font-size:var(--tgbl-body); font-weight:400; color:var(--tui-color-fg-muted); }
+    .tgbl-aside dd { margin:0; text-align:right; font-variant-numeric: tabular-nums;
+      font-weight:600; font-size:var(--tgbl-meta); }
+
+    /* the schematic — hairlines and boxes, no illustration */
+    .tgbl-schem { display:flex; align-items:center; margin:8px 0 4px; }
+    .tgbl-schem .snode { border:1px solid var(--tui-color-border); border-radius:8px;
+      background:var(--tui-color-bg-surface); padding:10px 14px; min-width:110px;
+      text-align:center; font-size:var(--tgbl-body); }
+    .tgbl-schem .snode b { display:block; font-size:var(--tgbl-title); font-weight:600; }
+    .tgbl-schem .snode .sk { font-size:var(--tgbl-micro); font-weight:600;
+      color:var(--tui-color-fg-muted); }
+    .tgbl-schem .snode[data-on] { border-color:var(--tui-theme-primary-base);
+      box-shadow:inset 0 0 0 1px var(--tui-theme-primary-base); background:var(--tui-color-bg); }
+    .tgbl-schem .snode[data-ghost] { border-style:dashed; opacity:.55; }
+    .tgbl-schem .swire { flex:1 1 0; min-width:26px; height:1.5px; background:#9E9CF7; position:relative; }
+    .tgbl-schem .swire em { position:absolute; top:-16px; left:50%; transform:translateX(-50%);
+      font-style:normal; font-size:var(--tgbl-micro); font-weight:600;
+      color:var(--tui-color-fg-muted); white-space:nowrap; }
+
+    /* Plain blue text link, as drawn (G-12). */
+    .tgbl-skip { color: var(--tui-theme-primary-base); background: none; border: 0;
+      cursor: pointer; padding: 0; font-size: var(--tgbl-body); font-family: inherit;
+      text-decoration: none; }
+    .tgbl-skip:hover, .tgbl-skip:focus-visible { text-decoration: underline; text-underline-offset: 3px; }
+
+    @media (max-width: 782px) {
+      .tgbl-wizard { --tgbl-gutter: 16px; --tgbl-display: 24px; }
+      .tgbl-wizard__well { padding: 28px var(--tgbl-gutter) 40px; }
+      .tgbl-wizard__page { gap: 20px; }
+      .tgbl-cols { flex-direction: column; }
+      .tgbl-aside { flex: 1 1 auto; border-left: 0; border-top: 1px solid var(--tui-color-divider);
+        padding-left: 0; padding-top: 16px; width: 100%; }
+    }
+  </style>
+  <?php print_style('tgbl-wizard-patterns', 'patterns.css'); ?>
+  <div class="tui-interface tgbl-wizard">
+    <header class="tgbl-wizard__topbar">
+      <?php render_lockup($plugin); ?>
+      <a class="tui-button is-style-ghost is-theme-primary tgbl-wizard__exit"
+         href="<?php echo esc_url(\tangible\hub\url()); ?>"><?php esc_html_e('Exit setup', 'tangible-framework'); ?></a>
+    </header>
+    <div class="tgbl-wizard__stepbar">
+      <?php render_stepper($plan['rail'], $plan['current']); ?>
+    </div>
+
+    <?php if ($all_done) : ?>
+      <form>
+        <main class="tgbl-wizard__well">
+          <?php // Centred like Done, which this is on a return visit. ?>
+          <div class="<?php echo esc_attr(page_classes([ 'width' => 'narrow', 'align' => 'center' ])); ?>">
+            <div class="tgbl-wizard__body">
+              <h2><?php esc_html_e('Nothing left to ask.', 'tangible-framework'); ?></h2>
+              <p class="step-intro"><?php esc_html_e('Everything is either configured or already on file.', 'tangible-framework'); ?></p>
+              <p class="tgbl-all-done__next"><a class="tui-button is-style-outline"
+                 href="<?php echo esc_url(\tangible\hub\url()); ?>"><?php esc_html_e('Go to Tangible Hub', 'tangible-framework'); ?></a></p>
+            </div>
+          </div>
+        </main>
+      </form>
+    <?php else : ?>
+      <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+        <?php wp_nonce_field('tangible_onboarding_step'); ?>
+        <input type="hidden" name="action" value="tangible_onboarding_step" />
+        <input type="hidden" name="plugin" value="<?php echo esc_attr($name); ?>" />
+        <input type="hidden" name="step" value="<?php echo esc_attr($step['id']); ?>" />
+        <?php if (empty($step['actions']) && empty($step['submit_in_body'])) : ?>
+          <?php // Enter in a field submits with the form's FIRST button — which
+                // would be Back, or a button inside a card. Make it Continue. ?>
+          <button type="submit" name="do" value="continue" class="tui-visually-hidden" tabindex="-1" aria-hidden="true"></button>
+        <?php endif; ?>
+
+        <main class="tgbl-wizard__well">
+          <div class="<?php echo esc_attr(page_classes($step)); ?>">
+            <?php $error = get_transient(step_error_key($name));
+            if ($error) { delete_transient(step_error_key($name)); } ?>
+            <?php if ($error) : ?>
+              <div class="tui-notice is-theme-danger tgbl-keep" role="alert">
+                <div class="tui-notice__inner"><div class="tui-notice__body"><?php echo esc_html($error); ?></div></div>
+              </div>
+            <?php endif; ?>
+
+            <div class="tgbl-wizard__body">
+              <?php
+              $render = function () use ($step, $plugin, $facts) {
+                if (is_callable($step['render'])) call_user_func($step['render'], $plugin, $facts, $step);
+                else echo '<h2>' . esc_html($step['id']) . '</h2>';
+              };
+              if (is_callable($step['aside'] ?? null)) : ?>
+                <div class="tgbl-cols">
+                  <div class="main"><?php $render(); ?></div>
+                  <aside class="tgbl-aside"><?php call_user_func($step['aside'], $plugin, $facts, $step); ?></aside>
+                </div>
+              <?php else : $render(); endif; ?>
+            </div>
+          </div>
+        </main>
+        <?php
+        // The footer only when it holds something: Done with its button in
+        // the body, and no Back, would otherwise be an empty white band.
+        $has_actions = !empty($step['actions']) && is_array($step['actions']);
+        if ($back || $has_actions || $step['skippable'] || empty($step['submit_in_body'])) : ?>
+        <footer class="tgbl-wizard__footer">
+          <?php if ($back) : ?>
+            <button class="tui-button is-style-outline tgbl-back" type="submit" name="do" value="back" formnovalidate><?php echo esc_html_x('Back', 'button: previous setup step', 'tangible-framework'); ?></button>
+          <?php endif; ?>
+          <span style="flex:1"></span>
+          <?php if ($has_actions) :
+            // Answer buttons: equal standing, nothing preselected — each one
+            // is a complete answer (the Wordfence shape, now in the footer).
+            foreach ($step['actions'] as $answer => $action) :
+              $style = ($action['style'] ?? 'outline') === 'primary' ? 'is-theme-primary' : 'is-style-outline'; ?>
+              <button class="tui-button <?php echo esc_attr($style); ?>" type="submit" name="do"
+                      value="answer:<?php echo esc_attr($answer); ?>"><?php echo esc_html($action['label'] ?? $answer); ?></button>
+            <?php endforeach;
+          else : ?>
+            <?php if ($step['skippable']) : ?>
+              <button class="tgbl-skip" type="submit" name="do" value="skip"><?php esc_html_e('Skip this step', 'tangible-framework'); ?></button>
+            <?php endif; ?>
+            <?php if (empty($step['submit_in_body'])) : ?>
+              <button class="tui-button is-theme-primary" type="submit" name="do" value="continue"><?php
+                echo esc_html($step['submit_label'] ?? __('Continue', 'tangible-framework')); ?></button>
+            <?php endif; ?>
+          <?php endif; ?>
+        </footer>
+        <?php endif; ?>
+      </form>
+    <?php endif; ?>
+  </div>
+  <?php
+  print_script('tgbl-wizard', 'wizard.js');
+}

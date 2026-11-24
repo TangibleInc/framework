@@ -1,0 +1,97 @@
+@use "@tangible/ui/styles/system" as sys;
+
+/* @tui-tokens
+--tui-stepper-gap
+--tui-stepper-dot-size
+--tui-stepper-dot-color
+--tui-stepper-dot-complete-color
+--tui-stepper-pill-bg
+--tui-stepper-pill-fg
+--tui-stepper-label-color
+--tui-stepper-font-size
+*/
+
+@mixin styles() {
+  // ==========================================================================
+  // Stepper Component
+  // ==========================================================================
+  //
+  // Component API tokens (never defined here, only read via fallback):
+  //   --tui-stepper-gap                 Gap between steps
+  //   --tui-stepper-dot-size            Marker dot diameter
+  //   --tui-stepper-dot-color           Upcoming dot color
+  //   --tui-stepper-dot-complete-color  Complete dot color
+  //   --tui-stepper-pill-bg             Current-step pill background
+  //   --tui-stepper-pill-fg             Current-step pill text color
+  //   --tui-stepper-label-color         Non-current label color
+  //   --tui-stepper-font-size           Label font size
+  //
+  // The current step's marker dot collapses and the step wears a filled
+  // pill instead; every other step is dot + muted label. Skipped dots are
+  // hollow so a decision reads differently from an achievement.
+  //
+  // ==========================================================================
+
+  :where(.#{sys.$prefix}interface) .#{sys.$prefix}stepper {
+    --_gap: var(--#{sys.$prefix}stepper-gap, var(--#{sys.$prefix}spacing-md));
+    --_dot-size: var(--#{sys.$prefix}stepper-dot-size, 8px);
+    --_dot: var(--#{sys.$prefix}stepper-dot-color, var(--#{sys.$prefix}color-border));
+    --_dot-complete: var(--#{sys.$prefix}stepper-dot-complete-color, var(--#{sys.$prefix}theme-success-base));
+    --_pill-bg: var(--#{sys.$prefix}stepper-pill-bg, var(--#{sys.$prefix}theme-primary-base));
+    --_pill-fg: var(--#{sys.$prefix}stepper-pill-fg, var(--#{sys.$prefix}color-fg-on-accent));
+    --_label: var(--#{sys.$prefix}stepper-label-color, var(--#{sys.$prefix}color-fg-muted));
+    --_fs: var(--#{sys.$prefix}stepper-font-size, var(--#{sys.$prefix}typography-size-sm));
+
+    display: flex;
+    justify-content: center;
+  }
+
+  :where(.#{sys.$prefix}interface) .#{sys.$prefix}stepper__list {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--_gap);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  :where(.#{sys.$prefix}interface) .#{sys.$prefix}stepper__step {
+    display: flex;
+    align-items: center;
+    gap: var(--#{sys.$prefix}spacing-xxs);
+    margin: 0;
+    font-size: var(--_fs);
+    line-height: var(--#{sys.$prefix}typography-line-height-tight);
+    color: var(--_label);
+
+    .#{sys.$prefix}stepper__marker {
+      width: var(--_dot-size);
+      height: var(--_dot-size);
+      border-radius: var(--#{sys.$prefix}radius-full);
+      background: var(--_dot);
+      flex: none;
+    }
+
+    &[data-status="complete"] .#{sys.$prefix}stepper__marker {
+      background: var(--_dot-complete);
+    }
+
+    &[data-status="skipped"] .#{sys.$prefix}stepper__marker {
+      background: transparent;
+      box-shadow: inset 0 0 0 var(--#{sys.$prefix}border-width-bold, 2px) var(--_dot);
+    }
+
+    &[data-status="current"] {
+      background: var(--_pill-bg);
+      color: var(--_pill-fg);
+      border-radius: var(--#{sys.$prefix}radius-full);
+      padding: var(--#{sys.$prefix}spacing-xxs) var(--#{sys.$prefix}spacing-sm);
+      font-weight: var(--#{sys.$prefix}typography-weight-medium);
+
+      .#{sys.$prefix}stepper__marker {
+        display: none;
+      }
+    }
+  }
+}

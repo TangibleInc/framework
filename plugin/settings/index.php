@@ -80,7 +80,7 @@ function is_plugin_settings_page($plugin) {
  * @param config.header - { logo: string, show_title: boolean }
  * @param config.title_callback - Function to display plugin title
  * @param config.title_section - { title: string, description: boolean }
- * @param config.tabs - { [name: string]: { title: string, callback: Function } }
+ * @param config.tabs - { [name: string]: { title: string|Closure, callback: Function } }
  */
 function register_plugin_settings($plugin, $config) {
 
@@ -138,7 +138,14 @@ function register_plugin_settings($plugin, $config) {
           $title = $plugin->title;
           $logos = $plugin->plugin_logos ?? [];
 
-          $tabs = $config['tabs'] ?? [];
+          // A tab title can be a closure, so it is translated here at render:
+          // settings are registered on plugins_loaded, before translations load.
+          $tabs = array_map(function($tab) {
+            if (isset($tab['title']) && $tab['title'] instanceof \Closure) {
+              $tab['title'] = $tab['title']();
+            }
+            return $tab;
+          }, $config['tabs'] ?? []);
           $title_callback = $config['title_callback'] ?? '';
           
           $header = $config['header'] ?? [];
@@ -164,7 +171,10 @@ function register_plugin_settings($plugin, $config) {
                     
                       <div class="plugin-title-and-logo">
                         <img class="plugin-logo<?php echo $header_logo === 'full' ? '-full' : '' ?>"
-                          alt="<?php echo esc_attr($title) ?> Logo"
+                          alt="<?php
+                            /* translators: %s: plugin name */
+                            echo esc_attr(sprintf(__('%s Logo', 'tangible-framework'), $title));
+                          ?>"
                           src="<?php echo esc_attr($logos[ $header_logo ]) ?>"
                         />
                         <?php
@@ -180,7 +190,13 @@ function register_plugin_settings($plugin, $config) {
                     }
                   ?>
                   <div class="tangible-plugin-store-link">
-                    &nbsp;By <a href="https://tangibleplugins.com" target="_blank">Tangible Plugins</a>
+                    &nbsp;<?php
+                      printf(
+                        /* translators: %s: "Tangible Plugins", linked to tangibleplugins.com */
+                        esc_html__('By %s', 'tangible-framework'),
+                        '<a href="https://tangibleplugins.com" target="_blank">Tangible Plugins</a>'
+                      );
+                    ?>
                   </div>
                 </h1>
               </div>
@@ -285,7 +301,8 @@ function register_plugin_settings($plugin, $config) {
   add_filter($filter, function($links) use ($plugin, $config, $settings_page_url) {
 
     $url = $settings_page_url;
-    $label = 'Settings';
+    // WordPress core's own "Settings", so it keeps core's translations.
+    $label = esc_html__('Settings', 'default');
 
     $links []= "<a href=\"$url\">$label</a>";
 

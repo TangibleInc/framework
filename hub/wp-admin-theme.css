@@ -1,0 +1,124 @@
+/*
+ * The Hub's copy of the WordPress admin theme for @tangible/ui — maps TUI
+ * tokens to wp-admin's own: the user's admin colour scheme, 13px controls,
+ * 2px radii, the system font. Copied from SearchSync
+ * (assets/src/css/admin/_wp-admin-theme.scss, cf418fa); a shared standard
+ * comes with the MemberSync / LMS / Quiz work, and this copy goes then.
+ */
+.wp-admin .tui-interface {
+  --tui-theme-primary-subtlest: #c5d9ed;
+  --tui-theme-primary-subtler: #9ec2e6;
+  --tui-theme-primary-subtle: #9abfe1;
+  --tui-theme-primary-base: var(--wp-admin-theme-color, #135e96);
+  --tui-theme-primary-strong: var(--wp-admin-theme-color-darker-10, var(--wp-components-color-accent-darker-10, #006ba1));
+  --tui-theme-primary-stronger: var(--wp-admin-theme-color-darker-20, var(--wp-components-color-accent-darker-20, #043959));
+  --tui-theme-primary-strongest: #01263a;
+  --tui-color-bg-surface: #ffffff;
+  --tui-color-bg: #f0f0f0;
+  --tui-color-bg-elevated: #ffffff;
+  --tui-color-fg: #1d2327;
+  --tui-color-fg-muted: #949494;
+  --tui-color-border: #c3c4c7;
+  --tui-color-divider: #e0e0e0;
+  --tui-focus-ring-color: var(--wp-admin-theme-color, #135e96);
+  --tui-focus-ring-offset: 1px;
+  --tui-focus-ring-width: 1.5px;
+  --tui-typography-size: inherit;
+  --tui-typography-weight-bold: 600;
+  --tui-control-height-sm: 24px;
+  --tui-control-height-md: 32px;
+  --tui-control-height-lg: 40px;
+  --tui-control-font-size-sm: calc(13 * var(--tui-fontSize-multiplier, calc(1rem / 16)));
+  --tui-control-font-size-md: calc(13 * var(--tui-fontSize-multiplier, calc(1rem / 16)));
+  --tui-control-font-size-lg: calc(13 * var(--tui-fontSize-multiplier, calc(1rem / 16)));
+  --tui-button-font-size-xs: calc(13 * var(--tui-fontSize-multiplier, calc(1rem / 16)));
+  --tui-button-font-size-sm: calc(13 * var(--tui-fontSize-multiplier, calc(1rem / 16)));
+  --tui-button-font-size: calc(13 * var(--tui-fontSize-multiplier, calc(1rem / 16)));
+  --tui-button-font-size-lg: calc(13 * var(--tui-fontSize-multiplier, calc(1rem / 16)));
+  --tui-button-font-weight: 499;
+  --tui-button-radius: 2px;
+  --tui-icon-button-radius: 2px;
+  --tui-input-radius: 2px;
+  --tui-select-trigger-radius: 2px;
+  --tui-select-content-radius: 2px;
+  --tui-accordion-radius: 4px;
+  --tui-chip-radius: 8px;
+  --tui-card-radius: 4px;
+  --tui-notice-radius: 0;
+  --tui-tabs-gap: 0;
+  --tui-tabs-tab-fg: var(--tui-color-fg);
+  --tui-input-fg: var(--tui-color-fg);
+  --tui-input-bg: var(--tui-color-bg-surface);
+  --tui-select-trigger-bg: var(--tui-color-bg-surface);
+}
+
+.wp-admin .tui-interface[data-theme=dark] {
+  --tui-theme-primary-subtlest: #01263a;
+  --tui-theme-primary-subtler: var(--wp-admin-theme-color-darker-20, var(--wp-components-color-accent-darker-20, #043959));
+  --tui-theme-primary-subtle: var(--wp-admin-theme-color-darker-10, var(--wp-components-color-accent-darker-10, #006ba1));
+  --tui-theme-primary-base: var(--wp-admin-theme-color, #135e96);
+  --tui-theme-primary-strong: #4382bd;
+  --tui-theme-primary-stronger: #5b91c7;
+  --tui-theme-primary-strongest: #c5d9ed;
+  --tui-color-bg: #1f2328;
+  --tui-color-bg-surface: #2c3338;
+  --tui-color-bg-elevated: #32373c;
+  --tui-color-fg: #f0f0f1;
+  --tui-color-fg-muted: #c3c4c7;
+  --tui-color-border: #50575e;
+  --tui-color-divider: #3c434a;
+  --tui-focus-ring-color: #72aee6;
+}
+
+:where(.tui-interface) :is(label, .tui-label) {
+  font-weight: normal;
+  font-size: calc(13 * var(--tui-fontSize-multiplier, 0.0625rem));
+}
+
+.tui-interface .tui-field__label {
+  font-weight: 500;
+  font-size: calc(11 * var(--tui-fontSize-multiplier, 0.0625rem));
+  text-transform: uppercase;
+}
+
+.tui-interface .tui-select__option {
+  border-radius: var(--tui-select-content-radius);
+}
+
+.tui-tooltip__arrow {
+  display: none;
+}
+
+.tui-interface .tui-tabs__tab {
+  font-size: 13px;
+  font-weight: normal;
+  min-height: 48px;
+  padding-inline: 1em;
+}
+
+.tui-interface .tui-inline-choice input[type=radio],
+.tui-interface .tui-inline-choice input[type=checkbox] {
+  font-size: 1.5em;
+  min-width: 1em;
+  min-height: 1em;
+  border-radius: var(--tui-input-radius);
+}
+
+.tui-interface .tui-inline-choice input[type=checkbox]:checked {
+  background-color: var(--_accent);
+  border-color: var(--_accent);
+}
+.tui-interface .tui-inline-choice input[type=checkbox]:checked::before {
+  display: none;
+}
+.tui-interface .tui-inline-choice input[type=checkbox]:focus {
+  --_border: var(--_accent);
+  outline: var(--tui-focus-ring-width) solid var(--tui-focus-ring-color);
+  outline-offset: var(--tui-focus-ring-offset);
+}
+
+.tui-interface .tui-radio__description {
+  color: var(--tui-field-helper-fg, var(--tui-color-fg-secondary));
+  font-size: var(--tui-typography-size-xs);
+  line-height: 1.4;
+}
