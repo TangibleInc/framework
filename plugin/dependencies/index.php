@@ -40,8 +40,8 @@ function check_plugin_dependencies($plugin) {
   framework\register_admin_notice(function() use ($plugin, $missing_deps) {
     ?>
     <div class="notice notice-warning">
-      <p><b>Missing plugin dependencies for <?php echo $plugin->title; ?></b></p>
-      <p><?php echo $plugin->title; ?> won't work properly until the following plugins have been installed and activated.</p>
+      <p><b><?php esc_html_e( 'Missing plugin dependencies for', 'tangible-framework' ); ?> <?php echo $plugin->title; ?></b></p>
+      <p><?php echo $plugin->title; ?> <?php esc_html_e( 'won\'t work properly until the following plugins have been installed and activated.', 'tangible-framework' ); ?></p>
       <p>
       <?php
         foreach ($missing_deps as $dep) {
