@@ -19,6 +19,7 @@
     "build:wizard-css": "sass --no-source-map --style=compressed --load-path=node_modules onboarding/src/wizard.scss onboarding/wizard.css",
     "archive": "roll archive",
     "format": "roll format",
+    "i18n:lint": "node ../tangible-strings/bin/tangible-strings.mjs lint .",
     "version": "node version.js",
     "subrepo": "git-subrepo",
     "now": "wp-now start --blueprint=blueprint.dev.json",
