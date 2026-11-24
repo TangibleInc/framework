@@ -9,7 +9,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-11-24T14:13:16+00:00\n"
+"POT-Creation-Date: 2026-11-24T14:19:51+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.11.0\n"
 "X-Domain: tangible-framework\n"
@@ -177,7 +177,7 @@ msgid "Export"
 msgstr ""
 
 #: design-settings/tab.php:81
-msgid "Download the design as a file to keep, or to import on another site. Licences are never included."
+msgid "Download the design as a file to keep, or to import on another site. Licenses are never included."
 msgstr ""
 
 #. translators: %s: plugin name
@@ -201,7 +201,7 @@ msgid "Review import…"
 msgstr ""
 
 #: design-settings/tab.php:107
-#: design-settings/tab.php:251
+msgctxt "section heading: reset design settings"
 msgid "Reset"
 msgstr ""
 
@@ -282,6 +282,7 @@ msgstr[0] ""
 msgstr[1] ""
 
 #: design-settings/tab.php:208
+msgctxt "import review: no settings skipped"
 msgid "None"
 msgstr ""
 
@@ -290,7 +291,7 @@ msgid "Apply import"
 msgstr ""
 
 #: design-settings/tab.php:217
-#: design-settings/tab.php:250
+msgctxt "button: cancel the design import"
 msgid "Cancel"
 msgstr ""
 
@@ -301,6 +302,16 @@ msgstr ""
 #. translators: %s: plugin name
 #: design-settings/tab.php:246
 msgid "Every saved design setting for %s will be removed. This cannot be undone; export first to keep a copy."
+msgstr ""
+
+#: design-settings/tab.php:250
+msgctxt "button: close the reset dialog without resetting"
+msgid "Cancel"
+msgstr ""
+
+#: design-settings/tab.php:251
+msgctxt "button: confirm resetting all design settings"
+msgid "Reset"
 msgstr ""
 
 #: design-settings/tab.php:274
@@ -429,6 +440,7 @@ msgid "Renew"
 msgstr ""
 
 #: hub/page.php:273
+msgctxt "button: update this plugin to its new version"
 msgid "Update"
 msgstr ""
 
@@ -461,10 +473,12 @@ msgid "Dismiss all"
 msgstr ""
 
 #: hub/page.php:365
+msgctxt "screen reader prefix before an unread notification title"
 msgid "New:"
 msgstr ""
 
 #: hub/page.php:370
+msgctxt "link: open what a notification is about"
 msgid "Open"
 msgstr ""
 
@@ -584,6 +598,7 @@ msgstr ""
 
 #: hub/rows.php:172
 #: hub/rows.php:174
+msgctxt "plugin edition: no license needed"
 msgid "Free"
 msgstr ""
 
@@ -961,6 +976,7 @@ msgid "Everything is either configured or already on file."
 msgstr ""
 
 #: onboarding/wizard.php:1479
+msgctxt "button: previous setup step"
 msgid "Back"
 msgstr ""
 

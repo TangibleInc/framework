@@ -1476,7 +1476,7 @@ function render_wizard($plugin) {
         if ($back || $has_actions || $step['skippable'] || empty($step['submit_in_body'])) : ?>
         <footer class="tgbl-wizard__footer">
           <?php if ($back) : ?>
-            <button class="tui-button is-style-outline tgbl-back" type="submit" name="do" value="back" formnovalidate><?php esc_html_e('Back', 'tangible-framework'); ?></button>
+            <button class="tui-button is-style-outline tgbl-back" type="submit" name="do" value="back" formnovalidate><?php echo esc_html_x('Back', 'button: previous setup step', 'tangible-framework'); ?></button>
           <?php endif; ?>
           <span style="flex:1"></span>
           <?php if ($has_actions) :
