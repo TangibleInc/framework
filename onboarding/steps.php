@@ -728,7 +728,15 @@ function marketing_consent_text($plugin) {
     . '. Recorded when Finish Setup is pressed with this box shown. (plugin wizard opt-in v3, Done band)';
 }
 
+/**
+ * A plugin can word the band itself with register_wizard()'s
+ * `release_notes_title` (already translated). It is also what the consent
+ * record says, so what was shown and what was recorded stay the same text.
+ */
 function release_notes_title($plugin) {
+  $custom = $plugin ? (wizard_args($plugin->name)['release_notes_title'] ?? '') : '';
+  if (is_string($custom) && trim($custom) !== '') return trim($custom);
+
   $name = $plugin ? short_title($plugin) : '';
   /* translators: %s: plugin name */
   return sprintf(__('Get release notes from the makers of %s', 'tangible-framework'),

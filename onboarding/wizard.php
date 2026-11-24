@@ -287,6 +287,10 @@ function wizard_args($plugin_name, $args = null) {
  *             stats, inset, video; see welcome_config() in welcome.php.
  *             The `tangible_onboarding_welcome` filter can supply or
  *             reshape the same array.
+ *   release_notes_title
+ *             the Done screen's release-notes question, in place of
+ *             "Get release notes from the makers of {short_title}". Pass it
+ *             translated. It is also the consent record's wording.
  */
 function register_wizard($plugin, $args = []) {
   $name = $plugin->name;

@@ -226,6 +226,29 @@ class Core_Steps_TestCase extends \WP_UnitTestCase {
     remove_all_filters('pre_http_request');
   }
 
+  function test_a_plugin_can_word_the_release_notes_question_and_the_record_follows() {
+    $this->assertSame('Get release notes from the makers of Core Test', onboarding\release_notes_title($this->plugin));
+
+    onboarding\wizard_args('coretest', [ 'release_notes_title' => 'Release notes for Core Test, please' ]);
+    try {
+      onboarding\mark('coretest', 'welcome', 'done');
+      $plan = onboarding\resolve_plan('coretest', onboarding\build_facts('coretest'));
+      $this->assertSame('done', $plan['current']);
+      ob_start(); ($plan['steps'][0]['render'])($this->plugin); $html = ob_get_clean();
+      $this->assertStringContainsString('Release notes for Core Test, please', $html);
+      $this->assertStringNotContainsString('makers of', $html);
+
+      $this->assertStringStartsWith('Release notes for Core Test, please. Recorded when',
+        onboarding\marketing_consent_text($this->plugin));
+
+      // Blank falls back to the default.
+      onboarding\wizard_args('coretest', [ 'release_notes_title' => '  ' ]);
+      $this->assertSame('Get release notes from the makers of Core Test', onboarding\release_notes_title($this->plugin));
+    } finally {
+      onboarding\wizard_args('coretest', []);
+    }
+  }
+
   function test_with_marketing_on_file_done_finishes_from_the_footer_and_records_nothing() {
     onboarding\record_consent_answer('marketing', 'declined', 'wording v1');
     onboarding\mark('coretest', 'welcome', 'done');
