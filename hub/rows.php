@@ -169,9 +169,9 @@ function row_state($f) {
     $key = __('Account', 'tangible-framework');
     // Verified or not, a connected site is connected (spec §4, amended 2026-10-14).
     if (in_array($f['connect'], ['active', 'unverified'], true)) {
-      $account = chip('info', __('Free', 'tangible-framework'), __('Via your tangible.one connection', 'tangible-framework'));
+      $account = chip('info', _x('Free', 'plugin edition: no license needed', 'tangible-framework'), __('Via your tangible.one connection', 'tangible-framework'));
     } else {
-      $account = chip('off', __('Not connected', 'tangible-framework'), __('Free', 'tangible-framework'), 'connect');
+      $account = chip('off', __('Not connected', 'tangible-framework'), _x('Free', 'plugin edition: no license needed', 'tangible-framework'), 'connect');
     }
   } else {
     $key = __('License', 'tangible-framework');

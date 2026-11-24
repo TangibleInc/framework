@@ -78,7 +78,7 @@ function render_tab( $plugin, $slug ) {
 		<?php if ( is_array( $review ) ) { render_review( $review ); } ?>
 
 		<h3><?php esc_html_e( 'Export', 'tangible-framework' ); ?></h3>
-		<p><?php esc_html_e( 'Download the design as a file to keep, or to import on another site. Licences are never included.', 'tangible-framework' ); ?></p>
+		<p><?php esc_html_e( 'Download the design as a file to keep, or to import on another site. Licenses are never included.', 'tangible-framework' ); ?></p>
 		<p>
 			<button type="submit" class="button" form="tangible-design-export" name="scope" value="plugin">
 				<?php
@@ -104,7 +104,7 @@ function render_tab( $plugin, $slug ) {
 			<button type="submit" class="button" form="tangible-design-import"><?php esc_html_e( 'Review import…', 'tangible-framework' ); ?></button>
 		</p>
 
-		<h3><?php esc_html_e( 'Reset', 'tangible-framework' ); ?></h3>
+		<h3><?php echo esc_html_x( 'Reset', 'section heading: reset design settings', 'tangible-framework' ); ?></h3>
 		<p>
 			<?php
 			/* translators: %s: plugin name */
@@ -205,7 +205,7 @@ function render_review( array $payload ) {
 								<code><?php echo esc_html( implode( ', ', $step['skipped'] ) ); ?></code>
 							</details>
 						<?php } else { ?>
-							<?php esc_html_e( 'None', 'tangible-framework' ); ?>
+							<?php echo esc_html_x( 'None', 'import review: no settings skipped', 'tangible-framework' ); ?>
 						<?php } ?>
 					</td>
 				</tr>
@@ -214,7 +214,7 @@ function render_review( array $payload ) {
 		</table>
 		<p>
 			<button type="submit" class="button button-primary" form="tangible-design-apply" name="apply" value="1"><?php esc_html_e( 'Apply import', 'tangible-framework' ); ?></button>
-			<button type="submit" class="button" form="tangible-design-apply" name="cancel" value="1" formnovalidate><?php esc_html_e( 'Cancel', 'tangible-framework' ); ?></button>
+			<button type="submit" class="button" form="tangible-design-apply" name="cancel" value="1" formnovalidate><?php echo esc_html_x( 'Cancel', 'button: cancel the design import', 'tangible-framework' ); ?></button>
 		</p>
 	</div>
 	<?php
@@ -247,8 +247,8 @@ function render_forms( $plugin, $slug ) {
 				?>
 			</p>
 			<p style="display: flex; gap: 0.5rem; justify-content: flex-end; margin-bottom: 0;">
-				<button type="button" class="button" id="tangible-design-reset-cancel"><?php esc_html_e( 'Cancel', 'tangible-framework' ); ?></button>
-				<button type="submit" class="button button-primary"><?php esc_html_e( 'Reset', 'tangible-framework' ); ?></button>
+				<button type="button" class="button" id="tangible-design-reset-cancel"><?php echo esc_html_x( 'Cancel', 'button: close the reset dialog without resetting', 'tangible-framework' ); ?></button>
+				<button type="submit" class="button button-primary"><?php echo esc_html_x( 'Reset', 'button: confirm resetting all design settings', 'tangible-framework' ); ?></button>
 			</p>
 		</form>
 	</dialog>

@@ -270,7 +270,7 @@ function render_action($plugin, $f, $action) {
     case 'update':
       $url = update_url($plugin);
       if ($url) {
-        echo '<a class="' . esc_attr(button_class('outline')) . '" href="' . esc_url($url) . '"><span>' . esc_html__('Update', 'tangible-framework') . '</span>' . $title . '</a>';
+        echo '<a class="' . esc_attr(button_class('outline')) . '" href="' . esc_url($url) . '"><span>' . esc_html_x('Update', 'button: update this plugin to its new version', 'tangible-framework') . '</span>' . $title . '</a>';
       }
       return;
   }
@@ -362,12 +362,12 @@ function render_notifications($items, $seen_at) {
               $unread = (int) $item['created'] > $seen_at; ?>
               <li class="tgbl-hub__note<?php echo $unread ? ' is-unread' : ''; ?>">
                 <div class="tgbl-hub__text">
-                  <h3><?php if ($unread) : ?><span class="tui-visually-hidden"><?php esc_html_e('New:', 'tangible-framework'); ?> </span><?php endif;
+                  <h3><?php if ($unread) : ?><span class="tui-visually-hidden"><?php echo esc_html_x('New:', 'screen reader prefix before an unread notification title', 'tangible-framework'); ?> </span><?php endif;
                     echo esc_html($item['title']); ?></h3>
                   <?php if (!empty($item['body']) || !empty($item['action']['url'])) : ?>
                     <p><?php echo esc_html($item['body'] ?? ''); ?>
                       <?php if (!empty($item['action']['url'])) : ?>
-                        <a href="<?php echo esc_url($item['action']['url']); ?>"><?php echo esc_html($item['action']['label'] ?? __('Open', 'tangible-framework')); ?></a>
+                        <a href="<?php echo esc_url($item['action']['url']); ?>"><?php echo esc_html($item['action']['label'] ?? _x('Open', 'link: open what a notification is about', 'tangible-framework')); ?></a>
                       <?php endif; ?></p>
                   <?php endif; ?>
                   <p class="tgbl-hub__small"><?php
