@@ -64,10 +64,35 @@ function url() {
   return admin_url('options-general.php?page=' . PAGE);
 }
 
+/**
+ * Whether this site has anything for the Hub to manage: a plugin on the
+ * tangible.one platform (a cloud_id or a setup wizard), or a site already
+ * connected (so it can still be disconnected). Plugins that only use the
+ * framework as a library (tangible-cred, client `-features` plugins) are
+ * not, so a site running only those shows no Hub, as before the onboarder.
+ * Filter `tangible_hub_enabled` to force the answer.
+ */
+function is_enabled() {
+  $enabled = connect_status() !== 'none';
+  if (!$enabled) {
+    $wizards = function_exists('tangible\\onboarding\\registered_wizards')
+      ? \tangible\onboarding\registered_wizards() : [];
+    foreach ((array) (framework::$state->plugins ?? []) as $plugin) {
+      if (!empty($plugin->cloud_id) || !empty($wizards[ $plugin->name ?? '' ])) {
+        $enabled = true;
+        break;
+      }
+    }
+  }
+  return (bool) apply_filters('tangible_hub_enabled', $enabled);
+}
+
 // ── menu: Settings → Tangible Hub ─────────────────────────────────────────
 // For now the Hub is not the first item under the shared Tangible top-level;
 // it lives under Settings. The page slug is unchanged, so admin.php?page=… links keep working.
+// Registered only when the site has something for it (is_enabled()).
 add_action('admin_menu', function () {
+  if (!is_enabled()) return;
   add_submenu_page(
     'options-general.php',
     __('Tangible Hub', 'tangible-framework'),
@@ -81,7 +106,7 @@ add_action('admin_menu', function () {
 // ── the admin-bar mark ─────────────────────────────────────────────────────
 // Hidden for now. Return true from this filter to bring it back.
 function show_admin_bar_mark() {
-  return (bool) apply_filters('tangible_hub_show_admin_bar_mark', false);
+  return is_enabled() && (bool) apply_filters('tangible_hub_show_admin_bar_mark', false);
 }
 
 add_action('admin_bar_menu', function ($bar) {
